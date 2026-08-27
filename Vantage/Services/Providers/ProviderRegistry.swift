@@ -12,6 +12,7 @@ struct ProviderRegistry: Sendable {
     var marketData: any MarketDataProvider
     var fundamentals: (any FundamentalsProvider)?
     var analyst: (any AnalystDataProvider)?
+    var metrics: (any CompanyMetricsProvider)?
     var sec: (any SECDataProvider)?
     var macro: (any MacroDataProvider)?
     var news: (any NewsProvider)?
@@ -27,6 +28,7 @@ struct ProviderRegistry: Sendable {
             marketData: MockMarketDataProvider(),
             fundamentals: nil,
             analyst: nil,
+            metrics: nil,
             sec: MockSECDataProvider(),
             macro: MockMacroDataProvider(),
             news: MockNewsProvider(),

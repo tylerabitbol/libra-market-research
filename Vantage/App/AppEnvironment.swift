@@ -82,6 +82,7 @@ final class AppEnvironment {
             fundamentals: secReady ? SECFundamentalsProvider(client: httpClient, secrets: secrets)
                                    : nil,
             analyst: finnhubReady ? FinnhubAnalystProvider(provider: finnhub) : nil,
+            metrics: finnhubReady ? FinnhubMetricsProvider(provider: finnhub) : nil,
             sec: secReady ? SECProvider(client: httpClient, secrets: secrets)
                           : MockSECDataProvider(),
             macro: fredReady ? FREDProvider(client: httpClient, secrets: secrets)

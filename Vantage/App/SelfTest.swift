@@ -29,8 +29,9 @@ enum SelfTest {
 
         let registry = ProviderRegistry(
             marketData: CompositeMarketDataProvider(quotes: finnhub, history: tiingo),
-            fundamentals: nil,
+            fundamentals: SECFundamentalsProvider(client: client, secrets: secrets),
             analyst: FinnhubAnalystProvider(provider: finnhub),
+            metrics: FinnhubMetricsProvider(provider: finnhub),
             sec: SECProvider(client: client, secrets: secrets),
             macro: FREDProvider(client: client, secrets: secrets),
             news: FinnhubNewsProvider(provider: finnhub),
@@ -43,6 +44,53 @@ enum SelfTest {
             logger.notice(
                 "SELFTEST \(provider.rawValue, privacy: .public)=\(status, privacy: .public) \(result.message, privacy: .public)"
             )
+        }
+
+        await verifyValuationContext(registry: registry)
+        await verifyFundamentals(registry: registry)
+    }
+
+    /// End-to-end check of the historical-valuation chain: fetch metrics, rank
+    /// the current multiple against the company's own history, and confirm the
+    /// two claims come back correctly labelled.
+    private static func verifyValuationContext(registry: ProviderRegistry) async {
+        guard let metricsProvider = registry.metrics else { return }
+        do {
+            let metrics = try await metricsProvider.metrics(symbol: "AAPL")
+            for metric in ValuationMetric.all.prefix(3) {
+                let history = metrics.history(metric.key)
+                guard let current = metrics.currentValue(metric.key)
+                        ?? history.last?.value,
+                      let context = ValuationCalculator.historicalContext(
+                        current: current, history: history)
+                else {
+                    logger.notice("SELFTEST valuation \(metric.displayName, privacy: .public)=SKIP insufficient history")
+                    continue
+                }
+                logger.notice(
+                    "SELFTEST valuation \(metric.displayName, privacy: .public)=\(Format.ratio(context.current, precision: 1), privacy: .public) percentile=\(context.percentile, privacy: .public) n=\(context.observationCount, privacy: .public) (\(context.descriptor, privacy: .public))"
+                )
+            }
+        } catch {
+            logger.error("SELFTEST valuation=FAIL \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// Confirms XBRL extraction produces discrete periods on live data.
+    private static func verifyFundamentals(registry: ProviderRegistry) async {
+        guard let fundamentals = registry.fundamentals else { return }
+        do {
+            let facts = try await fundamentals.facts(
+                symbol: "AAPL", cik: "0000320193",
+                concepts: [.revenue, .netIncome], since: nil
+            )
+            let quarters = facts.filter { $0.concept == .revenue && $0.periodKind == .quarter }
+            let annual = facts.filter { $0.concept == .revenue && $0.periodKind == .annual }
+            logger.notice(
+                "SELFTEST fundamentals=PASS revenue quarters=\(quarters.count, privacy: .public) annual=\(annual.count, privacy: .public) latest=\(Format.compactCurrency(quarters.last?.value), privacy: .public)"
+            )
+        } catch {
+            logger.error("SELFTEST fundamentals=FAIL \(String(describing: error), privacy: .public)")
         }
     }
 

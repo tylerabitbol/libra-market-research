@@ -19,7 +19,7 @@ From the original specification. Status as of the latest commit.
 |---|-------|--------|
 | 1 | **Foundation** — project architecture, SwiftData models, API abstraction, networking, secrets, navigation, basic dashboard | ✅ Complete |
 | 2 | **Market data** — quotes, historical prices, volume, watchlist, charts | 🟡 Providers done; watchlist and charts outstanding |
-| 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | ⬜ Next |
+| 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | 🟡 XBRL extraction + historical valuation percentiles done; persistence and UI outstanding |
 | 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | 🟡 Provider + filings done; Form 4 XML parsing outstanding |
 | 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings + earnings surprises available; estimate revisions blocked by tier |
 | 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | ⬜ |
@@ -59,6 +59,13 @@ so they never enter a command line.
   object, so a concept an issuer doesn't report stays genuinely absent.
 - **Fetch only what is displayed.** Sector tiles show a daily change only, so they
   cost no history request. Ignoring this once cost an 8-minute dashboard stall.
+- **XBRL periods are classified by duration, not by the `fp` label.** EDGAR files
+  cumulative year-to-date figures under the same tag as discrete quarters; a Q3
+  10-Q carries both a three-month and a nine-month revenue. Reading the latter as
+  a quarter makes Q3 look ~3x Q2. Cumulative rows are filtered out of extraction.
+- **Valuation percentiles compare a company against its own past**, not against
+  other companies, and require a minimum sample of 8 observations rather than
+  returning a weak percentile dressed as a strong one.
 - **Percentage points ≠ percent.** Relative performance reports `pp` throughout.
 - **No secrets in source.** Keys live in the Keychain, entered by the user.
   `DeveloperOptions` can seed from `VANTAGE_*` environment variables, gated on a
