@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import OSLog
 
 /// One benchmark's current state, including the case where it failed to load.
 ///
@@ -24,6 +25,9 @@ struct BenchmarkPerformance: Sendable, Identifiable {
     let freshness: Freshness
     /// Set when this row failed to load; the row still renders, marked.
     let error: APIError?
+    /// Set when the live price arrived but price history did not, so the UI can
+    /// distinguish "this security has no history" from "history request failed".
+    var historyError: APIError?
 
     var dailyPercent: Double? { daily?.percent }
 
@@ -38,7 +42,7 @@ struct BenchmarkPerformance: Sendable, Identifiable {
             benchmark: benchmark, level: nil, isIndexLevel: benchmark.hasRealIndex,
             asOf: nil, daily: nil, weekly: nil, monthly: nil,
             freshness: .failed(previous: nil, reason: error.shortDescription),
-            error: error
+            error: error, historyError: nil
         )
     }
 }
@@ -46,6 +50,10 @@ struct BenchmarkPerformance: Sendable, Identifiable {
 @Observable
 @MainActor
 final class DashboardViewModel {
+    nonisolated static let logger = Logger(
+        subsystem: "com.tylerabitbol.vantage", category: "dashboard"
+    )
+
     private(set) var market: [BenchmarkPerformance] = []
     private(set) var sectors: [BenchmarkPerformance] = []
     private(set) var volatility: [BenchmarkPerformance] = []
@@ -90,9 +98,15 @@ final class DashboardViewModel {
         isLoading = true
         defer { isLoading = false }
 
-        async let marketRows = Self.rows(for: Benchmark.broadMarket, registry: registry)
-        async let volatilityRows = Self.rows(for: Benchmark.volatility, registry: registry)
-        async let sectorRows = Self.rows(for: Benchmark.sectors, registry: registry)
+        async let marketRows = Self.rows(for: Benchmark.broadMarket, registry: registry,
+                                         needsHistory: true)
+        async let volatilityRows = Self.rows(for: Benchmark.volatility, registry: registry,
+                                             needsHistory: true)
+        // Sector tiles render a daily change and nothing else, so fetching 60
+        // days of bars for each was 11 wasted requests against Tiingo's ~50/hour
+        // free tier — enough on its own to stall the whole screen.
+        async let sectorRows = Self.rows(for: Benchmark.sectors, registry: registry,
+                                         needsHistory: false)
         async let macroRows = Self.macroReadings(registry: registry)
 
         let (marketResult, volatilityResult, sectorResult, macroResult) =
@@ -111,11 +125,14 @@ final class DashboardViewModel {
     /// Fetches each benchmark concurrently, isolating failures to their own row.
     private static func rows(
         for benchmarks: [Benchmark],
-        registry: ProviderRegistry
+        registry: ProviderRegistry,
+        needsHistory: Bool
     ) async -> [BenchmarkPerformance] {
         await withTaskGroup(of: BenchmarkPerformance.self) { group in
             for benchmark in benchmarks {
-                group.addTask { await row(for: benchmark, registry: registry) }
+                group.addTask {
+                    await row(for: benchmark, registry: registry, needsHistory: needsHistory)
+                }
             }
             var results: [BenchmarkPerformance] = []
             for await result in group { results.append(result) }
@@ -127,7 +144,8 @@ final class DashboardViewModel {
 
     private static func row(
         for benchmark: Benchmark,
-        registry: ProviderRegistry
+        registry: ProviderRegistry,
+        needsHistory: Bool
     ) async -> BenchmarkPerformance {
         do {
             // Prefer the genuine index series where one exists. FRED gives the
@@ -139,7 +157,8 @@ final class DashboardViewModel {
             guard let symbol = benchmark.etfSymbol else {
                 return .failed(benchmark, .noData(.fred, endpoint: benchmark.displayName))
             }
-            return try await etfRow(benchmark, symbol: symbol, provider: registry.marketData)
+            return try await etfRow(benchmark, symbol: symbol, provider: registry.marketData,
+                                    needsHistory: needsHistory)
         } catch let error as APIError {
             return .failed(benchmark, error)
         } catch {
@@ -182,7 +201,7 @@ final class DashboardViewModel {
             weekly: ReturnCalculator.trailingReturn(bars: bars, window: .init(day: -7)),
             monthly: ReturnCalculator.trailingReturn(bars: bars, window: .init(month: -1)),
             freshness: .fresh(asOf: latest.date),
-            error: nil
+            error: nil, historyError: nil
         )
     }
 
@@ -190,23 +209,36 @@ final class DashboardViewModel {
     private static func etfRow(
         _ benchmark: Benchmark,
         symbol: String,
-        provider: any MarketDataProvider
+        provider: any MarketDataProvider,
+        needsHistory: Bool
     ) async throws -> BenchmarkPerformance {
         let quote = try await provider.quote(symbol: symbol)
-        // History is a separate provider and a separate failure domain: if it
-        // is unavailable the live price is still worth showing.
-        let bars: [PriceBar]
-        do {
-            bars = try await provider.bars(
-                symbol: symbol, resolution: .daily,
-                from: Date.now.addingTimeInterval(-70 * 86_400), to: .now
-            ).map {
-                PriceBar(date: $0.date, resolution: .daily, open: $0.open, high: $0.high,
-                         low: $0.low, close: $0.close, volume: $0.volume,
-                         adjustedClose: $0.adjustedClose)
+        var historyError: APIError?
+
+        // History is a separate provider, a separate failure domain, and by far
+        // the scarcer quota. Fetch it only when the row will show it, and never
+        // let its failure take down a price we already have.
+        var bars: [PriceBar] = []
+        if needsHistory {
+            do {
+                bars = try await provider.bars(
+                    symbol: symbol, resolution: .daily,
+                    from: Date.now.addingTimeInterval(-70 * 86_400), to: .now
+                ).map {
+                    PriceBar(date: $0.date, resolution: .daily, open: $0.open, high: $0.high,
+                             low: $0.low, close: $0.close, volume: $0.volume,
+                             adjustedClose: $0.adjustedClose)
+                }
+            } catch {
+                // Swallowing this silently made a real failure look like
+                // "no history exists". Record it so the cause is visible.
+                historyError = error as? APIError
+                    ?? .transport(.tiingo, underlying: error.localizedDescription)
+                Self.logger.error(
+                    "History unavailable for \(symbol, privacy: .public): \(String(describing: historyError), privacy: .public)"
+                )
+                bars = []
             }
-        } catch {
-            bars = []
         }
 
         // The provider's own previous close accounts for corporate actions, so
@@ -227,7 +259,8 @@ final class DashboardViewModel {
             weekly: ReturnCalculator.trailingReturn(bars: bars, window: .init(day: -7)),
             monthly: ReturnCalculator.trailingReturn(bars: bars, window: .init(month: -1)),
             freshness: .fresh(asOf: .now),
-            error: nil
+            error: nil,
+            historyError: historyError
         )
     }
 
