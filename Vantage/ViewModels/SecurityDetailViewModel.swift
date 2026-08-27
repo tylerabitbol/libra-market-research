@@ -30,6 +30,13 @@ final class SecurityDetailViewModel {
     private(set) var fundamentalsError: APIError?
     private(set) var filingsError: APIError?
 
+    /// Changes detected from the data just loaded, most recent first.
+    private(set) var events: [DetectedEventDTO] = []
+    /// The subset the user has not seen — everything that occurred after their
+    /// previous visit. Empty on a first visit by design.
+    private(set) var newSinceLastVisit: [DetectedEventDTO] = []
+    private(set) var lastVisit: Date?
+
     private(set) var isLoading = false
     private(set) var lastRefreshedAt: Date?
     private(set) var selectedRange: ChartRange = .oneYear
@@ -77,7 +84,47 @@ final class SecurityDetailViewModel {
         loadTask?.cancel()
         loadTask = Task { [weak self] in
             await self?.performLoad(using: registry)
+            await self?.detectChanges(using: snapshots)
             await self?.persist(using: snapshots)
+        }
+    }
+
+    /// Whether this event postdates the user's previous visit.
+    func isNew(_ event: DetectedEventDTO) -> Bool {
+        guard let lastVisit else { return false }
+        return event.occurredAt > lastVisit
+    }
+
+    /// Runs the Section 4 detectors over what was just loaded.
+    ///
+    /// The prior visit is read *before* anything is stamped: the question is
+    /// "what happened since last time", and marking this visit first would make
+    /// the answer permanently "nothing". Detection itself runs whether or not a
+    /// store is attached, so the panel works in previews and on a first launch;
+    /// only the persistence and the visit stamp need one.
+    private func detectChanges(using snapshots: SnapshotStore?) async {
+        if let snapshots {
+            lastVisit = try? await snapshots.lastViewed(symbol: symbol)
+        }
+        // The quote carries today; the bars stop at the previous close.
+        let detected = EventDetector.detect(bars: bars, quote: quote)
+            + EventDetector.newFilings(filings: filings, since: lastVisit)
+        events = detected.sorted { $0.occurredAt > $1.occurredAt }
+
+        #if DEBUG
+        if let reading = EventDetector.latestReading(bars: bars, quote: quote) {
+            let measure = AnomalyMeasure.measure(
+                reading.reading.percent, against: reading.priors.map(\.percent)
+            )
+            Self.logger.notice("DETECT \(self.symbol, privacy: .public) bars=\(self.bars.count) intraday=\(reading.reading.isIntraday) move=\(reading.reading.percent) priors=\(reading.priors.count) scale=\(measure?.scale ?? -1) dev=\(measure?.deviations ?? -1) rank=\(measure?.unusualness ?? -1) events=\(detected.count)")
+        } else {
+            Self.logger.notice("DETECT \(self.symbol, privacy: .public) no reading available")
+        }
+        #endif
+        if let lastVisit {
+            newSinceLastVisit = events.filter { $0.occurredAt > lastVisit }
+        } else {
+            newSinceLastVisit = []
         }
     }
 
@@ -103,6 +150,16 @@ final class SecurityDetailViewModel {
             }
             if !filings.isEmpty {
                 try await snapshots.record(filings: filings, symbol: symbol)
+            }
+            if !events.isEmpty {
+                try await snapshots.record(events: events, symbol: symbol)
+            }
+            // Stamped last, and only when the load actually completed.
+            // Cancelling mid-load leaves `lastRefreshedAt` nil; stamping there
+            // would advance the reference point past changes the user never
+            // saw, and they would never be reported again.
+            if lastRefreshedAt != nil {
+                try await snapshots.markViewed(symbol: symbol)
             }
         } catch {
             Self.logger.error("Persist failed for \(symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")

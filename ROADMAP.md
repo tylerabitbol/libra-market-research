@@ -22,13 +22,13 @@ From the original specification. Status as of the latest commit.
 | 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | ✅ Complete — XBRL extraction, valuation percentiles, Security Detail UI, and append-only persistence |
 | 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | 🟡 Provider + filings done; Form 4 XML parsing outstanding |
 | 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings + earnings surprises available; estimate revisions blocked by tier |
-| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | ⬜ |
+| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | 🟡 Detectors, event storage, and the Research feed built; thresholds need calibration against live data |
 | 7 | **Personal research** — journal, thesis tracking, saved screens, historical comparisons | ⬜ |
 | 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | ⬜ |
 
 Five product areas: Dashboard, Watchlist, Security Detail, Research/Investigation,
-Settings. Dashboard, Watchlist and Security Detail are built; Research and
-Screener are still placeholders.
+Settings. Dashboard, Watchlist, Security Detail and Research are built; Screener
+is still a placeholder.
 
 ## Provider capabilities (measured against live keys, not assumed)
 
@@ -92,6 +92,28 @@ so they never enter a command line.
 - **Never edit navigation to capture a screenshot.** Use `-VantageOpenSymbol`.
   A hand-edit for a screenshot once reached a commit and left the Watchlist tab
   wired to a hardcoded symbol.
+- **Unusualness is a rank, never a probability.** A 3σ day is a 1-in-370 event
+  only under a normal distribution, and daily equity returns are not normal —
+  3σ days arrive several times a year. Detectors report position within the
+  observed sample ("larger than 248 of the past 250 sessions"), which is both
+  true and checkable. Converting it to a percentage chance would be a
+  fabricated statistic wearing a lab coat.
+- **Anomalies are measured with median and MAD, not mean and standard
+  deviation.** The spike being measured also inflates a standard deviation
+  computed over the window containing it, shrinking its own score and hiding
+  the *next* spike behind a permanently widened band.
+- **Detection reads the quote, not only the bars.** Daily bars end at the
+  previous close, so a detector reading bars alone is blind to today — the one
+  day the user is actually asking about.
+- **An open session is provisional and is never stored.** A +8% reading at
+  midday can close at +2%; the permanent record must not keep the midday figure
+  as what happened. `SnapshotStore.record(events:)` filters provisional events
+  itself so no future caller can store one by forgetting.
+- **A first visit reports nothing as new.** With no prior visit there is no
+  "since", and presenting a company's whole filing history as new would be false.
+- **The visit stamp is written only after a load completes**, and always read
+  before it is written. Stamping first would make every visit report "nothing
+  changed"; stamping a cancelled load would skip past changes the user never saw.
 - **Percentage points ≠ percent.** Relative performance reports `pp` throughout.
 - **No secrets in source.** Keys live in the Keychain, entered by the user.
   `DeveloperOptions` can seed from `VANTAGE_*` environment variables, gated on a
@@ -107,6 +129,7 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 | `-VantageSeedKeys` | Seeds the Keychain from `VANTAGE_*` environment variables |
 | `-VantageSeedWatchlist` | Adds AAPL, NVDA, COST to the watchlist without touching existing entries |
 | `-VantageCaptureFixtures` | Writes a trimmed `companyfacts` payload into the app container for use as a test fixture |
+| `DETECT` log line | Not an argument: a DEBUG-only `.notice` in `detectChanges` reporting what the detectors saw and why they stayed silent |
 | `-VantageOpenSymbol AAPL` | Opens straight to a security's detail page. Added because capturing that screen used to mean hand-editing `RootView`, and one such edit reached a commit |
 
 ## Known gaps
@@ -118,6 +141,23 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
   returning an empty array, which would read as "no insider trades".
 - **Intraday index levels** — FRED is end-of-day. An intraday ETF overlay is
   deliberately deferred.
+- **Detector thresholds are uncalibrated.** Observed live: NVDA at **+8.74%**
+  on 2026-08-27 produced no event, while the unit tests fire correctly on
+  synthetic data. Cause not yet isolated. Candidates, in order of suspicion:
+  (a) the rank threshold of 0.975 needs 59 of 60 prior sessions to be smaller,
+  which a volatile name can fail; (b) MAD over 60 sessions of a high-beta stock
+  gives a scale large enough that 8.74% falls under 3 deviations; (c) the quote
+  is not being read as a new session because Tiingo publishes a partial bar
+  dated today, so the same-day guard treats it as already counted. A
+  DEBUG-only `DETECT …` log line in `SecurityDetailViewModel.detectChanges`
+  prints the reading, prior count, scale, deviations and rank — read it with
+  `log show --predicate 'subsystem == "com.tylerabitbol.vantage"'` against a
+  live symbol to settle which. **Thresholds must be set from real distributions
+  before this feature is trustworthy**; right now a silent detector is
+  indistinguishable from a calm market, which is the failure mode that matters.
+- **Detection only ever examines the latest session.** A large move on a day
+  the user did not open the app is never recorded, even though the bars for it
+  are stored. A backfill pass over stored bars would fix this.
 - **Tiingo's 50 req/hour** is the binding constraint on any screen wanting
   history for many symbols. Budget accordingly; the rate limiter now refuses
   past a wait budget rather than blocking silently.
