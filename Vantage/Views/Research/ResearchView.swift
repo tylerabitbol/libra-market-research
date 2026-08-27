@@ -89,7 +89,10 @@ struct ResearchView: View {
         } description: {
             Text("Changes are recorded as you open securities. Visit one from "
                  + "your watchlist, and anything unusual in its price, volume, "
-                 + "volatility, or filings will collect here.")
+                 + "volatility, or filings will collect here.\n\n"
+                 + "A move in a session that is still open is shown on the "
+                 + "security's own page but not recorded here until it closes — "
+                 + "a reading taken at midday is not yet what happened that day.")
         }
     }
 }
