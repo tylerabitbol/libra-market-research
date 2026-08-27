@@ -30,6 +30,16 @@ Five product areas: Dashboard, Watchlist, Security Detail, Research/Investigatio
 Settings. Dashboard, Watchlist, Security Detail and Research are built; Screener
 is still a placeholder.
 
+**242 tests**, all passing as of `880f9b4`. Every wrong number caught in the
+last three commits was found by looking at rendered output on a real symbol —
+the suite stayed green throughout. Treat a screen check as part of "done", not
+optional polish; see *Build and verify* below.
+
+**Next, in priority order**, picking up Phase 6: sector-relative attribution
+(wire the declared sector ETFs into `RelativeAnalysis` alongside the market
+leg), backfill volatility shifts the same way price and volume already are,
+then Research Signal / contradictory evidence, then Phase 4's Form 4 parsing.
+
 ## Provider capabilities (measured against live keys, not assumed)
 
 | Source | Works | Does not work |
@@ -188,7 +198,7 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
   sector benchmark per security; the sector ETFs are declared but not wired to
   the detail page. A move the market does not explain is currently attributed
   to "this company or its industry" without separating the two.
-- - **Tiingo's 50 req/hour** is the binding constraint on any screen wanting
+- **Tiingo's 50 req/hour** is the binding constraint on any screen wanting
   history for many symbols. Budget accordingly; the rate limiter now refuses
   past a wait budget rather than blocking silently.
 
