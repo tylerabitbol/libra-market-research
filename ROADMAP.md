@@ -111,6 +111,11 @@ build settings. Signing must stay enabled (`DEVELOPMENT_TEAM: 3RSPVBC57V`): an
 unsigned build carries no entitlements, and the Keychain then fails with -34018.
 
 Provider tests decode real captured payloads through the full mapping path via a
-stubbed `URLSession`; no test touches the network. The SEC fixtures are the one
-exception and are hand-authored, since capturing them requires a contact address
-in the User-Agent.
+stubbed `URLSession`; no test touches the network.
+
+EDGAR fixtures cannot be captured with `curl` without putting a contact address
+in the User-Agent, so `-VantageCaptureFixtures` has the app fetch and trim them
+into its own container instead; lift them out with `simctl get_app_container`.
+The `companyfacts` fixture was captured that way. The two `sec_submissions_*`
+fixtures remain hand-authored, since their value is exercising ragged and
+well-formed parallel arrays rather than reproducing a real response.
