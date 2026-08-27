@@ -164,6 +164,40 @@ enum EstimateMetric: String, Sendable, CaseIterable {
     }
 }
 
+/// One observation of a metric at a point in time.
+struct MetricPoint: Sendable, Hashable {
+    let period: Date
+    let value: Double
+}
+
+/// A company's current metrics plus their history.
+///
+/// The history is what makes valuation interpretable. "P/E 31" says almost
+/// nothing on its own; "P/E 31, 78th percentile of its own last ten years"
+/// says whether that is unusual *for this company*, which is the question
+/// worth asking.
+struct CompanyMetricsDTO: Sendable, Hashable {
+    /// Current values, keyed by the provider's metric name.
+    let current: [String: Double]
+    /// Historical series, keyed by metric name.
+    let annual: [String: [MetricPoint]]
+    let quarterly: [String: [MetricPoint]]
+    let asOf: Date
+
+    func currentValue(_ key: String) -> Double? { current[key] }
+
+    /// Prefers quarterly history, which is denser, falling back to annual.
+    func history(_ key: String) -> [MetricPoint] {
+        let quarterlyPoints = quarterly[key] ?? []
+        return quarterlyPoints.isEmpty ? (annual[key] ?? []) : quarterlyPoints
+    }
+}
+
+/// Provides current and historical valuation and profitability metrics.
+protocol CompanyMetricsProvider: DataProvider {
+    func metrics(symbol: String) async throws -> CompanyMetricsDTO
+}
+
 struct RatingSnapshotDTO: Sendable, Hashable {
     let asOf: Date
     let strongBuy: Int

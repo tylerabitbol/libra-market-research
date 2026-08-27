@@ -78,6 +78,17 @@ struct FinnhubAnalystProvider: AnalystDataProvider {
     }
 }
 
+struct FinnhubMetricsProvider: CompanyMetricsProvider {
+    let id: DataProviderID = .finnhub
+    let provider: FinnhubProvider
+
+    func isConfigured() async -> Bool { await provider.isConfigured() }
+
+    func metrics(symbol: String) async throws -> CompanyMetricsDTO {
+        try await provider.metrics(symbol: symbol)
+    }
+}
+
 struct FinnhubNewsProvider: NewsProvider {
     let id: DataProviderID = .finnhub
     let provider: FinnhubProvider

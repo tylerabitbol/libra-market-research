@@ -157,6 +157,53 @@ struct FinnhubProvider: Sendable {
         }.sorted { $0.period < $1.period }
     }
 
+    // MARK: - Metrics
+
+    /// Current metrics plus the historical ratio series.
+    ///
+    /// The `series` block is the reason this endpoint matters: it carries years
+    /// of P/E, P/S, margins and ROE, which is what turns a bare multiple into
+    /// "78th percentile of its own history". Finnhub's free tier includes it
+    /// even though it withholds candles and estimates.
+    func metrics(symbol: String) async throws -> CompanyMetricsDTO {
+        let raw = try await client.get(
+            try endpoint(path: "/stock/metric",
+                         query: [.init(name: "symbol", value: symbol.uppercased()),
+                                 .init(name: "metric", value: "all")],
+                         label: "metric"),
+            as: FinnhubMetrics.self
+        )
+        guard let current = raw.metric, !current.isEmpty else {
+            throw APIError.noData(.finnhub, endpoint: "metric")
+        }
+
+        return CompanyMetricsDTO(
+            // Finnhub mixes numbers and strings (dates such as 52WeekHighDate)
+            // in one object, so non-numeric entries are dropped rather than
+            // coerced.
+            current: current.compactMapValues(\.doubleValue),
+            annual: Self.series(from: raw.series?.annual),
+            quarterly: Self.series(from: raw.series?.quarterly),
+            asOf: .now
+        )
+    }
+
+    private static func series(
+        from block: [String: [FinnhubSeriesPoint]]?
+    ) -> [String: [MetricPoint]] {
+        guard let block else { return [:] }
+        return block.compactMapValues { points in
+            let mapped = points.compactMap { point -> MetricPoint? in
+                guard let value = point.v,
+                      let date = dayFormatter.date(from: point.period)
+                else { return nil }
+                return MetricPoint(period: date, value: value)
+            }
+            .sorted { $0.period < $1.period }
+            return mapped.isEmpty ? nil : mapped
+        }
+    }
+
     // MARK: - News
 
     func companyNews(symbol: String, from: Date, to: Date) async throws -> [NewsItemDTO] {
@@ -261,6 +308,49 @@ private struct FinnhubEarnings: Decodable, Sendable {
     let actual: Double?
     let surprise: Double?
     let surprisePercent: Double?
+}
+
+private struct FinnhubMetrics: Decodable, Sendable {
+    let metric: [String: JSONValue]?
+    let series: Series?
+
+    struct Series: Decodable, Sendable {
+        let annual: [String: [FinnhubSeriesPoint]]?
+        let quarterly: [String: [FinnhubSeriesPoint]]?
+    }
+}
+
+private struct FinnhubSeriesPoint: Decodable, Sendable {
+    let period: String
+    let v: Double?
+}
+
+/// Finnhub's metric object mixes numbers, strings and nulls under one schema,
+/// so values are decoded permissively and only the numeric ones are kept.
+/// Decoding it as `[String: Double]` fails outright on the first date string.
+private enum JSONValue: Decodable, Sendable {
+    case number(Double)
+    case string(String)
+    case null
+    case other
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else {
+            self = .other
+        }
+    }
+
+    var doubleValue: Double? {
+        if case .number(let value) = self { return value }
+        return nil
+    }
 }
 
 private struct FinnhubNews: Decodable, Sendable {
