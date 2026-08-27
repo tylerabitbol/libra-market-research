@@ -20,6 +20,11 @@ final class AppEnvironment {
     /// The values themselves are never held here — only whether one exists.
     private(set) var configuredKeys: Set<SecretKey> = []
 
+    /// Whether secure storage works at all. Checked once at startup, because a
+    /// broken Keychain makes `configuredKeys` silently empty — the app would
+    /// otherwise report every key as unset with no explanation.
+    private(set) var secretsHealth: SecretsHealth = .available
+
     init(
         secrets: any SecretsStoring = KeychainSecretsStore(),
         httpClient: HTTPClient = HTTPClient()
@@ -27,6 +32,7 @@ final class AppEnvironment {
         self.secrets = secrets
         self.httpClient = httpClient
         self.registry = .sample
+        self.secretsHealth = secrets.diagnose()
         refreshConfiguredKeys()
         rebuildRegistry()
     }
