@@ -110,10 +110,22 @@ actor HTTPClient {
         case 401:
             throw APIError.invalidCredentials(endpoint.provider)
         case 403:
-            // Finnhub returns 403 for endpoints outside your plan; SEC returns
-            // it when the User-Agent is missing or the client is blocked.
-            // Both are "you can't have this", not "try again".
-            throw APIError.notEntitled(endpoint.provider, endpoint: endpoint.label)
+            // 403 is overloaded across these providers and the distinction is
+            // the difference between two very different user actions.
+            //
+            // Tiingo answers a bad credential with 403 {"detail":"Invalid
+            // token."} rather than 401, so a mistyped key would otherwise be
+            // reported as "not in your plan" and send the user off to consider
+            // upgrading a subscription that was never the problem. Finnhub uses
+            // 403 for genuine tier gaps; SEC uses it when the User-Agent is
+            // missing. Reading the body is the only way to tell them apart.
+            let body = String(decoding: data, as: UTF8.self).lowercased()
+            let looksLikeBadCredential = ["invalid token", "invalid api key",
+                                          "not authorized", "invalid credentials"]
+                .contains { body.contains($0) }
+            throw looksLikeBadCredential
+                ? APIError.invalidCredentials(endpoint.provider)
+                : APIError.notEntitled(endpoint.provider, endpoint: endpoint.label)
         case 404:
             throw APIError.notFound(endpoint.provider, endpoint: endpoint.label)
         case 429:

@@ -151,6 +151,13 @@ private struct BenchmarkRow: View {
                     .font(.caption2)
                     .foregroundStyle(.orange)
             } else {
+                // A live price with missing history is a partial success, and
+                // saying why beats leaving three cells reading "Not available".
+                if let historyError = performance.historyError {
+                    Text("History unavailable: \(historyError.shortDescription)")
+                        .font(.caption2)
+                        .foregroundStyle(.orange)
+                }
                 HStack(spacing: 0) {
                     changeColumn("1D", performance.dailyPercent)
                     changeColumn("1W", performance.weekly?.percent,

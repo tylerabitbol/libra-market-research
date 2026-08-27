@@ -28,10 +28,16 @@ struct SettingsView: View {
 
             Section {
                 ForEach(dataSources) { source in
-                    NavigationLink {
-                        SecretEntryView(key: source.key, provider: source.provider)
-                    } label: {
-                        DataSourceRow(source: source, readiness: app.readiness(for: source.provider))
+                    VStack(alignment: .leading, spacing: 8) {
+                        NavigationLink {
+                            SecretEntryView(key: source.key, provider: source.provider)
+                        } label: {
+                            DataSourceRow(source: source,
+                                          readiness: app.readiness(for: source.provider))
+                        }
+                        if app.readiness(for: source.provider).isReady {
+                            ConnectionTestRow(provider: source.provider)
+                        }
                     }
                     // Typing a key into a store that cannot retain it is worse
                     // than saying up front that it won't work.
@@ -81,6 +87,52 @@ struct SettingsView: View {
             .init(key: .fredAPIKey, provider: .fred,
                   purpose: "Index levels (S&P 500, Dow, Nasdaq, VIX) and macro series")
         ]
+    }
+}
+
+/// Verifies a stored key by actually using it.
+///
+/// Without this, a mistyped key looks identical to a working one until some
+/// unrelated screen renders empty much later.
+private struct ConnectionTestRow: View {
+    let provider: DataProviderID
+    @Environment(AppEnvironment.self) private var app
+
+    @State private var result: ConnectionTest.Result?
+    @State private var isTesting = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                Task { await test() }
+            } label: {
+                HStack(spacing: 6) {
+                    if isTesting {
+                        ProgressView().controlSize(.mini)
+                    } else {
+                        Image(systemName: "checkmark.shield")
+                    }
+                    Text(isTesting ? "Testing…" : "Test connection")
+                }
+                .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .disabled(isTesting)
+
+            if let result {
+                Label(result.message, systemImage: result.isSuccess
+                      ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    .font(.caption2)
+                    .foregroundStyle(result.isSuccess ? .green : .red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func test() async {
+        isTesting = true
+        defer { isTesting = false }
+        result = await ConnectionTest.run(for: provider, registry: app.registry)
     }
 }
 

@@ -10,6 +10,8 @@ struct VantageApp: App {
         if SelfTest.isRequested {
             SelfTest.run(secrets: KeychainSecretsStore())
         }
+        // Debug-only, and only when explicitly asked for by launch argument.
+        DeveloperOptions.seedSecretsFromEnvironment(into: KeychainSecretsStore())
     }
 
     var body: some Scene {
