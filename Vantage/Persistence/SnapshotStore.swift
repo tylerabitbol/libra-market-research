@@ -154,6 +154,107 @@ actor SnapshotStore {
         return inserted
     }
 
+    // MARK: - Detected events
+
+    /// Records detected events, one per kind per day per security.
+    ///
+    /// Detection re-runs on every visit over the same bars, so the same Tuesday
+    /// volume spike would otherwise accumulate a row per refresh. Deduplication
+    /// is on `naturalKey` rather than on the headline text: the wording of a
+    /// headline can change with a code edit, and that must not resurrect an
+    /// event the user has already acknowledged.
+    @discardableResult
+    func record(events: [DetectedEventDTO], symbol: String) throws -> Int {
+        // An unfinished session is not yet a fact. A +8% reading at midday can
+        // close at +2%, and the permanent record must not keep the midday
+        // figure as what happened — the closed session is picked up from the
+        // bars on a later visit. Enforced here rather than at the call site so
+        // no future caller can store one by forgetting.
+        let events = events.filter { !$0.isProvisional }
+        guard !events.isEmpty, let security = try security(for: symbol) else { return 0 }
+
+        let symbolKey = security.symbol
+        let descriptor = FetchDescriptor<DetectedEvent>(
+            predicate: #Predicate { $0.security?.symbol == symbolKey }
+        )
+        let existing = Set((try? modelContext.fetch(descriptor))?.map {
+            "\($0.kindRaw)|\(DetectedEventDTO.dayKey($0.occurredAt))"
+        } ?? [])
+
+        var inserted = 0
+        for event in events where !existing.contains(event.naturalKey) {
+            modelContext.insert(DetectedEvent(
+                security: security,
+                kind: event.kind,
+                occurredAt: event.occurredAt,
+                headline: event.headline,
+                detailLines: event.detailLines,
+                context: event.context,
+                unusualness: event.unusualness,
+                sourceDetails: event.sourceDetails,
+                sourceURLs: event.sourceURLs
+            ))
+            inserted += 1
+        }
+        if inserted > 0 { try modelContext.save() }
+        return inserted
+    }
+
+    /// Stored events for one security, most recent occurrence first.
+    func events(symbol: String, limit: Int = 50) throws -> [DetectedEventDTO] {
+        let key = symbol.uppercased()
+        var descriptor = FetchDescriptor<DetectedEvent>(
+            predicate: #Predicate { $0.security?.symbol == key },
+            sortBy: [SortDescriptor(\.occurredAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        return try modelContext.fetch(descriptor).map(\.snapshot)
+    }
+
+    /// Events across every security in the store, for the Research feed.
+    func recentEvents(limit: Int = 100) throws -> [SecurityEvent] {
+        var descriptor = FetchDescriptor<DetectedEvent>(
+            sortBy: [SortDescriptor(\.occurredAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        return try modelContext.fetch(descriptor).compactMap { event in
+            guard let security = event.security else { return nil }
+            return SecurityEvent(
+                symbol: security.symbol,
+                name: security.name,
+                event: event.snapshot
+            )
+        }
+    }
+
+    func acknowledge(symbol: String, naturalKey: String) throws {
+        let key = symbol.uppercased()
+        let descriptor = FetchDescriptor<DetectedEvent>(
+            predicate: #Predicate { $0.security?.symbol == key }
+        )
+        for event in try modelContext.fetch(descriptor)
+        where event.snapshot.naturalKey == naturalKey {
+            event.isAcknowledged = true
+        }
+        try modelContext.save()
+    }
+
+    // MARK: - Visits
+
+    /// When the user last opened this security, before the current visit.
+    ///
+    /// Must be read *before* `markViewed` — the whole point is the previous
+    /// timestamp, and stamping first would make every visit report no changes.
+    func lastViewed(symbol: String) throws -> Date? {
+        try security(for: symbol)?.lastViewedAt
+    }
+
+    func markViewed(symbol: String, at date: Date = .now) throws {
+        guard let security = try security(for: symbol) else { return }
+        security.lastViewedAt = date
+        try modelContext.save()
+    }
+
     // MARK: - Reading history back
 
     /// The most recent quote observation recorded before `date`.
@@ -215,4 +316,15 @@ struct QuoteSnapshot: Sendable, Hashable {
         previousClose = observation.previousClose
         changePercent = observation.changePercent
     }
+}
+
+
+/// One event together with the security it belongs to, for feeds that mix
+/// securities. The store's `DetectedEvent` reaches its symbol through a
+/// relationship, which does not survive the trip out of the actor.
+struct SecurityEvent: Sendable, Hashable, Identifiable {
+    var id: String { "\(symbol)|\(event.naturalKey)" }
+    let symbol: String
+    let name: String
+    let event: DetectedEventDTO
 }

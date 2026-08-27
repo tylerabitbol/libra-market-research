@@ -27,6 +27,16 @@ final class Security {
     var profileUpdatedAt: Date?
     var createdAt: Date
 
+    /// When the user last opened this security's detail page.
+    ///
+    /// The reference point for "what changed since I last looked" (Section 4).
+    /// Deliberately distinct from the last *fetch*: the app may refresh a
+    /// watchlist row many times between visits, and a change the user has not
+    /// seen is still new to them. Nil until the first visit, which is why
+    /// detectors report nothing rather than presenting a company's entire
+    /// history as new.
+    var lastViewedAt: Date?
+
     @Relationship(deleteRule: .cascade, inverse: \WatchlistEntry.security)
     var watchlistEntry: WatchlistEntry?
 

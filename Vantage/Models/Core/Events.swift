@@ -158,3 +158,101 @@ enum EvidenceCategory: String, Sendable, CaseIterable, Identifiable {
         }
     }
 }
+
+/// A detected change as a value type.
+///
+/// Detectors are pure functions and must stay testable without a SwiftData
+/// container, and `@Model` classes are not `Sendable` so one cannot cross an
+/// actor boundary. `DetectedEventDTO` is what detection produces; the store
+/// converts it into a `DetectedEvent` row.
+struct DetectedEventDTO: Sendable, Hashable, Identifiable {
+    var id: String { naturalKey }
+
+    let kind: EventKind
+    let occurredAt: Date
+    let headline: String
+    let detailLines: [String]
+    /// The "why this matters" text: what the numbers mean, never what to do.
+    let context: String?
+    /// 0–1, relative to the security's own history. Not importance, not
+    /// direction, and explicitly not a probability — see `EventDetector`.
+    let unusualness: Double
+    let sourceDetails: [String]
+    let sourceURLs: [URL]
+    /// The arithmetic, so the figure can be checked rather than trusted.
+    let derivation: Derivation?
+    /// True when the event describes a session that has not closed.
+    ///
+    /// Provisional events are shown but never stored. A move of +8% at midday
+    /// can finish the day at +2%, and the permanent record must not keep the
+    /// midday reading as though it were what happened. The closed session is
+    /// detected and stored on a later visit, from the bars.
+    let isProvisional: Bool
+
+    init(
+        kind: EventKind,
+        occurredAt: Date,
+        headline: String,
+        detailLines: [String] = [],
+        context: String? = nil,
+        unusualness: Double = 0,
+        sourceDetails: [String] = [],
+        sourceURLs: [URL] = [],
+        derivation: Derivation? = nil,
+        isProvisional: Bool = false
+    ) {
+        self.kind = kind
+        self.occurredAt = occurredAt
+        self.headline = headline
+        self.detailLines = detailLines
+        self.context = context
+        self.unusualness = min(max(unusualness, 0), 1)
+        self.sourceDetails = sourceDetails
+        self.sourceURLs = sourceURLs
+        self.derivation = derivation
+        self.isProvisional = isProvisional
+    }
+
+    /// Identity for deduplication: one event of a kind per day per security.
+    ///
+    /// Detection re-runs on every visit, and the same Tuesday volume spike must
+    /// not accumulate a row per refresh. Day granularity rather than the exact
+    /// timestamp because `occurredAt` for a bar-derived event is the session,
+    /// and sessions are days.
+    var naturalKey: String {
+        "\(kind.rawValue)|\(Self.dayKey(occurredAt))"
+    }
+
+    static func dayKey(_ date: Date) -> String {
+        date.formatted(.iso8601.year().month().day().dateSeparator(.dash))
+    }
+
+    /// The headline as a `.calculation`: it states measured arithmetic and
+    /// carries the derivation that produced it.
+    var headlineClaim: Claim {
+        Claim(kind: .calculation, text: headline, derivation: derivation)
+    }
+
+    /// The context as an `.interpretation` — a judgement about what the figures
+    /// show. Deliberately a weaker claim than the headline, and never a `.fact`.
+    var contextClaim: Claim? {
+        guard let context else { return nil }
+        return Claim(kind: .interpretation, text: context)
+    }
+}
+
+extension DetectedEvent {
+    /// The stored row rendered back as a value, safe to hand across actors.
+    var snapshot: DetectedEventDTO {
+        DetectedEventDTO(
+            kind: kind,
+            occurredAt: occurredAt,
+            headline: headline,
+            detailLines: detailLines,
+            context: context,
+            unusualness: unusualness,
+            sourceDetails: sourceDetails,
+            sourceURLs: sourceURLs
+        )
+    }
+}

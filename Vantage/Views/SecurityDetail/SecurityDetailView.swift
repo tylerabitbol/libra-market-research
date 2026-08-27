@@ -21,6 +21,7 @@ struct SecurityDetailView: View {
                 if app.isUsingSampleData { SampleDataBanner() }
 
                 overview
+                changesSection
                 chartSection
                 valuationSection
                 fundamentalsSection
@@ -112,6 +113,61 @@ struct SecurityDetailView: View {
               let high = model.metrics?.currentValue("52WeekHigh")
         else { return Format.notAvailable }
         return "\(Format.currency(low)) – \(Format.currency(high))"
+    }
+
+    // MARK: - What changed
+
+    /// The question the whole app exists to answer, so it sits directly under
+    /// the price rather than below the fold.
+    ///
+    /// An empty result is stated plainly. "Nothing unusual" is a real finding
+    /// and a useful one; leaving the section out entirely would make its
+    /// absence indistinguishable from a section that failed to load.
+    @ViewBuilder
+    private var changesSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("What changed").font(.headline)
+                Spacer()
+                if let lastVisit = model.lastVisit {
+                    Text("Since \(Format.shortDate(lastVisit))")
+                        .font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+
+            if model.events.isEmpty {
+                Text(emptyChangesMessage)
+                    .font(.caption).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(14)
+                    .background(Color(.secondarySystemGroupedBackground),
+                                in: .rect(cornerRadius: 12))
+            } else {
+                if model.lastVisit == nil {
+                    Text("This is your first visit, so everything below is "
+                         + "reported from the available history rather than as new.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                ForEach(model.events) { event in
+                    EventCard(event: event, isNew: model.isNew(event))
+                }
+            }
+        }
+    }
+
+    private var emptyChangesMessage: String {
+        if model.bars.isEmpty {
+            return model.historyError == nil
+                ? "Loading price history…"
+                : "No price history loaded, so nothing can be compared."
+        }
+        if model.bars.count < EventDetector.minimumSample {
+            return "Only \(model.bars.count) sessions of history are available. "
+                + "At least \(EventDetector.minimumSample) are needed before "
+                + "\"unusual\" means anything."
+        }
+        return "Nothing unusual in the recent price, volume, or volatility, "
+            + "and no new filings since your last visit."
     }
 
     // MARK: - Chart
