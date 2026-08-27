@@ -56,7 +56,19 @@ enum ConnectionTest {
                 }
                 return .success(detail: "S&P 500 at \(Format.ratio(latest.value, precision: 2)).")
 
-            case .sec, .computed, .userJournal:
+            case .sec:
+                guard let sec = registry.sec else {
+                    return .failure(.missingCredentials(.sec))
+                }
+                // Resolving a well-known ticker exercises the whole path: the
+                // User-Agent EDGAR demands, the ticker map, and decoding.
+                let cik = try await sec.resolveCIK(symbol: "AAPL")
+                let filings = try await sec.filings(cik: cik, formTypes: [], limit: 5)
+                return .success(
+                    detail: "CIK \(cik) resolved, \(filings.count) recent filings."
+                )
+
+            case .computed, .userJournal:
                 return .failure(.noData(provider, endpoint: "connection test"))
             }
         } catch let error as APIError {

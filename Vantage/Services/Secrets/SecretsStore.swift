@@ -17,6 +17,9 @@ enum SecretKey: String, CaseIterable, Sendable {
     /// policy requires a contact address in the User-Agent header, and that
     /// address is personal data that shouldn't be committed to the repo.
     case secContactEmail
+    /// The organisation half of the SEC User-Agent. Optional: defaults to the
+    /// app name, which satisfies the policy on its own.
+    case secOrganizationName
 
     var displayName: String {
         switch self {
@@ -25,6 +28,7 @@ enum SecretKey: String, CaseIterable, Sendable {
         case .fredAPIKey: "FRED API key"
         case .anthropicAPIKey: "Anthropic API key"
         case .secContactEmail: "SEC contact email"
+        case .secOrganizationName: "SEC organisation name"
         }
     }
 
@@ -40,12 +44,19 @@ enum SecretKey: String, CaseIterable, Sendable {
             "Optional. Only used if you turn on AI summaries. Calls are billed to your account."
         case .secContactEmail:
             "Required by the SEC. They ask every automated client to identify itself with a contact address. Requests to EDGAR are disabled until this is set."
+        case .secOrganizationName:
+            "Optional. The SEC's documented User-Agent format is \"Company Name contact@domain.com\". Leave blank to identify as \"Vantage\"."
         }
     }
 
     /// Secrets are masked in the UI; the contact email is not a secret and is
     /// more useful shown in full so typos are visible.
-    var isSensitive: Bool { self != .secContactEmail }
+    /// Neither the contact email nor the organisation name is a credential;
+    /// both are identification, and both are more useful shown in full so a
+    /// typo is visible.
+    var isSensitive: Bool {
+        self != .secContactEmail && self != .secOrganizationName
+    }
 }
 
 /// Whether secure storage actually works right now.

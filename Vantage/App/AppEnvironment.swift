@@ -63,6 +63,9 @@ final class AppEnvironment {
         let finnhubReady = hasKey(.finnhubAPIKey)
         let tiingoReady = hasKey(.tiingoAPIKey)
         let fredReady = hasKey(.fredAPIKey)
+        // EDGAR needs no key — only the contact email its fair-access policy
+        // requires. Without one, requests are refused by the SEC, not by us.
+        let secReady = hasKey(.secContactEmail)
 
         let finnhub = FinnhubProvider(client: httpClient, secrets: secrets)
         let tiingo = TiingoProvider(client: httpClient, secrets: secrets)
@@ -78,11 +81,12 @@ final class AppEnvironment {
             marketData: marketData,
             fundamentals: nil,                       // Phase 3, from SEC XBRL.
             analyst: finnhubReady ? FinnhubAnalystProvider(provider: finnhub) : nil,
-            sec: MockSECDataProvider(),              // Phase 4.
+            sec: secReady ? SECProvider(client: httpClient, secrets: secrets)
+                          : MockSECDataProvider(),
             macro: fredReady ? FREDProvider(client: httpClient, secrets: secrets)
                              : MockMacroDataProvider(),
             news: finnhubReady ? FinnhubNewsProvider(provider: finnhub) : nil,
-            isUsingSampleData: !(finnhubReady && tiingoReady && fredReady)
+            isUsingSampleData: !(finnhubReady && tiingoReady && fredReady && secReady)
         )
     }
 
