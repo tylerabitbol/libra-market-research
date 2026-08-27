@@ -103,6 +103,50 @@ struct KeychainErrorTests {
     }
 }
 
+@Suite("Key fingerprints")
+struct KeyFingerprintTests {
+    @Test("A stored key is fingerprinted by length and edges, never shown whole")
+    func fingerprintMasksTheMiddle() throws {
+        let store = InMemorySecretsStore()
+        try store.set("0123456789abcdef0123456789abcdef01234567", for: .tiingoAPIKey)
+        let fingerprint = try #require(store.fingerprint(for: .tiingoAPIKey))
+
+        #expect(fingerprint.contains("40 chars"))
+        #expect(fingerprint.contains("0123"))
+        #expect(fingerprint.contains("4567"))
+        #expect(!fingerprint.contains("456789abcdef0123456789abcdef0123"),
+                "The middle of a credential must never be displayed")
+    }
+
+    @Test("Length is what catches a truncated paste")
+    func truncationIsVisible() throws {
+        let store = InMemorySecretsStore()
+        try store.set("0123456789abcdef0123456789abcdef012345", for: .tiingoAPIKey)  // 38
+        #expect(store.fingerprint(for: .tiingoAPIKey)?.contains("38 chars") == true)
+    }
+
+    @Test("A value too short to mask is flagged rather than partially revealed")
+    func shortValueIsFlagged() throws {
+        let store = InMemorySecretsStore()
+        try store.set("abc123", for: .finnhubAPIKey)
+        let fingerprint = try #require(store.fingerprint(for: .finnhubAPIKey))
+        #expect(fingerprint.contains("too short"))
+        #expect(!fingerprint.contains("abc1"))
+    }
+
+    @Test("The SEC contact email is shown in full, being an address rather than a secret")
+    func emailIsNotMasked() throws {
+        let store = InMemorySecretsStore()
+        try store.set("someone@example.com", for: .secContactEmail)
+        #expect(store.fingerprint(for: .secContactEmail) == "someone@example.com")
+    }
+
+    @Test("Nothing stored yields no fingerprint")
+    func absentKeyHasNoFingerprint() {
+        #expect(InMemorySecretsStore().fingerprint(for: .tiingoAPIKey) == nil)
+    }
+}
+
 @Suite("Secrets store")
 struct SecretsStoreTests {
     @Test("An unset key throws the error the UI can act on")
