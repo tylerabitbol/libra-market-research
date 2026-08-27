@@ -8,7 +8,9 @@ struct VantageApp: App {
         // checked from the command line, where the Keychain actually behaves
         // like it does in production.
         if SelfTest.isRequested {
-            SelfTest.run(secrets: KeychainSecretsStore())
+            let secrets = KeychainSecretsStore()
+            SelfTest.run(secrets: secrets)
+            Task.detached { await SelfTest.runConnectionTests(secrets: secrets) }
         }
         // Debug-only, and only when explicitly asked for by launch argument.
         DeveloperOptions.seedSecretsFromEnvironment(into: KeychainSecretsStore())

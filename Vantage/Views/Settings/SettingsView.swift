@@ -84,6 +84,8 @@ struct SettingsView: View {
                   purpose: "Daily price history — charts, volatility, momentum"),
             .init(key: .secContactEmail, provider: .sec,
                   purpose: "Filings, financial statements, insider transactions"),
+            .init(key: .secOrganizationName, provider: .sec,
+                  purpose: "Optional — the name half of the SEC User-Agent"),
             .init(key: .fredAPIKey, provider: .fred,
                   purpose: "Index levels (S&P 500, Dow, Nasdaq, VIX) and macro series")
         ]
