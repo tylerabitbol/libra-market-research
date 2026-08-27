@@ -1,0 +1,59 @@
+name: Vantage
+options:
+  bundleIdPrefix: com.tylerabitbol
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: NO
+
+targets:
+  Vantage:
+    type: application
+    platform: iOS
+    sources:
+      - path: Vantage
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tylerabitbol.vantage
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        INFOPLIST_KEY_CFBundleDisplayName: Vantage
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_PREVIEWS: YES
+
+  VantageTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: VantageTests
+    dependencies:
+      - target: Vantage
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.tylerabitbol.vantage.tests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Vantage:
+    build:
+      targets:
+        Vantage: all
+    test:
+      targets:
+        - VantageTests
+      gatherCoverageData: true
+    run:
+      config: Debug
