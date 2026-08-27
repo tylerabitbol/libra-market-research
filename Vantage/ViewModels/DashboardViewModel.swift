@@ -9,7 +9,15 @@ struct BenchmarkPerformance: Sendable, Identifiable {
     var id: String { benchmark.id }
 
     let benchmark: Benchmark
-    let quote: QuoteDTO?
+    /// The headline value: an index level for FRED-backed rows, a share price
+    /// for ETF-backed rows. Which one it is changes how it must be formatted —
+    /// the S&P 500 at 7691.76 is points, not dollars.
+    let level: Double?
+    let isIndexLevel: Bool
+    /// The date the level refers to. FRED is end-of-day, so this is often the
+    /// prior session and the UI must say so rather than implying live data.
+    let asOf: Date?
+
     let daily: PeriodReturn?
     let weekly: PeriodReturn?
     let monthly: PeriodReturn?
@@ -17,11 +25,22 @@ struct BenchmarkPerformance: Sendable, Identifiable {
     /// Set when this row failed to load; the row still renders, marked.
     let error: APIError?
 
-    var last: Double? { quote?.last }
+    var dailyPercent: Double? { daily?.percent }
 
-    /// Prefers the quote's own previous-close change over a computed one, since
-    /// the provider's previous close accounts for corporate actions.
-    var dailyPercent: Double? { quote?.changePercent ?? daily?.percent }
+    /// Formatted for display, respecting whether this is points or currency.
+    var formattedLevel: String {
+        guard let level else { return Format.notAvailable }
+        return isIndexLevel ? Format.ratio(level, precision: 2) : Format.currency(level)
+    }
+
+    static func failed(_ benchmark: Benchmark, _ error: APIError) -> BenchmarkPerformance {
+        BenchmarkPerformance(
+            benchmark: benchmark, level: nil, isIndexLevel: benchmark.hasRealIndex,
+            asOf: nil, daily: nil, weekly: nil, monthly: nil,
+            freshness: .failed(previous: nil, reason: error.shortDescription),
+            error: error
+        )
+    }
 }
 
 @Observable
@@ -110,42 +129,106 @@ final class DashboardViewModel {
         for benchmark: Benchmark,
         registry: ProviderRegistry
     ) async -> BenchmarkPerformance {
-        let provider = registry.marketData
         do {
-            let quote = try await provider.quote(symbol: benchmark.symbol)
-            let bars = try await provider.bars(
-                symbol: benchmark.symbol,
-                resolution: .daily,
-                from: Date.now.addingTimeInterval(-70 * 86_400),
-                to: .now
-            )
-            let models = bars.map {
+            // Prefer the genuine index series where one exists. FRED gives the
+            // real S&P 500 and the real VIX for free; the ETF is only a
+            // fallback for benchmarks FRED does not publish.
+            if let seriesID = benchmark.fredSeriesID, let macro = registry.macro {
+                return try await indexRow(benchmark, seriesID: seriesID, macro: macro)
+            }
+            guard let symbol = benchmark.etfSymbol else {
+                return .failed(benchmark, .noData(.fred, endpoint: benchmark.displayName))
+            }
+            return try await etfRow(benchmark, symbol: symbol, provider: registry.marketData)
+        } catch let error as APIError {
+            return .failed(benchmark, error)
+        } catch {
+            return .failed(benchmark, .transport(.fred, underlying: error.localizedDescription))
+        }
+    }
+
+    /// A real index, built from a FRED daily series.
+    ///
+    /// FRED publishes closes only, so the synthetic bars carry the same value
+    /// for open/high/low. That is fine for the return arithmetic here, which
+    /// reads `analysisClose` — but it means these bars must never be used for
+    /// range or candlestick display.
+    private static func indexRow(
+        _ benchmark: Benchmark,
+        seriesID: String,
+        macro: any MacroDataProvider
+    ) async throws -> BenchmarkPerformance {
+        let observations = try await macro.observations(
+            seriesID: seriesID,
+            from: Date.now.addingTimeInterval(-400 * 86_400),
+            to: .now
+        )
+        guard let latest = observations.last else {
+            throw APIError.noData(.fred, endpoint: seriesID)
+        }
+
+        let bars = observations.map {
+            PriceBar(date: $0.date, resolution: .daily,
+                     open: $0.value, high: $0.value, low: $0.value, close: $0.value,
+                     adjustedClose: $0.value)
+        }
+
+        return BenchmarkPerformance(
+            benchmark: benchmark,
+            level: latest.value,
+            isIndexLevel: true,
+            asOf: latest.date,
+            daily: ReturnCalculator.trailingReturn(bars: bars, window: .init(day: -1)),
+            weekly: ReturnCalculator.trailingReturn(bars: bars, window: .init(day: -7)),
+            monthly: ReturnCalculator.trailingReturn(bars: bars, window: .init(month: -1)),
+            freshness: .fresh(asOf: latest.date),
+            error: nil
+        )
+    }
+
+    /// A tradable proxy, quoted live and backed by Tiingo history.
+    private static func etfRow(
+        _ benchmark: Benchmark,
+        symbol: String,
+        provider: any MarketDataProvider
+    ) async throws -> BenchmarkPerformance {
+        let quote = try await provider.quote(symbol: symbol)
+        // History is a separate provider and a separate failure domain: if it
+        // is unavailable the live price is still worth showing.
+        let bars: [PriceBar]
+        do {
+            bars = try await provider.bars(
+                symbol: symbol, resolution: .daily,
+                from: Date.now.addingTimeInterval(-70 * 86_400), to: .now
+            ).map {
                 PriceBar(date: $0.date, resolution: .daily, open: $0.open, high: $0.high,
                          low: $0.low, close: $0.close, volume: $0.volume,
                          adjustedClose: $0.adjustedClose)
             }
-            return BenchmarkPerformance(
-                benchmark: benchmark,
-                quote: quote,
-                daily: ReturnCalculator.trailingReturn(bars: models, window: .init(day: -1)),
-                weekly: ReturnCalculator.trailingReturn(bars: models, window: .init(day: -7)),
-                monthly: ReturnCalculator.trailingReturn(bars: models, window: .init(month: -1)),
-                freshness: .fresh(asOf: .now),
-                error: nil
-            )
-        } catch let error as APIError {
-            return BenchmarkPerformance(
-                benchmark: benchmark, quote: nil, daily: nil, weekly: nil, monthly: nil,
-                freshness: .failed(previous: nil, reason: error.shortDescription),
-                error: error
-            )
         } catch {
-            return BenchmarkPerformance(
-                benchmark: benchmark, quote: nil, daily: nil, weekly: nil, monthly: nil,
-                freshness: .failed(previous: nil, reason: "unexpected error"),
-                error: .transport(.finnhub, underlying: error.localizedDescription)
-            )
+            bars = []
         }
+
+        // The provider's own previous close accounts for corporate actions, so
+        // it beats a computed daily figure when available.
+        let daily = quote.changePercent.map {
+            PeriodReturn(percent: $0,
+                         startDate: quote.quoteTime ?? .now, endDate: quote.quoteTime ?? .now,
+                         startPrice: quote.previousClose ?? 0, endPrice: quote.last,
+                         isFullWindow: true)
+        } ?? ReturnCalculator.trailingReturn(bars: bars, window: .init(day: -1))
+
+        return BenchmarkPerformance(
+            benchmark: benchmark,
+            level: quote.last,
+            isIndexLevel: false,
+            asOf: quote.quoteTime ?? .now,
+            daily: daily,
+            weekly: ReturnCalculator.trailingReturn(bars: bars, window: .init(day: -7)),
+            monthly: ReturnCalculator.trailingReturn(bars: bars, window: .init(month: -1)),
+            freshness: .fresh(asOf: .now),
+            error: nil
+        )
     }
 
     private static func macroReadings(registry: ProviderRegistry) async -> [MacroReading] {

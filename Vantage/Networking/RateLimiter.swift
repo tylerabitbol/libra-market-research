@@ -65,6 +65,11 @@ actor RateLimiter {
     /// Finnhub's free tier documents 60 calls/minute. We use 50.
     static func finnhub() -> RateLimiter { RateLimiter(requests: 50, per: 60, burst: 10) }
 
+    /// Tiingo's free tier allows 50 requests/hour and 1000/day. The hourly cap
+    /// is the binding one and is easy to exhaust while backfilling history, so
+    /// we pace to 45/hour with a small burst for interactive use.
+    static func tiingo() -> RateLimiter { RateLimiter(requests: 45, per: 3600, burst: 6) }
+
     /// FRED permits 120 requests/minute.
     static func fred() -> RateLimiter { RateLimiter(requests: 100, per: 60, burst: 20) }
 }

@@ -44,12 +44,21 @@ struct Endpoint: Sendable, Hashable {
         return request
     }
 
-    /// Stable key for the response cache. Excludes headers, which carry
-    /// credentials and contact info that must never end up in a cache key.
+    /// Query parameter names that carry credentials.
+    ///
+    /// Finnhub and FRED both authenticate by query string rather than header,
+    /// so excluding headers alone is not enough to keep secrets out of cache
+    /// keys — these names are stripped explicitly.
+    static let credentialQueryNames: Set<String> = ["token", "api_key", "apikey"]
+
+    /// Stable key for the response cache. Excludes headers and any credential
+    /// query parameter, so a stored key can never contain a secret.
     var cacheKey: String {
         var components = URLComponents()
         components.path = path
-        components.queryItems = queryItems.sorted { $0.name < $1.name }
+        components.queryItems = queryItems
+            .filter { !Self.credentialQueryNames.contains($0.name.lowercased()) }
+            .sorted { $0.name < $1.name }
         return "\(provider.rawValue)|\(components.string ?? path)"
     }
 }

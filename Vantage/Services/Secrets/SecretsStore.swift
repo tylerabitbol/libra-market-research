@@ -10,6 +10,7 @@ import Security
 /// the provider that needs it for an Authorization header.
 enum SecretKey: String, CaseIterable, Sendable {
     case finnhubAPIKey
+    case tiingoAPIKey
     case fredAPIKey
     case anthropicAPIKey
     /// Not a credential, but it belongs with them: SEC EDGAR's fair-access
@@ -20,6 +21,7 @@ enum SecretKey: String, CaseIterable, Sendable {
     var displayName: String {
         switch self {
         case .finnhubAPIKey: "Finnhub API key"
+        case .tiingoAPIKey: "Tiingo API key"
         case .fredAPIKey: "FRED API key"
         case .anthropicAPIKey: "Anthropic API key"
         case .secContactEmail: "SEC contact email"
@@ -29,7 +31,9 @@ enum SecretKey: String, CaseIterable, Sendable {
     var helpText: String {
         switch self {
         case .finnhubAPIKey:
-            "Free key from finnhub.io. Used for quotes, company profiles and news."
+            "Free key from finnhub.io. Used for quotes, company profiles, fundamentals and news."
+        case .tiingoAPIKey:
+            "Free key from tiingo.com. Used for daily price history — charts, moving averages and volatility all depend on it."
         case .fredAPIKey:
             "Free key from fred.stlouisfed.org. Used for macroeconomic series."
         case .anthropicAPIKey:
