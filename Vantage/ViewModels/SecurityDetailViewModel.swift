@@ -107,9 +107,19 @@ final class SecurityDetailViewModel {
             lastVisit = try? await snapshots.lastViewed(symbol: symbol)
         }
         // The quote carries today; the bars stop at the previous close.
+        // The backfill covers the sessions in between — a large move on a day
+        // the app was not opened is still a change the user has not seen.
         let detected = EventDetector.detect(bars: bars, quote: quote)
+            + EventDetector.priceMoves(bars: bars, after: lastVisit)
             + EventDetector.newFilings(filings: filings, since: lastVisit)
-        events = detected.sorted { $0.occurredAt > $1.occurredAt }
+        // The live detector and the backfill can both reach the most recent
+        // closed session. They describe it identically, so the list would show
+        // the same card twice — the store deduplicates on the same key, but
+        // the screen has no such protection.
+        var seen: Set<String> = []
+        events = detected
+            .filter { seen.insert($0.naturalKey).inserted }
+            .sorted { $0.occurredAt > $1.occurredAt }
 
         #if DEBUG
         if let reading = EventDetector.latestReading(bars: bars, quote: quote) {
@@ -339,27 +349,33 @@ final class SecurityDetailViewModel {
     ///
     /// Computed rather than read, because issuers do not file an "FCF" concept.
     /// A period missing either input yields no figure, never a partial one.
+    ///
+    /// Keyed on the period the figures describe, **not** on `fiscalYear`. That
+    /// field is the *filing's* fiscal context, so a restatement carries the
+    /// filing's year rather than the period's — which pairs cash-flow figures
+    /// with the wrong dates and puts a real number under a wrong year. The same
+    /// mistake was already fixed once in XBRL extraction; it survived here.
     var annualFreeCashFlow: [CashFlowPoint] {
-        let ocf = Dictionary(
-            fundamentals.filter { $0.concept == .operatingCashFlow && $0.periodKind == .annual }
-                .map { ($0.fiscalYear, $0.value) },
-            uniquingKeysWith: { _, latest in latest })
-        let capex = Dictionary(
-            fundamentals.filter { $0.concept == .capitalExpenditures && $0.periodKind == .annual }
-                .map { ($0.fiscalYear, $0.value) },
-            uniquingKeysWith: { _, latest in latest })
-        let dates = Dictionary(
-            fundamentals.filter { $0.periodKind == .annual }.map { ($0.fiscalYear, $0.periodEnd) },
-            uniquingKeysWith: { first, _ in first })
+        let ocf = annualValuesByPeriod(.operatingCashFlow)
+        let capex = annualValuesByPeriod(.capitalExpenditures)
 
-        return ocf.keys.compactMap { year -> (Date, Double)? in
-            guard let operating = ocf[year], let spend = capex[year], let date = dates[year]
-            else { return nil }
+        return ocf.compactMap { period, operating -> CashFlowPoint? in
+            guard let spend = capex[period] else { return nil }
             // Capex is filed as a positive outflow.
-            return (date, operating - abs(spend))
+            return CashFlowPoint(period: period, value: operating - abs(spend))
         }
-        .sorted { $0.0 < $1.0 }
-        .map { CashFlowPoint(period: $0.0, value: $0.1) }
+        .sorted { $0.period < $1.period }
+    }
+
+    /// Annual values for one concept, keyed by the period they describe.
+    /// Where a period has been restated, the most recently filed figure wins —
+    /// the original is still in the store, which is the point of keeping it.
+    private func annualValuesByPeriod(_ concept: FinancialConcept) -> [Date: Double] {
+        let facts = fundamentals
+            .filter { $0.concept == concept && $0.periodKind == .annual }
+            .sorted { ($0.filedAt ?? .distantPast) < ($1.filedAt ?? .distantPast) }
+        return Dictionary(facts.map { ($0.periodEnd, $0.value) },
+                          uniquingKeysWith: { _, latest in latest })
     }
 }
 
@@ -378,6 +394,16 @@ struct AnnualFigure: Identifiable, Sendable {
     var id: Date { fact.periodEnd }
     let fact: FinancialFactDTO
     let growth: Double?
+
+    /// The year the period actually ended in.
+    ///
+    /// Not `fact.fiscalYear`: that is the filing's fiscal context, and a
+    /// restated period carries the restating filing's year. Two different years
+    /// then render under the same label — observed on screen as two "2022"
+    /// rows holding FY2022 and FY2021 revenue.
+    var periodLabel: String {
+        Calendar.current.component(.year, from: fact.periodEnd).formatted(.number.grouping(.never))
+    }
 }
 
 struct CashFlowPoint: Identifiable, Sendable {

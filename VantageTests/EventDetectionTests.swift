@@ -278,6 +278,56 @@ struct EventDetectionTests {
         #expect(EventDetector.volatilityShift(bars: bars(moves: calmMoves(90))) == nil)
     }
 
+    // MARK: - Backfilling sessions the user missed
+
+    @Test("Sessions missed between visits are detected from the stored bars")
+    func backfillCoversMissedSessions() throws {
+        // A large move on a day the app was not opened is still a change the
+        // user has not seen. Judging only the newest session loses it entirely.
+        let series = bars(moves: calmMoves(60) + [9.0] + calmMoves(3) + [-8.0])
+        let lastVisit = try #require(series.dropLast(6).last?.date)
+
+        let events = EventDetector.priceMoves(bars: series, after: lastVisit)
+        #expect(events.count == 2)
+        #expect(events.allSatisfy { !$0.isProvisional })
+        #expect(events.contains { $0.headline.contains("rose") })
+        #expect(events.contains { $0.headline.contains("fell") })
+    }
+
+    @Test("With no prior visit the backfill reports nothing")
+    func backfillNeedsAReferencePoint() {
+        let series = bars(moves: calmMoves(60) + [9.0])
+        #expect(EventDetector.priceMoves(bars: series, after: nil).isEmpty)
+    }
+
+    @Test("Sessions before the last visit are left alone")
+    func backfillIgnoresSeenSessions() throws {
+        let series = bars(moves: calmMoves(60) + [9.0] + calmMoves(5))
+        let after = try #require(series.last?.date)
+        #expect(EventDetector.priceMoves(bars: series, after: after).isEmpty)
+    }
+
+    @Test("A session is judged only against the sessions before it")
+    func backfillDoesNotUseHindsight() throws {
+        // Including later sessions in the reference sample would let a move be
+        // judged by information that did not exist yet.
+        let series = bars(moves: calmMoves(60) + [5.0] + Array(repeating: 6.0, count: 30))
+        let lastVisit = try #require(series.dropLast(32).last?.date)
+        let events = EventDetector.priceMoves(bars: series, after: lastVisit)
+
+        // The 5% day was extraordinary when it happened, even though a calmer
+        // reading of the whole series would call it unremarkable.
+        #expect(events.contains { $0.headline.contains("5.0%") })
+    }
+
+    @Test("A move that beat the whole window is described in words, not as a ratio")
+    func comparisonLineReadsWell() throws {
+        let event = try #require(EventDetector.priceMove(bars: bars(moves: calmMoves(80) + [9.0])))
+        let line = try #require(event.detailLines.first { $0.contains("Larger than") })
+        // "Larger than 250 of the prior 250" is correct and reads badly.
+        #expect(line.contains("every one of"))
+    }
+
     // MARK: - Filings
 
     private func filing(_ form: String, daysAgo: Double) -> FilingDTO {
@@ -338,13 +388,47 @@ struct EventDetectionTests {
                                  headline: "x", unusualness: -2).unusualness == 0)
     }
 
-    @Test("A headline is a calculation and its context an interpretation")
+    @Test("A measured headline is a calculation and its context an interpretation")
     func claimKinds() throws {
-        let event = DetectedEventDTO(kind: .unusualPriceMove, occurredAt: .now,
-                                     headline: "Price rose 9.0%",
-                                     context: "Moves this large usually have a cause.")
+        let event = DetectedEventDTO(
+            kind: .unusualPriceMove, occurredAt: .now,
+            headline: "Price rose 9.0%",
+            context: "Moves this large usually have a cause.",
+            derivation: Derivation(formula: "a - b", inputs: [], result: "9.0%")
+        )
         #expect(event.headlineClaim.kind == .calculation)
         #expect(try #require(event.contextClaim).kind == .interpretation)
+    }
+
+    @Test("An observed filing is a fact, not a calculation")
+    func filingHeadlineIsFact() throws {
+        // The app did not compute that an 8-K exists; the SEC reported it.
+        // Badging it CALCULATION overstates the app's involvement and
+        // understates the claim's authority.
+        let since = Self.epoch.addingTimeInterval(-10 * 86_400)
+        let event = try #require(
+            EventDetector.newFilings(filings: [filing("8-K", daysAgo: 1)], since: since).first
+        )
+        #expect(event.headlineClaim.kind == .fact)
+        #expect(event.headline.hasPrefix("Form 8-K"))
+    }
+
+    @Test("A filing offers one link, not the same filing twice")
+    func filingHasSingleSourceLink() throws {
+        let dated = FilingDTO(
+            accessionNumber: "0000320193-26-000001", formType: "10-Q",
+            filedAt: Self.epoch, periodOfReport: nil,
+            primaryDocumentURL: URL(string: "https://www.sec.gov/doc.htm"),
+            filingIndexURL: URL(string: "https://www.sec.gov/index.htm")
+        )
+        let since = Self.epoch.addingTimeInterval(-86_400)
+        let event = try #require(EventDetector.newFilings(filings: [dated], since: since).first)
+
+        #expect(event.sourceURLs.count == 1)
+        #expect(event.sourceURLs.first?.absoluteString.contains("doc.htm") == true)
+        // The reference must reach the user as a traceable source.
+        #expect(event.headlineClaim.isTraceable)
+        #expect(event.headlineClaim.sources.first?.provider == .sec)
     }
 }
 

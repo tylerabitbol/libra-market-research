@@ -48,6 +48,7 @@ struct RootView: View {
         .environment(appEnvironment)
         .task {
             DeveloperOptions.seedWatchlist(context: modelContext)
+            DeveloperOptions.backdateVisits(context: modelContext)
             appEnvironment.attach(container: modelContext.container)
         }
     }

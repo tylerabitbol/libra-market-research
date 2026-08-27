@@ -22,7 +22,7 @@ From the original specification. Status as of the latest commit.
 | 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | ✅ Complete — XBRL extraction, valuation percentiles, Security Detail UI, and append-only persistence |
 | 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | 🟡 Provider + filings done; Form 4 XML parsing outstanding |
 | 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings + earnings surprises available; estimate revisions blocked by tier |
-| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | 🟡 Detectors, event storage, and the Research feed built; thresholds need calibration against live data |
+| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | 🟡 Detectors, event storage, backfill and the Research feed built and calibrated against live data; Research Signal and contradictory evidence outstanding |
 | 7 | **Personal research** — journal, thesis tracking, saved screens, historical comparisons | ⬜ |
 | 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | ⬜ |
 
@@ -114,6 +114,26 @@ so they never enter a command line.
 - **The visit stamp is written only after a load completes**, and always read
   before it is written. Stamping first would make every visit report "nothing
   changed"; stamping a cancelled load would skip past changes the user never saw.
+- **Rank and dispersion come from different windows.** Scale uses 60 sessions
+  so it reflects the *current* volatility regime; rank uses 250 because rank
+  costs nothing extra over more data and "the largest move in a year" is a far
+  more useful statement than "the largest in 60 sessions".
+- **Rank is the primary gate; deviations are only a guard.** These were once
+  ANDed at equal strength, and an 8.74% NVDA day that was *the largest move in
+  the whole reference window* was rejected for missing a 3.0-sigma cut by 0.08.
+  A high-volatility name has a large MAD, so a hard sigma gate makes the
+  detector least sensitive exactly where large moves matter most.
+- **Candidate XBRL tags are merged by period, never first-tag-wins.** Issuers
+  change the tag they report a concept under. Taking the first candidate that
+  returns anything truncates the history at the changeover — NVIDIA's revenue
+  showed FY2021 and FY2022 only, hiding the four years that made the company
+  what it is, and the chart just looked like it started late. Merging in
+  priority order fills the gap without double-counting a period reported under
+  two tags.
+- **Derived annual figures key on `periodEnd`, never `fiscalYear`** — the same
+  rule as XBRL extraction, which the view model was violating. It paired free
+  cash flow with dates two years out and rendered two different years as two
+  identical "2022" rows.
 - **Percentage points ≠ percent.** Relative performance reports `pp` throughout.
 - **No secrets in source.** Keys live in the Keychain, entered by the user.
   `DeveloperOptions` can seed from `VANTAGE_*` environment variables, gated on a
@@ -129,6 +149,7 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 | `-VantageSeedKeys` | Seeds the Keychain from `VANTAGE_*` environment variables |
 | `-VantageSeedWatchlist` | Adds AAPL, NVDA, COST to the watchlist without touching existing entries |
 | `-VantageCaptureFixtures` | Writes a trimmed `companyfacts` payload into the app container for use as a test fixture |
+| `-VantageBackdateVisits 45` | Moves every visit stamp back that many days, so "what changed since you last looked" can be exercised without waiting days between runs. Moves the reference point only — no event is fabricated |
 | `DETECT` log line | Not an argument: a DEBUG-only `.notice` in `detectChanges` reporting what the detectors saw and why they stayed silent |
 | `-VantageOpenSymbol AAPL` | Opens straight to a security's detail page. Added because capturing that screen used to mean hand-editing `RootView`, and one such edit reached a commit |
 
@@ -141,24 +162,15 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
   returning an empty array, which would read as "no insider trades".
 - **Intraday index levels** — FRED is end-of-day. An intraday ETF overlay is
   deliberately deferred.
-- **Detector thresholds are uncalibrated.** Observed live: NVDA at **+8.74%**
-  on 2026-08-27 produced no event, while the unit tests fire correctly on
-  synthetic data. Cause not yet isolated. Candidates, in order of suspicion:
-  (a) the rank threshold of 0.975 needs 59 of 60 prior sessions to be smaller,
-  which a volatile name can fail; (b) MAD over 60 sessions of a high-beta stock
-  gives a scale large enough that 8.74% falls under 3 deviations; (c) the quote
-  is not being read as a new session because Tiingo publishes a partial bar
-  dated today, so the same-day guard treats it as already counted. A
-  DEBUG-only `DETECT …` log line in `SecurityDetailViewModel.detectChanges`
-  prints the reading, prior count, scale, deviations and rank — read it with
-  `log show --predicate 'subsystem == "com.tylerabitbol.vantage"'` against a
-  live symbol to settle which. **Thresholds must be set from real distributions
-  before this feature is trustworthy**; right now a silent detector is
-  indistinguishable from a calm market, which is the failure mode that matters.
-- **Detection only ever examines the latest session.** A large move on a day
-  the user did not open the app is never recorded, even though the bars for it
-  are stored. A backfill pass over stored bars would fix this.
-- **Tiingo's 50 req/hour** is the binding constraint on any screen wanting
+- **Only price moves are backfilled.** Unusual volume and volatility shifts are
+  detected for the current session only, so one on a day the app was not opened
+  is still missed. `EventDetector.priceMoves(bars:after:)` is the pattern to
+  follow.
+- **The Research feed stays empty until a session closes.** Provisional events
+  are deliberately not stored, so a first day of use shows detection on the
+  detail page and nothing in the feed. Correct, but it reads as broken; a line
+  explaining it would help.
+- - **Tiingo's 50 req/hour** is the binding constraint on any screen wanting
   history for many symbols. Budget accordingly; the rate limiter now refuses
   past a wait budget rather than blocking silently.
 

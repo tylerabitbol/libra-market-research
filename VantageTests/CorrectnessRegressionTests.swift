@@ -197,3 +197,76 @@ struct SortOptionTests {
         #expect(!WatchlistViewModel.SortOrder.allCases.contains { $0.rawValue == "mostUnusual" })
     }
 }
+
+
+/// Annual figures keyed on the period they describe, not on the filing's
+/// fiscal context. Observed on screen as two rows both labelled "2022",
+/// holding FY2022 and FY2021 revenue, and as free cash flow figures paired
+/// with dates two years off.
+@Suite("Annual period keying")
+@MainActor
+struct AnnualPeriodKeyingTests {
+
+    private func fact(
+        _ concept: FinancialConcept,
+        periodEnd: String,
+        fiscalYear: Int,
+        value: Double,
+        filed: String = "2026-01-01"
+    ) -> FinancialFactDTO {
+        let parse: (String) -> Date = { text in
+            try! Date(text + "T00:00:00Z", strategy: .iso8601)
+        }
+        return FinancialFactDTO(
+            concept: concept, rawTag: nil,
+            periodStart: nil, periodEnd: parse(periodEnd),
+            fiscalYear: fiscalYear, fiscalQuarter: nil, isAnnual: true,
+            periodKind: .annual, value: value, unit: "USD",
+            filedAt: parse(filed), accessionNumber: nil
+        )
+    }
+
+    @Test("Two periods sharing a fiscal year stay distinct")
+    func distinctPeriodsSurvive() {
+        // A restated FY2021 carries fy=2022 from the filing that restated it,
+        // colliding with the genuine FY2022 in any fiscalYear-keyed map.
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.applyFundamentalsForTesting([
+            fact(.revenue, periodEnd: "2022-01-30", fiscalYear: 2022, value: 26_914_000_000),
+            fact(.revenue, periodEnd: "2021-01-31", fiscalYear: 2022, value: 16_675_000_000)
+        ])
+
+        let labels = model.annualRevenue.map(\.periodLabel)
+        #expect(Set(labels) == ["2022", "2021"],
+                "Both rows previously rendered as 2022")
+    }
+
+    @Test("Free cash flow pairs each period with its own date")
+    func freeCashFlowPairsCorrectly() throws {
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.applyFundamentalsForTesting([
+            fact(.operatingCashFlow, periodEnd: "2024-01-28", fiscalYear: 2024, value: 28_090_000_000),
+            fact(.capitalExpenditures, periodEnd: "2024-01-28", fiscalYear: 2024, value: 1_069_000_000),
+            fact(.operatingCashFlow, periodEnd: "2023-01-29", fiscalYear: 2024, value: 5_641_000_000),
+            fact(.capitalExpenditures, periodEnd: "2023-01-29", fiscalYear: 2024, value: 1_833_000_000)
+        ])
+
+        let points = model.annualFreeCashFlow
+        #expect(points.count == 2, "A shared fiscalYear previously collapsed these to one")
+
+        let newest = try #require(points.last)
+        // 28.090B - 1.069B, matched to its own period end.
+        #expect(abs(newest.value - 27_021_000_000) < 1)
+        #expect(Calendar.current.component(.year, from: newest.period) == 2024)
+    }
+
+    @Test("A period missing either input yields no figure")
+    func partialPeriodIsOmitted() {
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.applyFundamentalsForTesting([
+            fact(.operatingCashFlow, periodEnd: "2024-01-28", fiscalYear: 2024, value: 28_090_000_000)
+        ])
+        // Free cash flow without capex is not free cash flow.
+        #expect(model.annualFreeCashFlow.isEmpty)
+    }
+}

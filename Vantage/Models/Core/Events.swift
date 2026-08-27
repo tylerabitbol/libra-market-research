@@ -227,10 +227,36 @@ struct DetectedEventDTO: Sendable, Hashable, Identifiable {
         date.formatted(.iso8601.year().month().day().dateSeparator(.dash))
     }
 
-    /// The headline as a `.calculation`: it states measured arithmetic and
-    /// carries the derivation that produced it.
+    /// The headline, labelled by what kind of statement it actually is.
+    ///
+    /// Not every event is a calculation. "8-K filed Aug 16" is a FACT reported
+    /// by a primary source — the SEC — and badging it CALCULATION overstates
+    /// the app's involvement while understating the claim's authority. A
+    /// detector that measured something carries a derivation; one that merely
+    /// observed a document does not, and that is exactly the distinction
+    /// Section 24 asks the app to make.
     var headlineClaim: Claim {
-        Claim(kind: .calculation, text: headline, derivation: derivation)
+        Claim(
+            kind: derivation != nil ? .calculation : .fact,
+            text: headline,
+            sources: sources,
+            derivation: derivation
+        )
+    }
+
+    /// Source references built from the stored detail/URL pairs, so the trail
+    /// back to the original document renders through `ClaimRow` like any other.
+    var sources: [SourceReference] {
+        guard !sourceURLs.isEmpty || !sourceDetails.isEmpty else { return [] }
+        let provider: DataProviderID = kind == .newFiling ? .sec : .computed
+        return sourceDetails.enumerated().map { index, detail in
+            SourceReference(
+                provider: provider,
+                detail: detail,
+                url: index < sourceURLs.count ? sourceURLs[index] : nil,
+                retrievedAt: occurredAt
+            )
+        }
     }
 
     /// The context as an `.interpretation` — a judgement about what the figures

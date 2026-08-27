@@ -209,3 +209,97 @@ struct FundamentalsTests {
         }
     }
 }
+
+
+/// Tag migration. Issuers change the XBRL tag they report a concept under,
+/// and the naive "first candidate tag that returns anything" rule silently
+/// truncates the history at the changeover — a chart that simply starts late,
+/// which looks like a data limitation rather than a bug.
+@Suite("Candidate tag merging")
+struct CandidateTagMergingTests {
+
+    private func payload() -> Data {
+        // Old years under `Revenues`, recent years under the newer tag —
+        // the shape NVIDIA's own filings take.
+        let json = """
+        {
+          "cik": 1045810,
+          "entityName": "NVIDIA CORP",
+          "facts": {
+            "us-gaap": {
+              "RevenueFromContractWithCustomerExcludingAssessedTax": {
+                "units": {
+                  "USD": [
+                    {"start": "2024-01-29", "end": "2025-01-26", "val": 130497000000,
+                     "fy": 2025, "fp": "FY", "form": "10-K", "filed": "2025-02-26",
+                     "accn": "0001045810-25-000023"},
+                    {"start": "2025-01-27", "end": "2026-01-25", "val": 213000000000,
+                     "fy": 2026, "fp": "FY", "form": "10-K", "filed": "2026-02-25",
+                     "accn": "0001045810-26-000010"}
+                  ]
+                }
+              },
+              "Revenues": {
+                "units": {
+                  "USD": [
+                    {"start": "2021-02-01", "end": "2022-01-30", "val": 26914000000,
+                     "fy": 2022, "fp": "FY", "form": "10-K", "filed": "2022-03-18",
+                     "accn": "0001045810-22-000036"},
+                    {"start": "2022-01-31", "end": "2023-01-29", "val": 26974000000,
+                     "fy": 2023, "fp": "FY", "form": "10-K", "filed": "2023-02-24",
+                     "accn": "0001045810-23-000017"}
+                  ]
+                }
+              }
+            }
+          }
+        }
+        """
+        return Data(json.utf8)
+    }
+
+    @Test("History spanning a tag change is complete, not truncated")
+    func tagMigrationKeepsEveryYear() throws {
+        let response = try JSONDecoder().decode(CompanyFactsResponse.self, from: payload())
+        let facts = SECFundamentalsProvider.extract(concept: .revenue, from: response, since: nil)
+
+        // First-tag-wins returned only the two years under the newer tag.
+        #expect(facts.count == 4)
+        let years = facts.map { Calendar.current.component(.year, from: $0.periodEnd) }
+        #expect(Set(years) == [2022, 2023, 2025, 2026])
+    }
+
+    @Test("Results are ordered oldest first regardless of which tag supplied them")
+    func mergedFactsAreOrdered() throws {
+        let response = try JSONDecoder().decode(CompanyFactsResponse.self, from: payload())
+        let facts = SECFundamentalsProvider.extract(concept: .revenue, from: response, since: nil)
+        let ends = facts.map(\.periodEnd)
+        #expect(ends == ends.sorted(), "A merged series must not interleave by tag")
+    }
+
+    @Test("A period reported under two tags contributes one figure")
+    func overlappingPeriodsAreNotDoubled() throws {
+        let json = """
+        {
+          "cik": 1, "entityName": "T",
+          "facts": { "us-gaap": {
+            "RevenueFromContractWithCustomerExcludingAssessedTax": { "units": { "USD": [
+              {"start": "2024-01-01", "end": "2024-12-31", "val": 100,
+               "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-01-15", "accn": "a"}
+            ]}},
+            "Revenues": { "units": { "USD": [
+              {"start": "2024-01-01", "end": "2024-12-31", "val": 115,
+               "fy": 2024, "fp": "FY", "form": "10-K", "filed": "2025-01-15", "accn": "b"}
+            ]}}
+          }}
+        }
+        """
+        let response = try JSONDecoder().decode(CompanyFactsResponse.self, from: Data(json.utf8))
+        let facts = SECFundamentalsProvider.extract(concept: .revenue, from: response, since: nil)
+
+        // Concatenating would report 215 of revenue for one year.
+        #expect(facts.count == 1)
+        // The higher-priority tag wins: the two tags differ by assessed tax.
+        #expect(facts.first?.value == 100)
+    }
+}
