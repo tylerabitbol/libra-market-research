@@ -125,25 +125,97 @@ enum ValuationCalculator {
     }
 }
 
-/// The valuation metrics shown with historical context, mapped to the keys the
-/// metrics provider uses.
+/// How a metric should be read and displayed.
+enum MetricUnit: Sendable, Hashable {
+    /// A multiple, e.g. P/E 34.0.
+    case multiple
+    /// A percentage, displayed as 46.2%.
+    case percent
+}
+
+/// A valuation or profitability metric, with the two provider keys it is
+/// assembled from and the scaling needed to reconcile them.
+///
+/// The scaling is not incidental. Finnhub reports the same concept at different
+/// scales in its two blocks: `grossMarginTTM` is 48.65 in the current metrics
+/// while `grossMargin` is 0.4622 in the historical series. Ranking one against
+/// the other puts every margin at the 100th percentile forever — a number that
+/// looks authoritative and means nothing. Both halves are normalised to one
+/// canonical scale before anything is compared.
 struct ValuationMetric: Sendable, Hashable, Identifiable {
     var id: String { key }
+    /// Key in the historical `series` block; also the metric's identity.
     let key: String
+    /// Key in the current `metric` block, when one exists under a different name.
+    let currentKey: String?
     let displayName: String
+    let unit: MetricUnit
+    /// Multiplier bringing a `series` value onto the canonical scale.
+    let historyScale: Double
+    /// Multiplier bringing a `metric` value onto the canonical scale.
+    let currentScale: Double
     /// True when a *lower* value is conventionally the cheaper one. Recorded so
     /// the UI can explain direction without implying a recommendation.
     let lowerIsCheaper: Bool
 
+    private static func multiple(
+        _ key: String, _ currentKey: String?, _ name: String, lowerIsCheaper: Bool = true
+    ) -> ValuationMetric {
+        .init(key: key, currentKey: currentKey, displayName: name, unit: .multiple,
+              historyScale: 1, currentScale: 1, lowerIsCheaper: lowerIsCheaper)
+    }
+
+    /// Series values arrive as ratios (0.46) and current values as percentages
+    /// (48.65); both are normalised to percent.
+    private static func margin(
+        _ key: String, _ currentKey: String?, _ name: String
+    ) -> ValuationMetric {
+        .init(key: key, currentKey: currentKey, displayName: name, unit: .percent,
+              historyScale: 100, currentScale: 1, lowerIsCheaper: false)
+    }
+
     static let all: [ValuationMetric] = [
-        .init(key: "peTTM", displayName: "P/E", lowerIsCheaper: true),
-        .init(key: "psTTM", displayName: "P/S", lowerIsCheaper: true),
-        .init(key: "pb", displayName: "P/B", lowerIsCheaper: true),
-        .init(key: "pfcfTTM", displayName: "P/FCF", lowerIsCheaper: true),
-        .init(key: "evEbitdaTTM", displayName: "EV/EBITDA", lowerIsCheaper: true),
-        .init(key: "grossMargin", displayName: "Gross margin", lowerIsCheaper: false),
-        .init(key: "operatingMargin", displayName: "Operating margin", lowerIsCheaper: false),
-        .init(key: "netMargin", displayName: "Net margin", lowerIsCheaper: false),
-        .init(key: "roe", displayName: "Return on equity", lowerIsCheaper: false)
+        multiple("peTTM", "peTTM", "P/E"),
+        multiple("psTTM", "psTTM", "P/S"),
+        multiple("pb", "pb", "P/B"),
+        multiple("pfcfTTM", "pfcfTTM", "P/FCF"),
+        multiple("evEbitdaTTM", "currentEv/freeCashFlowTTM", "EV/EBITDA"),
+        margin("grossMargin", "grossMarginTTM", "Gross margin"),
+        margin("operatingMargin", "operatingMarginTTM", "Operating margin"),
+        margin("netMargin", "netProfitMarginTTM", "Net margin"),
+        margin("roe", "roeTTM", "Return on equity")
     ]
+
+    /// Formats a canonical-scale value for display.
+    func format(_ value: Double) -> String {
+        switch unit {
+        case .multiple: Format.ratio(value, precision: 1)
+        case .percent: Format.percent(value, precision: 1)
+        }
+    }
+}
+
+extension CompanyMetricsDTO {
+    /// Current value and history for a metric, both on the metric's canonical
+    /// scale so they can legitimately be compared.
+    ///
+    /// Falls back to the most recent history point when the current block has
+    /// no entry, which keeps the two halves consistent rather than mixing a
+    /// fresh value at one scale with a history at another.
+    func normalized(for metric: ValuationMetric) -> (current: Double, history: [MetricPoint])? {
+        let history = self.history(metric.key).map {
+            MetricPoint(period: $0.period, value: $0.value * metric.historyScale)
+        }
+        guard !history.isEmpty else { return nil }
+
+        let current: Double
+        if let currentKey = metric.currentKey, let raw = currentValue(currentKey) {
+            current = raw * metric.currentScale
+        } else if let latest = history.last?.value {
+            current = latest
+        } else {
+            return nil
+        }
+        return (current, history)
+    }
 }

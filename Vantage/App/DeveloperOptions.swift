@@ -1,5 +1,6 @@
 import Foundation
 import OSLog
+import SwiftData
 
 /// Debug-build conveniences for testing against live APIs.
 ///
@@ -30,6 +31,56 @@ enum DeveloperOptions {
         (.fredAPIKey, "VANTAGE_FRED_KEY"),
         (.secContactEmail, "VANTAGE_SEC_EMAIL")
     ]
+
+    static let seedWatchlistArgument = "-VantageSeedWatchlist"
+
+    static var isWatchlistSeedRequested: Bool {
+        #if DEBUG
+        CommandLine.arguments.contains(seedWatchlistArgument)
+        #else
+        false
+        #endif
+    }
+
+    /// Populates the watchlist with a few well-known symbols.
+    ///
+    /// Debug builds only, and only on an explicit launch argument. Existing
+    /// entries are left alone so this never clobbers a real watchlist.
+    @MainActor
+    static func seedWatchlist(context: ModelContext) {
+        #if DEBUG
+        guard isWatchlistSeedRequested else { return }
+
+        let seeds = [
+            ("AAPL", "Apple Inc.", "Information Technology", "0000320193"),
+            ("NVDA", "NVIDIA Corporation", "Information Technology", "0001045810"),
+            ("COST", "Costco Wholesale Corporation", "Consumer Staples", "0000909832")
+        ]
+
+        for (symbol, name, sector, cik) in seeds {
+            let descriptor = FetchDescriptor<Security>(
+                predicate: #Predicate { $0.symbol == symbol }
+            )
+            let existing = try? context.fetch(descriptor).first
+            let security: Security
+            if let existing {
+                security = existing
+            } else {
+                security = Security(symbol: symbol, name: name, sector: sector, cik: cik)
+                context.insert(security)
+            }
+            guard security.watchlistEntry == nil else { continue }
+            context.insert(WatchlistEntry(security: security))
+        }
+
+        do {
+            try context.save()
+            logger.notice("Seeded watchlist with \(seeds.count, privacy: .public) securities.")
+        } catch {
+            logger.error("Watchlist seed failed: \(error.localizedDescription, privacy: .public)")
+        }
+        #endif
+    }
 
     static var isSeedRequested: Bool {
         #if DEBUG
