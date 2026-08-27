@@ -79,6 +79,30 @@ protocol SecretsStoring: Sendable {
 extension SecretsStoring {
     func diagnose() -> SecretsHealth { .available }
 
+    /// A masked fingerprint of a stored value: its length and first/last four
+    /// characters, e.g. "40 chars · d54d…4940".
+    ///
+    /// Enough to compare against the key shown in a provider's dashboard —
+    /// which is how a truncated paste or a key entered in the wrong field gets
+    /// caught — without putting the credential on screen. Returns nil when
+    /// nothing is stored, and refuses to fingerprint a value too short to mask.
+    func fingerprint(for key: SecretKey) -> String? {
+        guard let value = value(for: key)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty
+        else { return nil }
+
+        // Email addresses aren't secrets and are more useful shown in full.
+        guard key.isSensitive else { return value }
+
+        guard value.count >= 12 else {
+            return "\(value.count) chars · too short to be valid"
+        }
+        return "\(value.count) chars · \(value.prefix(4))…\(value.suffix(4))"
+    }
+}
+
+extension SecretsStoring {
+
     func hasValue(for key: SecretKey) -> Bool {
         guard let value = value(for: key) else { return false }
         return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

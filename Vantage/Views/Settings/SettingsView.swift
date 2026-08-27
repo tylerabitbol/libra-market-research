@@ -246,6 +246,15 @@ struct SecretEntryView: View {
                     Text("A value is already saved. Typing here replaces it.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let fingerprint = app.secrets.fingerprint(for: key) {
+                        LabeledContent("Stored") {
+                            Text(fingerprint)
+                                .font(.system(.caption, design: .monospaced))
+                        }
+                        Text("Compare this with the key shown in your provider's dashboard. A different length means it was truncated or pasted incompletely.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                     Button("Remove saved value", role: .destructive) {
                         save(nil)
                     }
