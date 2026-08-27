@@ -18,6 +18,14 @@ struct SettingsView: View {
                 }
             }
 
+            if let reason = app.secretsHealth.reason {
+                Section {
+                    StorageUnavailableBanner(reason: reason)
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
+            }
+
             Section {
                 ForEach(dataSources) { source in
                     NavigationLink {
@@ -25,6 +33,9 @@ struct SettingsView: View {
                     } label: {
                         DataSourceRow(source: source, readiness: app.readiness(for: source.provider))
                     }
+                    // Typing a key into a store that cannot retain it is worse
+                    // than saying up front that it won't work.
+                    .disabled(!app.secretsHealth.isAvailable)
                 }
             } header: {
                 Text("Data sources")
@@ -70,6 +81,32 @@ struct SettingsView: View {
             .init(key: .fredAPIKey, provider: .fred,
                   purpose: "Index levels (S&P 500, Dow, Nasdaq, VIX) and macro series")
         ]
+    }
+}
+
+/// Shown when the Keychain itself is unusable, so the failure is attributed to
+/// the build rather than to the user's key.
+private struct StorageUnavailableBanner: View {
+    let reason: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "lock.trianglebadge.exclamationmark.fill")
+                .foregroundStyle(.red)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Secure storage unavailable")
+                    .font(.footnote.weight(.semibold))
+                Text(reason)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.red.opacity(0.12), in: .rect(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
     }
 }
 

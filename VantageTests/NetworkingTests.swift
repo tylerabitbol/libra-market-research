@@ -66,6 +66,43 @@ struct EndpointTests {
     }
 }
 
+@Suite("Keychain error reporting")
+struct KeychainErrorTests {
+    @Test("errSecMissingEntitlement is explained as a build problem, not a user error")
+    func missingEntitlementIsExplained() {
+        let message = SecretsError.explain(errSecMissingEntitlement)
+        #expect(message.contains("entitlements"))
+        #expect(message.contains("not"), "Must make clear this isn't the user's fault")
+        #expect(!message.contains("-34018"),
+                "A bare OSStatus is what made this hard to diagnose in the first place")
+    }
+
+    @Test("A locked keychain suggests unlocking rather than reporting a code")
+    func lockedKeychainIsActionable() {
+        #expect(SecretsError.explain(errSecInteractionNotAllowed).lowercased().contains("unlock"))
+    }
+
+    @Test("Unmapped statuses still report the raw code so nothing is swallowed")
+    func unmappedStatusKeepsTheCode() {
+        let message = SecretsError.explain(errSecDecode)
+        #expect(message.contains("\(errSecDecode)"))
+    }
+
+    @Test("A healthy store reports available with no reason to show")
+    func healthyStoreHasNoReason() {
+        let health = InMemorySecretsStore().diagnose()
+        #expect(health.isAvailable)
+        #expect(health.reason == nil)
+    }
+
+    @Test("An unavailable store carries an explanation for the UI")
+    func unavailableCarriesReason() {
+        let health = SecretsHealth.unavailable(reason: "signed without entitlements")
+        #expect(!health.isAvailable)
+        #expect(health.reason == "signed without entitlements")
+    }
+}
+
 @Suite("Secrets store")
 struct SecretsStoreTests {
     @Test("An unset key throws the error the UI can act on")

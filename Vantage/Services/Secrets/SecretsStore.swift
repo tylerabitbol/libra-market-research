@@ -48,14 +48,37 @@ enum SecretKey: String, CaseIterable, Sendable {
     var isSensitive: Bool { self != .secContactEmail }
 }
 
+/// Whether secure storage actually works right now.
+///
+/// This exists because a misconfigured build breaks the Keychain in a way that
+/// is invisible from the outside: writes throw, but *reads* just return nil, so
+/// the app cheerfully reports "key not set" for a key the user already entered.
+/// Asking the store to prove it works is the only reliable way to tell.
+enum SecretsHealth: Sendable, Equatable {
+    case available
+    /// Carries an explanation the user can act on, not an error code.
+    case unavailable(reason: String)
+
+    var isAvailable: Bool { self == .available }
+
+    var reason: String? {
+        if case .unavailable(let reason) = self { return reason }
+        return nil
+    }
+}
+
 /// Read/write access to stored credentials.
 protocol SecretsStoring: Sendable {
     func value(for key: SecretKey) -> String?
     func set(_ value: String?, for key: SecretKey) throws
     func hasValue(for key: SecretKey) -> Bool
+    /// Proves the store can round-trip a value, rather than assuming it can.
+    func diagnose() -> SecretsHealth
 }
 
 extension SecretsStoring {
+    func diagnose() -> SecretsHealth { .available }
+
     func hasValue(for key: SecretKey) -> Bool {
         guard let value = value(for: key) else { return false }
         return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -119,11 +142,51 @@ struct KeychainSecretsStore: SecretsStoring {
     }
 
     private func baseQuery(for key: SecretKey) -> [String: Any] {
+        baseQuery(account: key.rawValue)
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: key.rawValue
+            kSecAttrAccount as String: account
         ]
+    }
+
+    /// Writes, reads back, and deletes a throwaway value.
+    ///
+    /// A capability check rather than an inference: entitlement problems,
+    /// a locked device, and a corrupt keychain all present differently, and
+    /// only an actual round-trip distinguishes "works" from "silently empty".
+    func diagnose() -> SecretsHealth {
+        let account = "__healthcheck__"
+        let probe = Data("ok".utf8)
+        var query = baseQuery(account: account)
+
+        // Clear any residue from an interrupted earlier check.
+        SecItemDelete(query as CFDictionary)
+
+        query[kSecValueData as String] = probe
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        let addStatus = SecItemAdd(query as CFDictionary, nil)
+        guard addStatus == errSecSuccess else {
+            return .unavailable(reason: SecretsError.explain(addStatus))
+        }
+
+        defer { SecItemDelete(baseQuery(account: account) as CFDictionary) }
+
+        var read = baseQuery(account: account)
+        read[kSecReturnData as String] = true
+        read[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let readStatus = SecItemCopyMatching(read as CFDictionary, &item)
+        guard readStatus == errSecSuccess else {
+            return .unavailable(reason: SecretsError.explain(readStatus))
+        }
+        guard (item as? Data) == probe else {
+            return .unavailable(reason: "The Keychain returned a different value than was written.")
+        }
+        return .available
     }
 }
 
@@ -132,8 +195,29 @@ enum SecretsError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .keychain(let status):
-            let message = SecCopyErrorMessageString(status, nil) as String? ?? "unknown"
+        case .keychain(let status): SecretsError.explain(status)
+        }
+    }
+
+    /// Turns an OSStatus into something the user can act on.
+    ///
+    /// `-34018` in particular is not a user error and not a transient glitch:
+    /// it means the build was signed without Keychain entitlements. Printing
+    /// the bare code sent an earlier debugging session down the wrong path.
+    static func explain(_ status: OSStatus) -> String {
+        switch status {
+        case errSecMissingEntitlement:
+            return "This build can't use the Keychain because it was signed without the "
+                 + "required entitlements. That's a build configuration problem, not "
+                 + "something you did — code signing must be enabled with a development team."
+        case errSecInteractionNotAllowed:
+            return "The Keychain is locked. Unlock the device and try again."
+        case errSecAuthFailed:
+            return "The Keychain refused access. You may need to unlock the device."
+        case errSecNotAvailable:
+            return "The Keychain is unavailable on this device right now."
+        default:
+            let message = SecCopyErrorMessageString(status, nil) as String? ?? "unknown error"
             return "Keychain error \(status): \(message)"
         }
     }
