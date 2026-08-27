@@ -150,6 +150,9 @@ struct SecurityDetailView: View {
                 }
                 ForEach(model.events) { event in
                     EventCard(event: event, isNew: model.isNew(event))
+                    if event.kind == .unusualPriceMove, let attribution = model.latestAttribution {
+                        AttributionCard(attribution: attribution)
+                    }
                 }
             }
         }

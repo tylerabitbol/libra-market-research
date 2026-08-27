@@ -206,6 +206,39 @@ enum EventDetector {
         return Array(events.suffix(limit))
     }
 
+    /// Unusual volume on sessions that closed after a given date.
+    ///
+    /// Same reason as `priceMoves`: judging only the newest session loses a
+    /// spike on any day the app was not opened.
+    static func volumeAnomalies(
+        bars: [PriceBar],
+        after date: Date?,
+        limit: Int = 10,
+        multipleThreshold: Double = 2,
+        rankThreshold: Double = 0.95,
+        sourceDetail: String = "Daily bars"
+    ) -> [DetectedEventDTO] {
+        guard let date else { return [] }
+        let sorted = bars.sorted { $0.date < $1.date }
+        guard sorted.count > minimumSample else { return [] }
+
+        var events: [DetectedEventDTO] = []
+        for index in minimumSample..<sorted.count where sorted[index].date > date {
+            // Judged against the sessions before it only — the window ends at
+            // this bar, so nothing that followed can influence the verdict.
+            let window = Array(sorted[...index])
+            if let event = volumeAnomaly(
+                bars: window, quote: nil,
+                multipleThreshold: multipleThreshold,
+                rankThreshold: rankThreshold,
+                sourceDetail: sourceDetail
+            ) {
+                events.append(event)
+            }
+        }
+        return Array(events.suffix(limit))
+    }
+
     /// Builds the event for one reading judged against one set of priors.
     /// Shared so the live session and a backfilled one are described in
     /// identical terms and cannot drift apart.

@@ -24,6 +24,14 @@ final class SecurityDetailViewModel {
     private(set) var fundamentals: [FinancialFactDTO] = []
     private(set) var filings: [FilingDTO] = []
 
+    /// The market's daily closes, for separating "the market moved" from
+    /// "this company moved". FRED's real S&P 500 index, not an ETF.
+    private(set) var marketCloses: [(date: Date, close: Double)] = []
+    /// The current session's market move, which FRED cannot supply because it
+    /// publishes at the close. An ETF stands in, and is labelled as one.
+    private(set) var marketIntradayMove: Double?
+    private(set) var beta: Beta?
+
     private(set) var quoteError: APIError?
     private(set) var historyError: APIError?
     private(set) var metricsError: APIError?
@@ -111,6 +119,7 @@ final class SecurityDetailViewModel {
         // the app was not opened is still a change the user has not seen.
         let detected = EventDetector.detect(bars: bars, quote: quote)
             + EventDetector.priceMoves(bars: bars, after: lastVisit)
+            + EventDetector.volumeAnomalies(bars: bars, after: lastVisit)
             + EventDetector.newFilings(filings: filings, since: lastVisit)
         // The live detector and the backfill can both reach the most recent
         // closed session. They describe it identically, so the list would show
@@ -186,7 +195,10 @@ final class SecurityDetailViewModel {
         async let quoteWork: Void = loadQuote(using: registry)
         async let historyWork: Void = loadHistory(using: registry)
         async let metricsWork: Void = loadMetrics(using: registry)
-        _ = await (profileWork, quoteWork, historyWork, metricsWork)
+        async let marketWork: Void = loadMarketContext(using: registry)
+        _ = await (profileWork, quoteWork, historyWork, metricsWork, marketWork)
+
+        computeBeta()
 
         // These need the CIK, which comes from the profile or a lookup, so they
         // follow rather than run alongside.
@@ -233,6 +245,82 @@ final class SecurityDetailViewModel {
         } catch {
             historyError = .transport(.tiingo, underlying: error.localizedDescription)
         }
+    }
+
+    /// Loads the market series the attribution rests on.
+    ///
+    /// Failures are swallowed on purpose: attribution is additional context,
+    /// and losing it must not mark the page as failed or hide the price move
+    /// it annotates. The UI shows attribution only when it exists.
+    private func loadMarketContext(using registry: ProviderRegistry) async {
+        async let history: Void = loadMarketHistory(using: registry)
+        async let live: Void = loadMarketIntraday(using: registry)
+        _ = await (history, live)
+    }
+
+    private func loadMarketHistory(using registry: ProviderRegistry) async {
+        guard let macro = registry.macro else { return }
+        let from = ChartRange.fiveYear.startDate()
+        do {
+            let observations = try await macro.observations(
+                seriesID: Benchmark.marketSeriesID, from: from, to: .now
+            )
+            marketCloses = observations.map { (date: $0.date, close: $0.value) }
+        } catch {
+            Self.logger.error("Market context unavailable for \(self.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// The index itself is end-of-day, so the current session comes from a
+    /// broad-market ETF. Declared a proxy everywhere it is shown.
+    private func loadMarketIntraday(using registry: ProviderRegistry) async {
+        guard symbol != Benchmark.marketProxySymbol else { return }
+        let proxy = try? await registry.marketData.quote(symbol: Benchmark.marketProxySymbol)
+        marketIntradayMove = proxy?.changePercent
+    }
+
+    private func computeBeta() {
+        guard !bars.isEmpty, !marketCloses.isEmpty else {
+            beta = nil
+            return
+        }
+        beta = RelativeAnalysis.beta(
+            RelativeAnalysis.align(security: bars, market: marketCloses)
+        )
+    }
+
+    /// How much of the most recent move the market accounts for.
+    ///
+    /// Nil rather than a guess when the market leg for that session is
+    /// missing — an attribution computed against the wrong day's market move
+    /// would be worse than none.
+    var latestAttribution: MoveAttribution? {
+        guard let reading = EventDetector.latestReading(bars: bars, quote: quote)?.reading
+        else { return nil }
+
+        let marketMove: Double
+        let isProxy: Bool
+        if reading.isIntraday {
+            guard let intraday = marketIntradayMove else { return nil }
+            marketMove = intraday
+            isProxy = true
+        } else {
+            let aligned = RelativeAnalysis.align(security: bars, market: marketCloses)
+            let day = Calendar.current.startOfDay(for: reading.date)
+            guard let match = aligned.last(where: {
+                Calendar.current.startOfDay(for: $0.date) == day
+            }) else { return nil }
+            marketMove = match.market
+            isProxy = false
+        }
+
+        return RelativeAnalysis.attribute(
+            securityMove: reading.percent,
+            marketMove: marketMove,
+            marketName: isProxy ? "S&P 500 (SPY)" : "S&P 500",
+            beta: beta,
+            isMarketProxy: isProxy
+        )
     }
 
     private func loadMetrics(using registry: ProviderRegistry) async {

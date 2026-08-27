@@ -22,7 +22,7 @@ From the original specification. Status as of the latest commit.
 | 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | ✅ Complete — XBRL extraction, valuation percentiles, Security Detail UI, and append-only persistence |
 | 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | 🟡 Provider + filings done; Form 4 XML parsing outstanding |
 | 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings + earnings surprises available; estimate revisions blocked by tier |
-| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | 🟡 Detectors, event storage, backfill and the Research feed built and calibrated against live data; Research Signal and contradictory evidence outstanding |
+| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | 🟡 Detectors, storage, backfill, Research feed and market attribution (beta-adjusted) built; Research Signal and contradictory evidence outstanding |
 | 7 | **Personal research** — journal, thesis tracking, saved screens, historical comparisons | ⬜ |
 | 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | ⬜ |
 
@@ -36,7 +36,7 @@ is still a placeholder.
 |---|---|---|
 | **Finnhub** (free) | `quote`, `profile2`, `metric` (133 metrics + 39 annual / 41 quarterly historical ratio series), `recommendation`, `stock/earnings`, `insider-transactions`, `company-news` | `candle`, `eps-estimate`, `revenue-estimate`, `price-target`, `split`, index symbols — all 403 |
 | **Tiingo** (free) | Adjusted daily OHLCV back to 1980, ETFs included. 50 req/**hour**, 1000/day, 500 symbols/month | Intraday |
-| **FRED** | `SP500`, `DJIA`, `NASDAQCOM`, `VIXCLS`, macro series. Free, generous limits | Sector indexes, intraday |
+| **FRED** | `SP500`, `DJIA`, `NASDAQCOM`, `VIXCLS`, macro series. Free, generous limits. Also the market leg for beta and attribution | Sector indexes, intraday |
 | **SEC EDGAR** | Ticker→CIK map, submissions/filing history. **No API key**; requires identifying User-Agent, ~10 req/sec | Form 4 parsing not yet implemented |
 
 Verify all four at any time: launch with `-VantageSelfTest` and read the log
@@ -134,6 +134,24 @@ so they never enter a command line.
   rule as XBRL extraction, which the view model was violating. It paired free
   cash flow with dates two years out and rendered two different years as two
   identical "2022" rows.
+- **Attribution is beta-adjusted, and the beta is shown.** A raw
+  security-minus-market difference understates the market's contribution for a
+  high-beta name — NVIDIA's computed beta is ~2.2, so a +0.3% market day
+  accounts for more than twice what the raw difference credits it with. The
+  model is one-factor, named as such in the text, and the beta carries its own
+  derivation so it can be rejected.
+- **Beta is fitted over ~2 years, not all available history.** Beta is not a
+  constant. A five-year fit averages a sensitivity the company no longer has
+  into the one being applied today, and looks more rigorous while being less
+  informative.
+- **Aligned returns must span identical sessions.** Matching on the end date
+  alone is not enough: after a holiday present in one calendar and not the
+  other, one series' "daily" return covers two days and the other covers one,
+  and the difference lands in the residual reading as company-specific. Both
+  legs must share a previous session too.
+- **The market/company split is never rendered as a share of one move.** The
+  two parts can point in opposite directions — a stock can rise on a falling
+  market — and any percentage-of-the-move framing breaks down entirely there.
 - **Percentage points ≠ percent.** Relative performance reports `pp` throughout.
 - **No secrets in source.** Keys live in the Keychain, entered by the user.
   `DeveloperOptions` can seed from `VANTAGE_*` environment variables, gated on a
@@ -162,14 +180,14 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
   returning an empty array, which would read as "no insider trades".
 - **Intraday index levels** — FRED is end-of-day. An intraday ETF overlay is
   deliberately deferred.
-- **Only price moves are backfilled.** Unusual volume and volatility shifts are
-  detected for the current session only, so one on a day the app was not opened
-  is still missed. `EventDetector.priceMoves(bars:after:)` is the pattern to
-  follow.
-- **The Research feed stays empty until a session closes.** Provisional events
-  are deliberately not stored, so a first day of use shows detection on the
-  detail page and nothing in the feed. Correct, but it reads as broken; a line
-  explaining it would help.
+- **Volatility shifts are not backfilled.** Price moves and volume are; a
+  regime change that began on a day the app was not opened is still reported
+  only from the current window. `EventDetector.priceMoves(bars:after:)` is the
+  pattern to follow.
+- **Attribution is market-only.** Sector-relative comparison (spec §7) needs a
+  sector benchmark per security; the sector ETFs are declared but not wired to
+  the detail page. A move the market does not explain is currently attributed
+  to "this company or its industry" without separating the two.
 - - **Tiingo's 50 req/hour** is the binding constraint on any screen wanting
   history for many symbols. Budget accordingly; the rate limiter now refuses
   past a wait budget rather than blocking silently.

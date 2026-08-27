@@ -51,6 +51,15 @@ struct Benchmark: Sendable, Hashable, Identifiable {
 
     // MARK: - Broad market
 
+    /// The reference market for attribution — separating "the market moved"
+    /// from "this company moved". The real index, since a beta measured
+    /// against an ETF inherits the ETF's tracking error.
+    static let marketSeriesID = "SP500"
+
+    /// Stands in for the index during an open session, because FRED publishes
+    /// the index only at the close. Labelled a proxy wherever it is shown.
+    static let marketProxySymbol = "SPY"
+
     static let broadMarket: [Benchmark] = [
         .init(id: "sp500", displayName: "S&P 500",
               fredSeriesID: "SP500", etfSymbol: "SPY",
