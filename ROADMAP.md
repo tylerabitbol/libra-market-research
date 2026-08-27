@@ -18,8 +18,8 @@ From the original specification. Status as of the latest commit.
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | **Foundation** — project architecture, SwiftData models, API abstraction, networking, secrets, navigation, basic dashboard | ✅ Complete |
-| 2 | **Market data** — quotes, historical prices, volume, watchlist, charts | 🟡 Providers done; watchlist and charts outstanding |
-| 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | 🟡 XBRL extraction + historical valuation percentiles done; persistence and UI outstanding |
+| 2 | **Market data** — quotes, historical prices, volume, watchlist, charts | ✅ Complete — providers, watchlist with search/add/persistence, and range charts |
+| 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | 🟡 XBRL extraction, valuation percentiles and Security Detail UI done; snapshot persistence outstanding |
 | 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | 🟡 Provider + filings done; Form 4 XML parsing outstanding |
 | 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings + earnings surprises available; estimate revisions blocked by tier |
 | 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | ⬜ |
@@ -27,7 +27,8 @@ From the original specification. Status as of the latest commit.
 | 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | ⬜ |
 
 Five product areas: Dashboard, Watchlist, Security Detail, Research/Investigation,
-Settings. Navigation shell exists for all five; Dashboard and Settings are built.
+Settings. Dashboard, Watchlist and Security Detail are built; Research and
+Screener are still placeholders.
 
 ## Provider capabilities (measured against live keys, not assumed)
 
@@ -66,10 +67,32 @@ so they never enter a command line.
 - **Valuation percentiles compare a company against its own past**, not against
   other companies, and require a minimum sample of 8 observations rather than
   returning a weak percentile dressed as a strong one.
+- **Finnhub reports the same concept at two different scales.** `grossMarginTTM`
+  is 48.65 in the current metrics block while the `grossMargin` series is 0.4622.
+  Ranking one against the other pins every margin at the 100th percentile
+  forever — authoritative-looking and meaningless. `ValuationMetric` declares
+  both keys and the scaling that reconciles them; never compare the two blocks
+  without normalising.
+- **XBRL facts are deduplicated by the period they describe, not by `fy`.** That
+  field is the *filing's* fiscal context, so two distinct periods can share it
+  and one gets silently dropped — which showed up as a 0.0% revenue growth year.
+- **The watchlist fetches quotes only, never history.** One bars request per row
+  would exhaust Tiingo's hourly quota on a list of any size.
 - **Percentage points ≠ percent.** Relative performance reports `pp` throughout.
 - **No secrets in source.** Keys live in the Keychain, entered by the user.
   `DeveloperOptions` can seed from `VANTAGE_*` environment variables, gated on a
   DEBUG build plus an explicit `-VantageSeedKeys` argument.
+
+## Debug launch arguments
+
+Debug builds only, each gated on an explicit argument so nothing fires by accident.
+
+| Argument | Effect |
+|---|---|
+| `-VantageSelfTest` | Keychain round-trip, live connection test per provider, and end-to-end valuation/fundamentals checks; results go to the unified log |
+| `-VantageSeedKeys` | Seeds the Keychain from `VANTAGE_*` environment variables |
+| `-VantageSeedWatchlist` | Adds AAPL, NVDA, COST to the watchlist without touching existing entries |
+| `-VantageCaptureFixtures` | Writes a trimmed `companyfacts` payload into the app container for use as a test fixture |
 
 ## Known gaps
 

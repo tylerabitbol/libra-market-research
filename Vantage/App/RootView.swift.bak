@@ -30,7 +30,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 }
 
 struct RootView: View {
-    @State private var selection: AppSection = .watchlist
+    @State private var selection: AppSection = .dashboard
     @State private var appEnvironment = AppEnvironment()
     @Environment(\.modelContext) private var modelContext
 
@@ -55,7 +55,7 @@ struct RootView: View {
     private func content(for section: AppSection) -> some View {
         switch section {
         case .dashboard: DashboardView()
-        case .watchlist: SecurityDetailView(symbol: "NVDA")
+        case .watchlist: WatchlistView()
         case .research: ResearchView()
         case .screener: ScreenerView()
         case .settings: SettingsView()

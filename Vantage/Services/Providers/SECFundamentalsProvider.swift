@@ -99,10 +99,20 @@ struct SECFundamentalsProvider: FundamentalsProvider {
     /// Collapses restatements to the most recently filed figure per period,
     /// while keeping periods distinct. An issuer filing a correction should not
     /// produce two conflicting rows on one chart.
+    /// Year and month of a period end, tolerant of fiscal calendars that shift
+    /// the closing date by a few days between years.
+    static func periodKey(_ date: Date) -> String {
+        let components = Calendar(identifier: .iso8601).dateComponents([.year, .month], from: date)
+        return "\(components.year ?? 0)-\(components.month ?? 0)"
+    }
+
     static func deduplicated(_ facts: [FinancialFactDTO]) -> [FinancialFactDTO] {
         var latest: [String: FinancialFactDTO] = [:]
         for fact in facts {
-            let key = "\(fact.fiscalYear)-\(fact.fiscalQuarter.map(String.init) ?? "FY")-\(fact.periodKind.rawValue)"
+            // Keyed on the period the figure actually describes. XBRL's `fy`
+            // is the filing's fiscal context, not the fact's, so two different
+            // periods can share it — keying on `fy` silently drops one.
+            let key = "\(Self.periodKey(fact.periodEnd))-\(fact.periodKind.rawValue)"
             if let existing = latest[key] {
                 let existingFiled = existing.filedAt ?? .distantPast
                 let candidateFiled = fact.filedAt ?? .distantPast

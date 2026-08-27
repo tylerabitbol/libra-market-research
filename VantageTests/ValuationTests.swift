@@ -102,6 +102,87 @@ struct ValuationTests {
         }
     }
 
+    @Test("A percent current value is never ranked against a ratio history")
+    func mixedScalesAreReconciled() throws {
+        // Finnhub's two blocks disagree on scale for the same concept:
+        // grossMarginTTM is 48.65 while the grossMargin series is 0.4622.
+        // Comparing them unreconciled puts every margin at the 100th
+        // percentile — authoritative-looking and meaningless.
+        let history = (0..<12).map { index in
+            MetricPoint(period: Date(timeIntervalSince1970: 1_500_000_000
+                                     + Double(index) * 90 * 86_400),
+                        value: 0.40 + Double(index) * 0.005)   // ratios
+        }
+        let metrics = CompanyMetricsDTO(
+            current: ["grossMarginTTM": 48.65],                 // percent
+            annual: [:], quarterly: ["grossMargin": history], asOf: .now
+        )
+        let metric = try #require(ValuationMetric.all.first { $0.key == "grossMargin" })
+        let pair = try #require(metrics.normalized(for: metric))
+
+        // Both halves land on percent.
+        #expect(abs(pair.current - 48.65) < 0.001)
+        #expect(pair.history.allSatisfy { $0.value > 1 })
+
+        let context = try #require(ValuationCalculator.historicalContext(
+            current: pair.current, history: pair.history))
+        #expect(context.percentile == 100,
+                "48.65% genuinely exceeds a 40-45% history — but by 3 points, not by 100x")
+        #expect(context.maximum < 50, "History must be on the percent scale, not the ratio scale")
+    }
+
+    @Test("A multiple needs no rescaling in either direction")
+    func multiplesAreNotRescaled() throws {
+        let history = (0..<10).map { index in
+            MetricPoint(period: Date(timeIntervalSince1970: 1_500_000_000
+                                     + Double(index) * 90 * 86_400),
+                        value: 30 + Double(index))
+        }
+        let metrics = CompanyMetricsDTO(
+            current: ["peTTM": 34.36], annual: [:],
+            quarterly: ["peTTM": history], asOf: .now
+        )
+        let metric = try #require(ValuationMetric.all.first { $0.key == "peTTM" })
+        let pair = try #require(metrics.normalized(for: metric))
+        #expect(pair.current == 34.36)
+        #expect(pair.history.first?.value == 30)
+    }
+
+    @Test("With no current value, the latest history point is used at the same scale")
+    func fallsBackToHistoryAtMatchingScale() throws {
+        let history = (0..<10).map { index in
+            MetricPoint(period: Date(timeIntervalSince1970: 1_500_000_000
+                                     + Double(index) * 90 * 86_400),
+                        value: 0.30 + Double(index) * 0.01)
+        }
+        let metrics = CompanyMetricsDTO(
+            current: [:], annual: [:], quarterly: ["netMargin": history], asOf: .now
+        )
+        let metric = try #require(ValuationMetric.all.first { $0.key == "netMargin" })
+        let pair = try #require(metrics.normalized(for: metric))
+        // Scaled to percent like the history, not left as a bare ratio.
+        #expect(abs(pair.current - 39) < 0.001)
+    }
+
+    @Test("Margins format as percentages and multiples as bare numbers")
+    func formattingByUnit() throws {
+        let margin = try #require(ValuationMetric.all.first { $0.key == "grossMargin" })
+        let multiple = try #require(ValuationMetric.all.first { $0.key == "peTTM" })
+        #expect(margin.format(46.2) == "46.2%")
+        #expect(multiple.format(34.0) == "34.0")
+        #expect(!multiple.format(34.0).contains("%"))
+    }
+
+    @Test("A metric with no history produces nothing rather than a bare number")
+    func noHistoryYieldsNothing() throws {
+        let metrics = CompanyMetricsDTO(
+            current: ["peTTM": 34.36], annual: [:], quarterly: [:], asOf: .now
+        )
+        let metric = try #require(ValuationMetric.all.first { $0.key == "peTTM" })
+        #expect(metrics.normalized(for: metric) == nil,
+                "A multiple without context is what this app exists to avoid")
+    }
+
     @Test("Metric definitions record direction without implying a recommendation")
     func metricDirection() throws {
         let pe = try #require(ValuationMetric.all.first { $0.key == "peTTM" })
@@ -109,6 +190,8 @@ struct ValuationTests {
         #expect(pe.lowerIsCheaper)
         #expect(!margin.lowerIsCheaper)
         #expect(Set(ValuationMetric.all.map(\.key)).count == ValuationMetric.all.count)
+        #expect(pe.unit == .multiple)
+        #expect(margin.unit == .percent)
     }
 }
 
