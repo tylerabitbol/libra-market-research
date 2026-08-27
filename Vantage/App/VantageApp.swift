@@ -12,6 +12,10 @@ struct VantageApp: App {
             SelfTest.run(secrets: secrets)
             Task.detached { await SelfTest.runConnectionTests(secrets: secrets) }
         }
+        if SelfTest.isCaptureRequested {
+            let secrets = KeychainSecretsStore()
+            Task.detached { await SelfTest.captureFixtures(secrets: secrets) }
+        }
         // Debug-only, and only when explicitly asked for by launch argument.
         DeveloperOptions.seedSecretsFromEnvironment(into: KeychainSecretsStore())
     }

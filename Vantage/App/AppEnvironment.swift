@@ -79,7 +79,8 @@ final class AppEnvironment {
 
         registry = ProviderRegistry(
             marketData: marketData,
-            fundamentals: nil,                       // Phase 3, from SEC XBRL.
+            fundamentals: secReady ? SECFundamentalsProvider(client: httpClient, secrets: secrets)
+                                   : nil,
             analyst: finnhubReady ? FinnhubAnalystProvider(provider: finnhub) : nil,
             sec: secReady ? SECProvider(client: httpClient, secrets: secrets)
                           : MockSECDataProvider(),
