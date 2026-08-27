@@ -101,6 +101,36 @@ enum DeveloperOptions {
         #endif
     }
 
+    /// `-VantageBackdateVisits 30` moves every recorded visit stamp back by
+    /// that many days.
+    ///
+    /// Exists because "what changed since you last looked" cannot be exercised
+    /// on demand: it needs a *past* visit and closed sessions after it, which
+    /// otherwise means waiting days between runs. Backdating the stamp makes
+    /// the detectors treat already-stored bars as unseen, which is exactly the
+    /// state a returning user is in.
+    ///
+    /// It moves the reference point and nothing else — no event is fabricated,
+    /// and anything that appears was detected from real stored bars.
+    @MainActor
+    static func backdateVisits(context: ModelContext) {
+        #if DEBUG
+        let arguments = CommandLine.arguments
+        guard let index = arguments.firstIndex(of: "-VantageBackdateVisits"),
+              index + 1 < arguments.count,
+              let days = Int(arguments[index + 1]), days > 0
+        else { return }
+
+        let cutoff = Calendar.current.date(byAdding: .day, value: -days, to: .now) ?? .now
+        guard let securities = try? context.fetch(FetchDescriptor<Security>()) else { return }
+        for security in securities {
+            security.lastViewedAt = cutoff
+        }
+        try? context.save()
+        logger.notice("Backdated \(securities.count, privacy: .public) visit stamps by \(days, privacy: .public) days.")
+        #endif
+    }
+
     static var isSeedRequested: Bool {
         #if DEBUG
         CommandLine.arguments.contains(seedArgument)

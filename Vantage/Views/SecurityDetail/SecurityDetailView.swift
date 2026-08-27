@@ -296,7 +296,7 @@ struct SecurityDetailView: View {
                 Text("Annual revenue").font(.caption).foregroundStyle(.secondary)
                 ForEach(Array(model.annualRevenue.prefix(6))) { entry in
                     HStack {
-                        Text(String(entry.fact.fiscalYear))
+                        Text(entry.periodLabel)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundStyle(.secondary)
                         Spacer()

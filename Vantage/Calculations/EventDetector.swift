@@ -28,9 +28,21 @@ enum EventDetector {
     /// Below this, "unusual" is an opinion about a small sample.
     static let minimumSample = 40
 
-    /// The reference window. Long enough to describe a regime, short enough
-    /// that a change of regime shows up rather than being averaged away.
-    static let referenceWindow = 60
+    /// Window for measuring *dispersion*. Long enough to describe a regime,
+    /// short enough that a change of regime shows up rather than being
+    /// averaged away — a stock that got twice as volatile last month should be
+    /// judged against last month, not against a calm year.
+    static let scaleWindow = 60
+
+    /// Window for measuring *rank*. Deliberately longer than the scale window:
+    /// rank costs nothing extra to compute over more data, and a year of
+    /// context supports a far more useful statement. "The largest move in 60
+    /// sessions" understates what the app knows when it holds five years.
+    static let rankWindow = 250
+
+    /// Retained name for the dispersion window, which is what callers outside
+    /// the anomaly machinery mean by "the reference window".
+    static var referenceWindow: Int { scaleWindow }
 
     // MARK: - Entry point
 
@@ -116,11 +128,24 @@ enum EventDetector {
     /// tight. A minimum absolute move sits on top of both as noise suppression
     /// — that one is a judgement about what is worth a reader's attention, not
     /// a statistical claim, and is labelled as such.
+    /// - Parameters:
+    ///   - rankThreshold: the primary criterion — how far into the tail of the
+    ///     security's own recent sessions the move must sit. This is what the
+    ///     app actually states on screen, so it is what the gate is built on.
+    ///   - deviationThreshold: a secondary guard, not a second opinion. It
+    ///     exists only to reject a move that ranks highly because the sample
+    ///     happens to be unusually tight. Set low deliberately: an earlier
+    ///     value of 3.0 rejected an 8.7% day that was the *largest in the whole
+    ///     reference window*, because a high-volatility name has a large MAD —
+    ///     which made the detector least sensitive exactly where large moves
+    ///     matter most.
+    ///   - minimumAbsoluteMove: noise suppression. A judgement about what is
+    ///     worth attention, not a statistical claim.
     static func priceMove(
         bars: [PriceBar],
         quote: QuoteDTO? = nil,
         rankThreshold: Double = 0.975,
-        deviationThreshold: Double = 3,
+        deviationThreshold: Double = 2,
         minimumAbsoluteMove: Double = 1.0,
         sourceDetail: String = "Daily bars"
     ) -> DetectedEventDTO? {
@@ -128,7 +153,70 @@ enum EventDetector {
               priorReturns.count >= minimumSample
         else { return nil }
 
-        let priors = priorReturns.map(\.percent)
+        return priceMoveEvent(
+            latest: latest,
+            priors: priorReturns.map(\.percent),
+            rankThreshold: rankThreshold,
+            deviationThreshold: deviationThreshold,
+            minimumAbsoluteMove: minimumAbsoluteMove,
+            sourceDetail: sourceDetail
+        )
+    }
+
+    /// Unusual moves on sessions that closed after a given date.
+    ///
+    /// `priceMove` only ever judges the newest session, which means a large
+    /// move on a day the user did not open the app was never recorded even
+    /// though its bar was stored. This walks the gap between visits so the
+    /// record is complete regardless of when the app happened to be open.
+    ///
+    /// Each session is judged only against the sessions *before* it, never
+    /// against the ones that followed — anything else is hindsight dressed up
+    /// as detection.
+    static func priceMoves(
+        bars: [PriceBar],
+        after date: Date?,
+        limit: Int = 10,
+        rankThreshold: Double = 0.975,
+        deviationThreshold: Double = 2,
+        minimumAbsoluteMove: Double = 1.0,
+        sourceDetail: String = "Daily bars"
+    ) -> [DetectedEventDTO] {
+        guard let date else { return [] }
+        let sorted = bars.sorted { $0.date < $1.date }
+        let returns = dailyReturns(bars: sorted)
+        guard returns.count > minimumSample else { return [] }
+
+        var events: [DetectedEventDTO] = []
+        for index in minimumSample..<returns.count where returns[index].date > date {
+            let session = returns[index]
+            let reading = LatestReading(date: session.date, percent: session.percent,
+                                        close: session.close, volume: nil, isIntraday: false)
+            let priors = returns[..<index].map(\.percent)
+            if let event = priceMoveEvent(
+                latest: reading, priors: priors,
+                rankThreshold: rankThreshold,
+                deviationThreshold: deviationThreshold,
+                minimumAbsoluteMove: minimumAbsoluteMove,
+                sourceDetail: sourceDetail
+            ) {
+                events.append(event)
+            }
+        }
+        return Array(events.suffix(limit))
+    }
+
+    /// Builds the event for one reading judged against one set of priors.
+    /// Shared so the live session and a backfilled one are described in
+    /// identical terms and cannot drift apart.
+    private static func priceMoveEvent(
+        latest: LatestReading,
+        priors: [Double],
+        rankThreshold: Double,
+        deviationThreshold: Double,
+        minimumAbsoluteMove: Double,
+        sourceDetail: String
+    ) -> DetectedEventDTO? {
         guard let measure = AnomalyMeasure.measure(latest.percent, against: priors)
         else { return nil }
 
@@ -140,8 +228,7 @@ enum EventDetector {
         let direction = latest.percent >= 0 ? "rose" : "fell"
         var details = [
             "Move: \(Format.signedPercent(latest.percent, precision: 2))",
-            "Larger than \(measure.exceededCount) of the prior "
-                + "\(measure.sampleSize) closed sessions",
+            measure.comparisonLine,
             "\(Format.multiple(abs(measure.deviations), precision: 1)) the typical "
                 + "daily move (median absolute deviation)",
             "\(latest.isIntraday ? "Last" : "Close"): \(Format.currency(latest.close))"
@@ -334,7 +421,8 @@ enum EventDetector {
                 DetectedEventDTO(
                     kind: .newFiling,
                     occurredAt: filing.filedAt,
-                    headline: "\(filing.formType) filed \(Format.shortDate(filing.filedAt))",
+                    headline: "Form \(filing.formType) filed "
+                        + "\(Format.shortDate(filing.filedAt))",
                     detailLines: [
                         "Form: \(filing.formType)",
                         filing.periodOfReport.map {
@@ -346,8 +434,12 @@ enum EventDetector {
                     // A filing either exists or does not; there is no sample to
                     // rank it against, so it carries no unusualness score.
                     unusualness: 0,
-                    sourceDetails: ["SEC EDGAR — \(filing.accessionNumber)"],
-                    sourceURLs: [filing.primaryDocumentURL, filing.filingIndexURL].compactMap { $0 }
+                    sourceDetails: ["\(filing.formType) — \(filing.accessionNumber)"],
+                    // One link, not two. The document and its index point at
+                    // the same filing, and offering both as identically
+                    // labelled links is noise rather than a second source.
+                    sourceURLs: [filing.primaryDocumentURL ?? filing.filingIndexURL]
+                        .compactMap { $0 }
                 )
             }
     }
@@ -380,34 +472,53 @@ struct AnomalyMeasure: Sendable, Hashable {
     /// Median absolute deviation, rescaled so it is comparable to a standard
     /// deviation for normally distributed data.
     let scale: Double
+    /// Size of the window `exceededCount` is drawn from.
     let sampleSize: Int
     /// Prior observations whose absolute deviation was smaller than this one's.
     let exceededCount: Int
+    /// Size of the shorter window the dispersion was measured over.
+    let scaleSampleSize: Int
 
     var deviations: Double { (observation - median) / scale }
     /// 0–1. Position within the sample, not a probability.
     var unusualness: Double { Double(exceededCount) / Double(sampleSize) }
 
+    /// What the observation was compared against, in words.
+    /// "Larger than 250 of the prior 250" is technically right and reads badly;
+    /// the whole point of that reading is that nothing in the window beat it.
+    var comparisonLine: String {
+        exceededCount == sampleSize
+            ? "Larger than every one of the prior \(sampleSize) closed sessions"
+            : "Larger than \(exceededCount) of the prior \(sampleSize) closed sessions"
+    }
+
     /// Nil when the sample is too small or has no dispersion to measure
     /// against — a flat series makes every deviation infinite, which would
     /// render as an extraordinary event rather than as an absence of movement.
+    ///
+    /// Dispersion and rank are drawn from different windows on purpose. Scale
+    /// must reflect the *current* regime, so it uses the shorter window. Rank
+    /// is a statement about how rare something is, and is better the more
+    /// history it sees, so it uses the longer one.
     static func measure(_ observation: Double, against sample: [Double]) -> AnomalyMeasure? {
         let usable = sample.filter(\.isFinite)
         guard observation.isFinite, usable.count >= EventDetector.minimumSample - 1
         else { return nil }
 
-        let window = Array(usable.suffix(EventDetector.referenceWindow))
-        let median = Statistics.median(window)
-        guard let scale = Statistics.robustScale(window, median: median), scale > 0
+        let scaleSample = Array(usable.suffix(EventDetector.scaleWindow))
+        let median = Statistics.median(scaleSample)
+        guard let scale = Statistics.robustScale(scaleSample, median: median), scale > 0
         else { return nil }
 
+        let rankSample = Array(usable.suffix(EventDetector.rankWindow))
         let magnitude = abs(observation - median)
         return AnomalyMeasure(
             observation: observation,
             median: median,
             scale: scale,
-            sampleSize: window.count,
-            exceededCount: window.filter { abs($0 - median) < magnitude }.count
+            sampleSize: rankSample.count,
+            exceededCount: rankSample.filter { abs($0 - median) < magnitude }.count,
+            scaleSampleSize: scaleSample.count
         )
     }
 
@@ -420,7 +531,8 @@ struct AnomalyMeasure: Sendable, Hashable {
                       value: Format.signedPercent(median, precision: 2), source: nil),
                 .init(name: "robust scale",
                       value: Format.percent(scale, precision: 2), source: nil),
-                .init(name: "sample size", value: "\(sampleSize) sessions", source: nil)
+                .init(name: "rank sample", value: "\(sampleSize) sessions", source: nil),
+                .init(name: "scale sample", value: "\(scaleSampleSize) sessions", source: nil)
             ],
             result: "\(Format.multiple(abs(deviations), precision: 1)) typical"
         )

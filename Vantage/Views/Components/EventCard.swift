@@ -37,15 +37,6 @@ struct EventCard: View {
                 Divider()
                 ClaimRow(claim: context)
             }
-
-            if !event.sourceURLs.isEmpty {
-                ForEach(event.sourceURLs, id: \.self) { url in
-                    Link(destination: url) {
-                        Label("Open the source document", systemImage: "arrow.up.right.square")
-                            .font(.caption)
-                    }
-                }
-            }
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))

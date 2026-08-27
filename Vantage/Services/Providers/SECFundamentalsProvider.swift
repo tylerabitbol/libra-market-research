@@ -69,15 +69,31 @@ struct SECFundamentalsProvider: FundamentalsProvider {
         return try await client.get(endpoint, as: CompanyFactsResponse.self)
     }
 
-    /// Picks the first candidate tag the issuer actually reports, then maps its
-    /// entries. Trying every candidate and merging would double-count a company
-    /// that reports two of them.
+    /// Merges the candidate tags in priority order, one figure per period.
+    ///
+    /// The obvious implementation — take the first tag that returns anything —
+    /// silently truncates the history of any issuer that changed tags. NVIDIA
+    /// is a live example: its recent revenue sits under one tag and its older
+    /// revenue under another, and first-tag-wins returned FY2021 and FY2022
+    /// only, hiding four years including the ones that made the company what
+    /// it is. Nothing about that failure looks like a failure on screen; the
+    /// chart simply starts late.
+    ///
+    /// Merging by period rather than concatenating is what keeps the opposite
+    /// error away: an issuer reporting two candidate tags for the *same* period
+    /// contributes one figure, from the higher-priority tag, so the totals are
+    /// never doubled. `rawTag` records which tag each figure came from, since a
+    /// series spanning a tag change is worth being able to inspect — the two
+    /// tags can carry slightly different definitions.
     static func extract(
         concept: FinancialConcept,
         from response: CompanyFactsResponse,
         since: Date?
     ) -> [FinancialFactDTO] {
         guard let gaap = response.facts["us-gaap"] else { return [] }
+
+        var byPeriod: [String: FinancialFactDTO] = [:]
+        var order: [String] = []
 
         for tag in concept.candidateTags {
             guard let entry = gaap[tag] else { continue }
@@ -91,9 +107,22 @@ struct SECFundamentalsProvider: FundamentalsProvider {
             // Cumulative half-year and nine-month rows share a tag with the
             // discrete quarters; keeping both would double-count.
             .filter(\.periodKind.isDiscrete)
-            if !facts.isEmpty { return Self.deduplicated(facts) }
+
+            for fact in Self.deduplicated(facts) {
+                let key = Self.mergeKey(fact)
+                // Earlier candidates outrank later ones, so a period already
+                // filled by a higher-priority tag is left alone.
+                guard byPeriod[key] == nil else { continue }
+                byPeriod[key] = fact
+                order.append(key)
+            }
         }
-        return []
+
+        return order.compactMap { byPeriod[$0] }.sorted { $0.periodEnd < $1.periodEnd }
+    }
+
+    private static func mergeKey(_ fact: FinancialFactDTO) -> String {
+        "\(periodKey(fact.periodEnd))|\(fact.periodKind.rawValue)"
     }
 
     /// Collapses restatements to the most recently filed figure per period,
