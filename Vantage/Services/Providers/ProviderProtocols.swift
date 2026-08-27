@@ -16,6 +16,18 @@ struct QuoteDTO: Sendable, Hashable {
     let previousClose: Double?
     let volume: Double?
     let quoteTime: Date?
+
+    /// Nil when the provider didn't supply a previous close. Returning nil
+    /// rather than 0 keeps an unknown change from rendering as "flat".
+    var change: Double? {
+        guard let previousClose else { return nil }
+        return last - previousClose
+    }
+
+    var changePercent: Double? {
+        guard let previousClose, previousClose != 0 else { return nil }
+        return (last - previousClose) / previousClose * 100
+    }
 }
 
 struct PriceBarDTO: Sendable, Hashable {
