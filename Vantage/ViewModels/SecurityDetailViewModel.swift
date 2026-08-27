@@ -68,10 +68,45 @@ final class SecurityDetailViewModel {
         Task { await loadHistory(using: registry) }
     }
 
-    func load(using registry: ProviderRegistry, force: Bool = false) {
+    func load(
+        using registry: ProviderRegistry,
+        snapshots: SnapshotStore? = nil,
+        force: Bool = false
+    ) {
         if !force, case .fresh = freshness { return }
         loadTask?.cancel()
-        loadTask = Task { [weak self] in await self?.performLoad(using: registry) }
+        loadTask = Task { [weak self] in
+            await self?.performLoad(using: registry)
+            await self?.persist(using: snapshots)
+        }
+    }
+
+    /// Records everything the load produced.
+    ///
+    /// Deliberately after the UI has its data: persistence must never delay
+    /// what is on screen, and a write failure must not blank a loaded page.
+    private func persist(using snapshots: SnapshotStore?) async {
+        guard let snapshots else { return }
+        let symbol = self.symbol
+        do {
+            if let quote { try await snapshots.record(quote: quote, symbol: symbol) }
+            if !bars.isEmpty {
+                let dtos = bars.map {
+                    PriceBarDTO(date: $0.date, open: $0.open, high: $0.high, low: $0.low,
+                                close: $0.close, volume: $0.volume,
+                                adjustedClose: $0.adjustedClose)
+                }
+                try await snapshots.record(bars: dtos, symbol: symbol, resolution: .daily)
+            }
+            if !fundamentals.isEmpty {
+                try await snapshots.record(facts: fundamentals, symbol: symbol)
+            }
+            if !filings.isEmpty {
+                try await snapshots.record(filings: filings, symbol: symbol)
+            }
+        } catch {
+            Self.logger.error("Persist failed for \(symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func performLoad(using registry: ProviderRegistry) async {
@@ -222,9 +257,12 @@ final class SecurityDetailViewModel {
             // ValuationMetric for why that is load-bearing.
             guard let pair = metrics.normalized(for: metric),
                   let context = ValuationCalculator.historicalContext(
-                    current: pair.current, history: pair.history)
+                    current: pair.current,
+                    history: pair.history,
+                    lowerIsCheaper: metric.lowerIsCheaper,
+                    currentIsFromHistory: pair.currentIsFromHistory)
             else { return nil }
-            return RankedMetric(metric: metric, context: context)
+            return RankedMetric(metric: metric, context: context, asOf: pair.asOf)
         }
     }
 
@@ -273,6 +311,9 @@ struct RankedMetric: Identifiable, Sendable {
     var id: String { metric.id }
     let metric: ValuationMetric
     let context: HistoricalContext
+    /// The date the current value refers to. Equal to now for live figures;
+    /// older for metrics sourced from the quarterly series.
+    let asOf: Date
 }
 
 /// One annual figure with its year-over-year growth, when a prior year exists.

@@ -14,6 +14,11 @@ struct WatchlistView: View {
 
     @State private var model = WatchlistViewModel()
     @State private var isAddingSymbol = false
+    /// Debug-only deep link; nil in release builds.
+    @State private var debugSymbol: String? = DeveloperOptions.debugSymbol
+    /// A failed write used to vanish silently, leaving the user believing a
+    /// security had been added when it had not.
+    @State private var saveError: String?
 
     var body: some View {
         Group {
@@ -22,6 +27,9 @@ struct WatchlistView: View {
             } else {
                 list
             }
+        }
+        .navigationDestination(item: $debugSymbol) { symbol in
+            SecurityDetailView(symbol: symbol)
         }
         .navigationTitle("Watchlist")
         .toolbar {
@@ -49,9 +57,14 @@ struct WatchlistView: View {
         .sheet(isPresented: $isAddingSymbol) {
             AddSymbolSheet { profile in add(profile) }
         }
-        .refreshable { model.load(entries: entries, registry: app.registry, force: true) }
+        .alert("Couldn't save", isPresented: .constant(saveError != nil)) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "")
+        }
+        .refreshable { model.load(entries: entries, registry: app.registry, snapshots: app.snapshots, force: true) }
         .task(id: entries.count) {
-            model.load(entries: entries, registry: app.registry)
+            model.load(entries: entries, registry: app.registry, snapshots: app.snapshots)
         }
     }
 
@@ -112,7 +125,16 @@ struct WatchlistView: View {
         guard security.watchlistEntry == nil else { return }
         let entry = WatchlistEntry(security: security, priority: entries.count)
         context.insert(entry)
-        try? context.save()
+        save()
+    }
+
+    private func save() {
+        do {
+            try context.save()
+            saveError = nil
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 
     private func delete(at offsets: IndexSet) {
@@ -127,7 +149,7 @@ struct WatchlistView: View {
                 context.delete(entry)
             }
         }
-        try? context.save()
+        save()
     }
 }
 

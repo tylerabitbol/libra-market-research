@@ -93,10 +93,24 @@ struct SECProvider: SECDataProvider {
         String(format: "%010d", value)
     }
 
+    /// Normalises a CIK to ten digits, rejecting anything unparseable.
+    ///
+    /// Throws rather than defaulting to zero. A `?? 0` fallback builds a
+    /// perfectly well-formed request for CIK 0000000000 — a silent wrong
+    /// question, whose answer is either a 404 or, worse, some other filer.
+    static func normalizedCIK(_ raw: String) throws -> String {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        if trimmed.count == 10, trimmed.allSatisfy(\.isNumber) { return trimmed }
+        guard let value = Int(trimmed), value > 0 else {
+            throw APIError.notFound(.sec, endpoint: "CIK \(raw)")
+        }
+        return padCIK(value)
+    }
+
     // MARK: - Filings
 
     func filings(cik: String, formTypes: [String], limit: Int) async throws -> [FilingDTO] {
-        let padded = cik.count == 10 ? cik : String(format: "%010d", Int(cik) ?? 0)
+        let padded = try Self.normalizedCIK(cik)
         let endpoint = Endpoint(
             provider: .sec,
             baseURL: Self.dataHost,
@@ -158,13 +172,18 @@ struct SubmissionsResponse: Decodable, Sendable {
 
         func filings(cik: String) -> [FilingDTO] {
             let count = min(accessionNumber.count, filingDate.count, form.count)
+            // A CIK that will not parse cannot produce a correct archive URL,
+            // and a URL pointing at the wrong filer is worse than no link.
+            guard let numericCIK = Int(cik.trimmingCharacters(in: .whitespaces)), numericCIK > 0
+            else { return [] }
+
             return (0..<count).compactMap { index in
                 guard let filed = SECProvider.dayFormatter.date(from: filingDate[index])
                 else { return nil }
 
                 let accession = accessionNumber[index]
                 let bare = accession.replacingOccurrences(of: "-", with: "")
-                let base = "https://www.sec.gov/Archives/edgar/data/\(Int(cik) ?? 0)/\(bare)"
+                let base = "https://www.sec.gov/Archives/edgar/data/\(numericCIK)/\(bare)"
                 let document = primaryDocument?.indices.contains(index) == true
                     ? primaryDocument?[index] : nil
 

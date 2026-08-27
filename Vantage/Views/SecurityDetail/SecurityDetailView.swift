@@ -38,8 +38,8 @@ struct SecurityDetailView: View {
                 .background(.regularMaterial, in: .capsule)
                 .padding(.bottom, 6)
         }
-        .refreshable { model.load(using: app.registry, force: true) }
-        .task { model.load(using: app.registry) }
+        .refreshable { model.load(using: app.registry, snapshots: app.snapshots, force: true) }
+        .task { model.load(using: app.registry, snapshots: app.snapshots) }
     }
 
     // MARK: - Overview
@@ -177,17 +177,19 @@ struct SecurityDetailView: View {
 
     /// Padded bounds so the line never sits flush against the frame, and so a
     /// quiet period doesn't get magnified into apparent volatility.
-    private var chartFloor: Double {
+    /// Padded bounds. A flat range would otherwise give floor == ceiling and a
+    /// degenerate chart domain, so the padding falls back to a fraction of the
+    /// value itself rather than of a zero spread.
+    private var chartBounds: (floor: Double, ceiling: Double) {
         let values = model.visibleBars.map(\.analysisClose)
-        guard let low = values.min(), let high = values.max() else { return 0 }
-        return low - (high - low) * 0.08
+        guard let low = values.min(), let high = values.max() else { return (0, 1) }
+        let spread = high - low
+        let padding = spread > 0 ? spread * 0.08 : max(abs(high) * 0.02, 0.5)
+        return (low - padding, high + padding)
     }
 
-    private var chartCeiling: Double {
-        let values = model.visibleBars.map(\.analysisClose)
-        guard let low = values.min(), let high = values.max() else { return 1 }
-        return high + (high - low) * 0.08
-    }
+    private var chartFloor: Double { chartBounds.floor }
+    private var chartCeiling: Double { chartBounds.ceiling }
 
     // MARK: - Valuation
 
@@ -206,7 +208,7 @@ struct SecurityDetailView: View {
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 ForEach(model.valuationContexts) { entry in
-                    ValuationRow(metric: entry.metric, context: entry.context)
+                    ValuationRow(metric: entry.metric, context: entry.context, asOf: entry.asOf)
                     if entry.id != model.valuationContexts.last?.id {
                         Divider()
                     }
@@ -303,6 +305,7 @@ struct SecurityDetailView: View {
 private struct ValuationRow: View {
     let metric: ValuationMetric
     let context: HistoricalContext
+    let asOf: Date
     @State private var isExpanded = false
 
     var body: some View {
@@ -316,31 +319,52 @@ private struct ValuationRow: View {
                     Text(metric.format(context.current))
                         .font(.system(.subheadline, design: .rounded).weight(.medium))
                         .monospacedDigit()
-                    Text("\(Format.ordinal(context.percentile)) pctile")
-                        .font(.caption).monospacedDigit()
-                        .foregroundStyle(.secondary)
-                        .frame(width: 84, alignment: .trailing)
+                    Group {
+                        if context.meaningfulness.isRankable {
+                            Text("\(Format.ordinal(context.percentile)) pctile")
+                        } else {
+                            Text("not meaningful")
+                        }
+                    }
+                    .font(.caption).monospacedDigit()
+                    .foregroundStyle(context.meaningfulness.isRankable
+                                     ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
+                    .frame(width: 100, alignment: .trailing)
                 }
             }
             .buttonStyle(.plain)
 
-            PercentileBar(percentile: context.percentile)
+            // A bar implies a position in a range. When the value cannot be
+            // ranked, drawing one would assert exactly what we are refusing to.
+            if context.meaningfulness.isRankable {
+                PercentileBar(percentile: context.percentile)
+            }
+
+            if context.currentIsFromHistory {
+                Text("As of \(Format.shortDate(asOf)) — no current figure published.")
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(context.descriptor)
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Text("Range").font(.caption2).foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(metric.format(context.minimum)) – \(metric.format(context.maximum))")
-                            .font(.system(.caption2, design: .monospaced))
-                    }
-                    HStack {
-                        Text("Median").font(.caption2).foregroundStyle(.secondary)
-                        Spacer()
-                        Text(metric.format(context.median))
-                            .font(.system(.caption2, design: .monospaced))
+                        .font(.caption)
+                        .foregroundStyle(context.meaningfulness.isRankable
+                                         ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
+                        .fixedSize(horizontal: false, vertical: true)
+                    if context.meaningfulness.isRankable {
+                        HStack {
+                            Text("Range").font(.caption2).foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(metric.format(context.minimum)) – \(metric.format(context.maximum))")
+                                .font(.system(.caption2, design: .monospaced))
+                        }
+                        HStack {
+                            Text("Median").font(.caption2).foregroundStyle(.secondary)
+                            Spacer()
+                            Text(metric.format(context.median))
+                                .font(.system(.caption2, design: .monospaced))
+                        }
                     }
                     HStack {
                         Text("Observations").font(.caption2).foregroundStyle(.secondary)

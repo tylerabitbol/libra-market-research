@@ -92,7 +92,8 @@ struct ValuationTests {
             let context = HistoricalContext(
                 current: 20, percentile: percentile, median: 18, minimum: 10,
                 maximum: 40, observationCount: 20,
-                earliest: .distantPast, latest: .now
+                earliest: .distantPast, latest: .now,
+                meaningfulness: .rankable, currentIsFromHistory: false
             )
             let descriptor = context.descriptor.lowercased()
             for word in banned {

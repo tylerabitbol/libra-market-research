@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import SwiftData
+import OSLog
 
 /// One watchlist row's live state.
 struct WatchlistRow: Identifiable, Sendable {
@@ -28,16 +29,18 @@ final class WatchlistViewModel {
 
     private var loadTask: Task<Void, Never>?
 
-    /// Section 15's sort options, minus the ones that need signals not yet built.
+    /// Section 15's sort options, minus the ones that need signals not yet
+    /// built. "Most unusual" and "highest research signal" arrive with the
+    /// Phase 6 detectors; offering them now would mean two menu entries
+    /// producing identical orderings, which is worse than one honest entry.
     enum SortOrder: String, CaseIterable, Identifiable {
-        case symbol, biggestChange, mostUnusual
+        case symbol, biggestChange
         var id: String { rawValue }
 
         var displayName: String {
             switch self {
             case .symbol: "Symbol"
             case .biggestChange: "Biggest change"
-            case .mostUnusual: "Most unusual"
             }
         }
     }
@@ -55,16 +58,21 @@ final class WatchlistViewModel {
             // Absolute magnitude: a 5% fall is as notable as a 5% rise, and
             // this screen is about what moved, not about what went up.
             rows.sorted { abs($0.changePercent ?? 0) > abs($1.changePercent ?? 0) }
-        case .mostUnusual:
-            // Placeholder ordering until the event detectors land in Phase 6;
-            // magnitude is the honest stand-in for "unusual" until then.
-            rows.sorted { abs($0.changePercent ?? 0) > abs($1.changePercent ?? 0) }
         }
     }
 
     func setSort(_ order: SortOrder) { sort = order }
 
-    func load(entries: [WatchlistEntry], registry: ProviderRegistry, force: Bool = false) {
+    nonisolated static let logger = Logger(
+        subsystem: "com.tylerabitbol.vantage", category: "watchlist"
+    )
+
+    func load(
+        entries: [WatchlistEntry],
+        registry: ProviderRegistry,
+        snapshots: SnapshotStore? = nil,
+        force: Bool = false
+    ) {
         let members = entries.compactMap(\.security).map { ($0.symbol, $0.name) }
         // Show names from disk immediately; prices follow.
         rows = members.map { WatchlistRow(symbol: $0.0, name: $0.1) }
@@ -74,6 +82,7 @@ final class WatchlistViewModel {
         loadTask?.cancel()
         loadTask = Task { [weak self] in
             await self?.refreshQuotes(registry: registry)
+            await self?.persist(using: snapshots)
         }
     }
 
@@ -116,6 +125,20 @@ final class WatchlistViewModel {
             return updated
         }
         lastRefreshedAt = .now
+    }
+
+    /// Records each quote so the watchlist accrues history simply by being
+    /// opened — which is what gives Phase 6 something to compare against.
+    private func persist(using snapshots: SnapshotStore?) async {
+        guard let snapshots else { return }
+        for row in rows {
+            guard let quote = row.quote else { continue }
+            do {
+                try await snapshots.record(quote: quote, symbol: row.symbol)
+            } catch {
+                Self.logger.error("Persist failed for \(row.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 }
 

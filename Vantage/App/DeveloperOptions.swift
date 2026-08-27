@@ -82,6 +82,25 @@ enum DeveloperOptions {
         #endif
     }
 
+    /// `-VantageOpenSymbol AAPL` opens straight to a security's detail page.
+    ///
+    /// Exists because capturing that screen previously meant editing
+    /// `RootView` by hand, and one of those edits was committed — leaving the
+    /// Watchlist tab wired to a hardcoded symbol. A supported route costs a few
+    /// lines and removes the need to touch navigation at all.
+    static var debugSymbol: String? {
+        #if DEBUG
+        let arguments = CommandLine.arguments
+        guard let index = arguments.firstIndex(of: "-VantageOpenSymbol"),
+              index + 1 < arguments.count
+        else { return nil }
+        let symbol = arguments[index + 1].trimmingCharacters(in: .whitespaces).uppercased()
+        return symbol.isEmpty ? nil : symbol
+        #else
+        return nil
+        #endif
+    }
+
     static var isSeedRequested: Bool {
         #if DEBUG
         CommandLine.arguments.contains(seedArgument)
