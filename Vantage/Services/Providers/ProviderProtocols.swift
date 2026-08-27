@@ -52,6 +52,42 @@ struct CompanyProfileDTO: Sendable, Hashable {
     let cik: String?
 }
 
+/// How long a reported figure covers.
+///
+/// XBRL files cumulative year-to-date figures under the *same tag* as discrete
+/// quarterly ones: a Q3 10-Q carries both the three-month revenue and the
+/// nine-month running total. Reading a nine-month total as a quarter makes Q3
+/// look roughly three times Q2 and corrupts every growth rate computed from it,
+/// so duration is classified explicitly rather than inferred from `fp`.
+enum FiscalPeriodKind: String, Sendable, Hashable, CaseIterable {
+    /// A single quarter, roughly 90 days.
+    case quarter
+    /// Six months cumulative.
+    case halfYear
+    /// Nine months cumulative.
+    case nineMonth
+    /// A full year, roughly 365 days.
+    case annual
+    /// A balance-sheet item: a point in time, with no duration.
+    case instant
+
+    /// Classifies by day count, with windows wide enough for 52/53-week fiscal
+    /// calendars and companies whose quarters are not exactly 13 weeks.
+    static func classify(days: Double?) -> FiscalPeriodKind {
+        guard let days else { return .instant }
+        switch days {
+        case ..<140: return .quarter
+        case ..<230: return .halfYear
+        case ..<310: return .nineMonth
+        default: return .annual
+        }
+    }
+
+    /// The kinds worth showing directly. Cumulative periods are kept in the
+    /// store but excluded from quarter-over-quarter work.
+    var isDiscrete: Bool { self == .quarter || self == .annual || self == .instant }
+}
+
 struct FinancialFactDTO: Sendable, Hashable {
     let concept: FinancialConcept
     let rawTag: String?
@@ -60,6 +96,7 @@ struct FinancialFactDTO: Sendable, Hashable {
     let fiscalYear: Int
     let fiscalQuarter: Int?
     let isAnnual: Bool
+    let periodKind: FiscalPeriodKind
     let value: Double
     let unit: String
     let filedAt: Date?
