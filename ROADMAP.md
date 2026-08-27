@@ -19,7 +19,7 @@ From the original specification. Status as of the latest commit.
 |---|-------|--------|
 | 1 | **Foundation** — project architecture, SwiftData models, API abstraction, networking, secrets, navigation, basic dashboard | ✅ Complete |
 | 2 | **Market data** — quotes, historical prices, volume, watchlist, charts | ✅ Complete — providers, watchlist with search/add/persistence, and range charts |
-| 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | 🟡 XBRL extraction, valuation percentiles and Security Detail UI done; snapshot persistence outstanding |
+| 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | ✅ Complete — XBRL extraction, valuation percentiles, Security Detail UI, and append-only persistence |
 | 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | 🟡 Provider + filings done; Form 4 XML parsing outstanding |
 | 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings + earnings surprises available; estimate revisions blocked by tier |
 | 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | ⬜ |
@@ -78,6 +78,20 @@ so they never enter a command line.
   and one gets silently dropped — which showed up as a 0.0% revenue growth year.
 - **The watchlist fetches quotes only, never history.** One bars request per row
   would exhaust Tiingo's hourly quota on a list of any size.
+- **A multiple that cannot be ranked is shown and flagged, never silently
+  omitted.** A negative P/E ranked naively lands at the 0th percentile and reads
+  as "near the low end of its own range" — which scans as cheap when it means
+  losses. Omitting it instead would hide that the company is loss-making.
+- **A value taken from history is excluded from its own ranking.** Counting an
+  observation in the sample it is measured against inflates the percentile.
+- **Scale factors are validated against the data, not assumed.** A ratio series
+  that is already in percent must not be multiplied again; a silent 100x error
+  is the worst outcome available in this app.
+- **SEC identifiers are parsed strictly.** `Int(cik) ?? 0` builds a well-formed
+  request for CIK 0000000000 — a silent wrong question rather than a failure.
+- **Never edit navigation to capture a screenshot.** Use `-VantageOpenSymbol`.
+  A hand-edit for a screenshot once reached a commit and left the Watchlist tab
+  wired to a hardcoded symbol.
 - **Percentage points ≠ percent.** Relative performance reports `pp` throughout.
 - **No secrets in source.** Keys live in the Keychain, entered by the user.
   `DeveloperOptions` can seed from `VANTAGE_*` environment variables, gated on a
@@ -93,6 +107,7 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 | `-VantageSeedKeys` | Seeds the Keychain from `VANTAGE_*` environment variables |
 | `-VantageSeedWatchlist` | Adds AAPL, NVDA, COST to the watchlist without touching existing entries |
 | `-VantageCaptureFixtures` | Writes a trimmed `companyfacts` payload into the app container for use as a test fixture |
+| `-VantageOpenSymbol AAPL` | Opens straight to a security's detail page. Added because capturing that screen used to mean hand-editing `RootView`, and one such edit reached a commit |
 
 ## Known gaps
 

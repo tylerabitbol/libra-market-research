@@ -7,9 +7,29 @@ import Foundation
 /// the company's *own* past, not against other companies — a software firm at
 /// a P/E of 31 and a utility at 31 are not comparable, but a company against
 /// its own ten-year range is.
+/// Why a value cannot be ranked, when it cannot.
+///
+/// A negative multiple is the important case. Ranked naively it lands at the
+/// bottom of a positive history and the descriptor reads "near the low end of
+/// its own range" — which a reader takes as cheap, when it actually means the
+/// company lost money. Refusing to rank it, and saying why, is the only honest
+/// option; omitting it silently would hide the loss entirely.
+enum MetricMeaningfulness: Sendable, Hashable {
+    case rankable
+    case notMeaningful(reason: String)
+
+    var isRankable: Bool { self == .rankable }
+
+    var reason: String? {
+        if case .notMeaningful(let reason) = self { return reason }
+        return nil
+    }
+}
+
 struct HistoricalContext: Sendable, Hashable {
     let current: Double
-    /// 0–100. The share of historical observations at or below `current`.
+    /// 0–100. The share of *prior* observations at or below `current`.
+    /// Meaningless unless `meaningfulness` is `.rankable`.
     let percentile: Int
     let median: Double
     let minimum: Double
@@ -17,16 +37,23 @@ struct HistoricalContext: Sendable, Hashable {
     let observationCount: Int
     let earliest: Date
     let latest: Date
+    let meaningfulness: MetricMeaningfulness
+    /// True when `current` was taken from the history rather than from a live
+    /// figure, so the UI can date-stamp it instead of implying it is current.
+    let currentIsFromHistory: Bool
 
     /// An `.interpretation` claim — a judgement about what the number shows,
     /// deliberately not a `.fact`, and never a recommendation.
     var descriptor: String {
+        if let reason = meaningfulness.reason { return reason }
+        // Explicit returns throughout: the early return above makes the
+        // implicit-return form invalid.
         switch percentile {
-        case ..<10: "near the low end of its own range"
-        case ..<25: "below its usual range"
-        case ..<75: "within its usual range"
-        case ..<90: "above its usual range"
-        default: "near the high end of its own range"
+        case ..<10: return "near the low end of its own range"
+        case ..<25: return "below its usual range"
+        case ..<75: return "within its usual range"
+        case ..<90: return "above its usual range"
+        default: return "near the high end of its own range"
         }
     }
 }
@@ -43,10 +70,10 @@ enum ValuationCalculator {
     static func historicalContext(
         current: Double,
         history: [MetricPoint],
-        minimumObservations: Int = 8
+        minimumObservations: Int = 8,
+        lowerIsCheaper: Bool = true,
+        currentIsFromHistory: Bool = false
     ) -> HistoricalContext? {
-        // Non-finite values, and negative multiples such as a P/E on negative
-        // earnings, are not meaningfully rankable.
         let usable = history.filter { $0.value.isFinite }
         guard current.isFinite,
               usable.count >= minimumObservations,
@@ -54,7 +81,13 @@ enum ValuationCalculator {
               let latest = usable.map(\.period).max()
         else { return nil }
 
-        let values = usable.map(\.value).sorted()
+        // When `current` came from the history, it is the last element of it.
+        // Counting an observation in its own ranking inflates the percentile by
+        // roughly 1/n and guarantees a value can never rank below itself.
+        let priors = currentIsFromHistory ? Array(usable.dropLast()) : usable
+        guard priors.count >= minimumObservations - 1 else { return nil }
+
+        let values = priors.map(\.value).sorted()
         let atOrBelow = values.filter { $0 <= current }.count
         let percentile = Int((Double(atOrBelow) / Double(values.count) * 100).rounded())
 
@@ -66,8 +99,38 @@ enum ValuationCalculator {
             maximum: values.last ?? current,
             observationCount: values.count,
             earliest: earliest,
-            latest: latest
+            latest: latest,
+            meaningfulness: meaningfulness(
+                current: current, history: values, lowerIsCheaper: lowerIsCheaper
+            ),
+            currentIsFromHistory: currentIsFromHistory
         )
+    }
+
+    /// Decides whether a ranking would mean anything.
+    ///
+    /// Only applied to metrics where lower is conventionally cheaper — the
+    /// price multiples. A negative margin or return on equity is a perfectly
+    /// meaningful figure that genuinely sits at the bottom of its range.
+    static func meaningfulness(
+        current: Double,
+        history: [Double],
+        lowerIsCheaper: Bool
+    ) -> MetricMeaningfulness {
+        guard lowerIsCheaper else { return .rankable }
+
+        if current < 0 {
+            return .notMeaningful(reason: "Not meaningful — a negative multiple reflects "
+                                        + "negative earnings, not a low valuation.")
+        }
+        // A history straddling zero cannot be ordered sensibly either: a large
+        // negative and a large positive sit at opposite ends of a range whose
+        // middle has no interpretation.
+        if history.contains(where: { $0 < 0 }) && history.contains(where: { $0 > 0 }) {
+            return .notMeaningful(reason: "Not meaningful — this metric was negative in "
+                                        + "part of the period, so its range cannot be ranked.")
+        }
+        return .rankable
     }
 
     static func median(of sortedValues: [Double]) -> Double {
@@ -178,8 +241,13 @@ struct ValuationMetric: Sendable, Hashable, Identifiable {
         multiple("peTTM", "peTTM", "P/E"),
         multiple("psTTM", "psTTM", "P/S"),
         multiple("pb", "pb", "P/B"),
-        multiple("pfcfTTM", "pfcfTTM", "P/FCF"),
-        multiple("evEbitdaTTM", "currentEv/freeCashFlowTTM", "EV/EBITDA"),
+        // Finnhub's metric block carries no P/FCF, so this one is sourced from
+        // the historical series and date-stamped rather than shown as current.
+        multiple("pfcfTTM", nil, "P/FCF"),
+        // EV/EBITDA, not EV/free-cash-flow. These are different metrics and
+        // Finnhub reports both; an earlier revision read the wrong one and
+        // displayed it under this label.
+        multiple("evEbitdaTTM", "evEbitdaTTM", "EV/EBITDA"),
         margin("grossMargin", "grossMarginTTM", "Gross margin"),
         margin("operatingMargin", "operatingMarginTTM", "Operating margin"),
         margin("netMargin", "netProfitMarginTTM", "Net margin"),
@@ -199,23 +267,52 @@ extension CompanyMetricsDTO {
     /// Current value and history for a metric, both on the metric's canonical
     /// scale so they can legitimately be compared.
     ///
-    /// Falls back to the most recent history point when the current block has
-    /// no entry, which keeps the two halves consistent rather than mixing a
-    /// fresh value at one scale with a history at another.
-    func normalized(for metric: ValuationMetric) -> (current: Double, history: [MetricPoint])? {
-        let history = self.history(metric.key).map {
-            MetricPoint(period: $0.period, value: $0.value * metric.historyScale)
-        }
-        guard !history.isEmpty else { return nil }
+    /// The scaling is validated rather than assumed. Finnhub reports margins as
+    /// ratios in the series block and as percentages in the metric block, but
+    /// that is an observation about today's API, not a guarantee. Multiplying a
+    /// series that is already in percent would render margins 100x wrong while
+    /// looking entirely plausible — the worst failure available here — so the
+    /// data is inspected before any factor is applied.
+    func normalized(for metric: ValuationMetric) -> NormalizedMetric? {
+        let raw = self.history(metric.key)
+        guard !raw.isEmpty else { return nil }
 
-        let current: Double
-        if let currentKey = metric.currentKey, let raw = currentValue(currentKey) {
-            current = raw * metric.currentScale
-        } else if let latest = history.last?.value {
-            current = latest
-        } else {
-            return nil
+        let scale = Self.resolvedHistoryScale(declared: metric.historyScale, values: raw.map(\.value))
+        let history = raw.map { MetricPoint(period: $0.period, value: $0.value * scale) }
+
+        if let currentKey = metric.currentKey, let value = currentValue(currentKey) {
+            return NormalizedMetric(current: value * metric.currentScale,
+                                    history: history,
+                                    currentIsFromHistory: false,
+                                    asOf: asOf)
         }
-        return (current, history)
+        guard let latest = history.last else { return nil }
+        return NormalizedMetric(current: latest.value,
+                                history: history,
+                                currentIsFromHistory: true,
+                                asOf: latest.period)
     }
+
+    /// Applies the declared scale only when the data is consistent with it.
+    ///
+    /// A ratio series carries values around 0–1.5. If the values are larger,
+    /// the series is already in percent and multiplying again would be wrong.
+    static func resolvedHistoryScale(declared: Double, values: [Double]) -> Double {
+        guard declared != 1 else { return 1 }
+        let magnitudes = values.map(abs).filter { $0 > 0 }
+        guard let largest = magnitudes.max() else { return declared }
+        // Ratios above 1.5 do occur (ROE of 1.37 is 137%), so the threshold is
+        // set well clear of them; anything above 3 is percent already.
+        return largest > 3 ? 1 : declared
+    }
+}
+
+/// A metric's current value and history, reconciled onto one scale.
+struct NormalizedMetric: Sendable, Hashable {
+    let current: Double
+    let history: [MetricPoint]
+    /// True when `current` is the newest history point rather than a live value.
+    let currentIsFromHistory: Bool
+    /// The date `current` refers to.
+    let asOf: Date
 }

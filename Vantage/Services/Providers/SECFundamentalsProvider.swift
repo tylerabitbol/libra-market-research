@@ -51,7 +51,7 @@ struct SECFundamentalsProvider: FundamentalsProvider {
 
     /// The raw payload, exposed so a debug build can capture it as a fixture.
     func companyFacts(cik: String) async throws -> CompanyFactsResponse {
-        let padded = cik.count == 10 ? cik : SECProvider.padCIK(Int(cik) ?? 0)
+        let padded = try SECProvider.normalizedCIK(cik)
         let email = try secrets.require(.secContactEmail, for: .sec)
         let organization = secrets.value(for: .secOrganizationName)?
             .trimmingCharacters(in: .whitespacesAndNewlines)
