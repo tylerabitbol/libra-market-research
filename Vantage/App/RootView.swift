@@ -31,6 +31,7 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
 
 struct RootView: View {
     @State private var selection: AppSection = .dashboard
+    @State private var appEnvironment = AppEnvironment()
 
     var body: some View {
         TabView(selection: $selection) {
@@ -43,6 +44,7 @@ struct RootView: View {
                 }
             }
         }
+        .environment(appEnvironment)
     }
 
     @ViewBuilder
