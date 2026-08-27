@@ -49,13 +49,35 @@ final class AppEnvironment {
 
     /// Chooses live or sample implementations based on what credentials exist.
     ///
-    /// Live providers arrive in Phase 2; until then this always resolves to
-    /// mocks, but the decision point exists so wiring them in later doesn't
-    /// touch any view.
+    /// Resolution is per-source, not all-or-nothing: entering only a Finnhub
+    /// key gives live quotes while macro data stays mocked. `isUsingSampleData`
+    /// stays true while *any* source is still synthetic, so the banner remains
+    /// accurate through partial setup.
     private func rebuildRegistry() {
-        // Phase 2 will branch here on `hasKey(.finnhubAPIKey)` and
-        // `hasKey(.secContactEmail)` to install FinnhubProvider / SECProvider.
-        registry = .sample
+        let finnhubReady = hasKey(.finnhubAPIKey)
+        let tiingoReady = hasKey(.tiingoAPIKey)
+        let fredReady = hasKey(.fredAPIKey)
+
+        let finnhub = FinnhubProvider(client: httpClient, secrets: secrets)
+        let tiingo = TiingoProvider(client: httpClient, secrets: secrets)
+
+        // Quotes and history come from different vendors; the composite needs
+        // both keys. With only one, mocks stay in place rather than serving a
+        // half-populated screen that looks real.
+        let marketData: any MarketDataProvider = (finnhubReady && tiingoReady)
+            ? CompositeMarketDataProvider(quotes: finnhub, history: tiingo)
+            : MockMarketDataProvider()
+
+        registry = ProviderRegistry(
+            marketData: marketData,
+            fundamentals: nil,                       // Phase 3, from SEC XBRL.
+            analyst: finnhubReady ? FinnhubAnalystProvider(provider: finnhub) : nil,
+            sec: MockSECDataProvider(),              // Phase 4.
+            macro: fredReady ? FREDProvider(client: httpClient, secrets: secrets)
+                             : MockMacroDataProvider(),
+            news: finnhubReady ? FinnhubNewsProvider(provider: finnhub) : nil,
+            isUsingSampleData: !(finnhubReady && tiingoReady && fredReady)
+        )
     }
 
     /// Whether a given data source is usable right now, and why not if it isn't.
@@ -63,8 +85,12 @@ final class AppEnvironment {
         switch provider {
         case .finnhub:
             hasKey(.finnhubAPIKey) ? .ready : .needsSetup("Add your Finnhub API key.")
+        case .tiingo:
+            hasKey(.tiingoAPIKey) ? .ready : .needsSetup("Add your Tiingo API key.")
         case .fred:
-            hasKey(.fredAPIKey) ? .ready : .needsSetup("Add your FRED API key.")
+            hasKey(.fredAPIKey)
+                ? .ready
+                : .needsSetup("Add your FRED API key. The dashboard's index data needs it.")
         case .sec:
             hasKey(.secContactEmail)
                 ? .ready

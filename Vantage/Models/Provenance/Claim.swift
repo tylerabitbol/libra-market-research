@@ -74,6 +74,7 @@ struct SourceReference: Codable, Sendable, Hashable, Identifiable {
 enum DataProviderID: String, Codable, Sendable, CaseIterable {
     case sec
     case finnhub
+    case tiingo
     case fred
     case computed
     case userJournal
@@ -82,6 +83,7 @@ enum DataProviderID: String, Codable, Sendable, CaseIterable {
         switch self {
         case .sec: "SEC EDGAR"
         case .finnhub: "Finnhub"
+        case .tiingo: "Tiingo"
         case .fred: "FRED"
         case .computed: "Calculated locally"
         case .userJournal: "Your notes"

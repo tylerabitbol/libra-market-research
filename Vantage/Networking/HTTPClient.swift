@@ -30,6 +30,7 @@ actor HTTPClient {
         self.limiters = limiters ?? [
             .sec: .sec(),
             .finnhub: .finnhub(),
+            .tiingo: .tiingo(),
             .fred: .fred()
         ]
     }

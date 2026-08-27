@@ -75,19 +75,35 @@ struct FormatTests {
 
 @Suite("Benchmarks")
 struct BenchmarkTests {
-    @Test("Index rows are labelled as ETF proxies, not as the index itself")
-    func indexesAreMarkedAsProxies() throws {
-        let sp500 = try #require(Benchmark.broadMarket.first { $0.id == "sp500" })
-        #expect(sp500.symbol == "SPY")
-        #expect(sp500.isProxy, "SPY is not the S&P 500 and must not be presented as it")
-        #expect(sp500.proxyNote?.isEmpty == false)
+    @Test("The major indexes use real FRED series, not ETF proxies")
+    func majorIndexesAreReal() throws {
+        for id in ["sp500", "nasdaq", "dow"] {
+            let benchmark = try #require(Benchmark.broadMarket.first { $0.id == id })
+            #expect(benchmark.hasRealIndex, "\(id) should resolve to a genuine index series")
+            #expect(!benchmark.isProxy)
+            #expect(benchmark.proxyNote == nil, "A real index needs no substitution caveat")
+        }
+        #expect(Benchmark.broadMarket.first { $0.id == "sp500" }?.fredSeriesID == "SP500")
     }
 
-    @Test("The volatility proxy warns that futures are not the VIX index")
-    func volatilityProxyIsCaveated() throws {
+    @Test("Volatility is the real VIX, not a futures ETF")
+    func volatilityIsTheRealVIX() throws {
         let vix = try #require(Benchmark.volatility.first)
-        let note = try #require(vix.proxyNote)
-        #expect(note.contains("not the VIX index"))
+        #expect(vix.fredSeriesID == "VIXCLS")
+        #expect(vix.etfSymbol == nil, "The decaying VIX-futures proxy was removed deliberately")
+        #expect(!vix.isProxy)
+    }
+
+    @Test("Benchmarks without a FRED series keep an ETF and say they are proxies")
+    func proxiesAreDeclared() throws {
+        let russell = try #require(Benchmark.broadMarket.first { $0.id == "russell2000" })
+        #expect(russell.fredSeriesID == nil)
+        #expect(russell.isProxy)
+        #expect(russell.proxyNote?.isEmpty == false)
+
+        // FRED publishes no sector index, so every sector row is a proxy.
+        #expect(Benchmark.sectors.allSatisfy { $0.isProxy })
+        #expect(Benchmark.sectors.allSatisfy { $0.proxyNote?.isEmpty == false })
     }
 
     @Test("All eleven GICS sectors are covered")
@@ -95,16 +111,17 @@ struct BenchmarkTests {
         #expect(Benchmark.sectors.count == 11)
     }
 
-    @Test("Benchmark identifiers and symbols are unique")
-    func noDuplicates() {
+    @Test("Benchmark identifiers are unique and every row has a data source")
+    func wellFormed() {
         #expect(Set(Benchmark.all.map(\.id)).count == Benchmark.all.count)
-        #expect(Set(Benchmark.all.map(\.symbol)).count == Benchmark.all.count)
+        #expect(Benchmark.all.allSatisfy { $0.fredSeriesID != nil || $0.etfSymbol != nil },
+                "A benchmark with no source could never render a value")
     }
 
     @Test("A company's sector maps to the matching sector benchmark")
     func sectorMatching() {
-        #expect(Benchmark.sector(matching: "Information Technology")?.symbol == "XLK")
-        #expect(Benchmark.sector(matching: "Financials")?.symbol == "XLF")
+        #expect(Benchmark.sector(matching: "Information Technology")?.etfSymbol == "XLK")
+        #expect(Benchmark.sector(matching: "Financials")?.etfSymbol == "XLF")
     }
 
     @Test("An unrecognised sector matches nothing rather than a wrong benchmark")

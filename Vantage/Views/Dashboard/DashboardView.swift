@@ -114,7 +114,7 @@ private struct SectionHeader: View {
 
 private struct BenchmarkRow: View {
     let performance: BenchmarkPerformance
-    @State private var isShowingProxyNote = false
+    @State private var isShowingSourceNote = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -123,27 +123,27 @@ private struct BenchmarkRow: View {
                     HStack(spacing: 4) {
                         Text(performance.benchmark.displayName)
                             .font(.subheadline.weight(.medium))
-                        if performance.benchmark.isProxy {
-                            Button {
-                                isShowingProxyNote = true
-                            } label: {
-                                Image(systemName: "info.circle")
-                                    .font(.caption2)
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.tertiary)
-                            .accessibilityLabel("About this proxy")
+                        Button {
+                            isShowingSourceNote = true
+                        } label: {
+                            Image(systemName: performance.benchmark.isProxy
+                                  ? "exclamationmark.circle" : "info.circle")
+                                .font(.caption2)
                         }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(performance.benchmark.isProxy
+                                         ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+                        .accessibilityLabel("About this data source")
                     }
-                    Text(performance.benchmark.symbol)
+                    Text(sourceLabel)
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
                 Spacer()
-                Text(Format.currency(performance.last))
+                Text(performance.formattedLevel)
                     .font(.system(.subheadline, design: .rounded).weight(.medium))
                     .monospacedDigit()
-                    .foregroundStyle(performance.last == nil ? .secondary : .primary)
+                    .foregroundStyle(performance.level == nil ? .secondary : .primary)
             }
 
             if performance.error != nil {
@@ -161,11 +161,25 @@ private struct BenchmarkRow: View {
             }
         }
         .padding(12)
-        .alert(performance.benchmark.displayName, isPresented: $isShowingProxyNote) {
+        .alert(performance.benchmark.displayName, isPresented: $isShowingSourceNote) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(performance.benchmark.proxyNote ?? "")
+            Text(sourceExplanation)
         }
+    }
+
+    /// Names what is actually being displayed: the index series, or the ETF
+    /// standing in for it.
+    private var sourceLabel: String {
+        if let series = performance.benchmark.fredSeriesID { return "FRED \(series)" }
+        return performance.benchmark.etfSymbol ?? "—"
+    }
+
+    private var sourceExplanation: String {
+        if let note = performance.benchmark.proxyNote { return note }
+        let asOf = performance.asOf.map(Format.shortDate) ?? "an unknown date"
+        return "The actual index, from FRED. Published end-of-day, so this reflects the "
+             + "close on \(asOf) rather than the current level."
     }
 
     @ViewBuilder

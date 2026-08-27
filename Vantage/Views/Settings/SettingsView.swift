@@ -62,11 +62,13 @@ struct SettingsView: View {
     private var dataSources: [DataSourceDescriptor] {
         [
             .init(key: .finnhubAPIKey, provider: .finnhub,
-                  purpose: "Quotes, price history, company profiles, news"),
+                  purpose: "Live quotes, company profiles, ratings, news"),
+            .init(key: .tiingoAPIKey, provider: .tiingo,
+                  purpose: "Daily price history — charts, volatility, momentum"),
             .init(key: .secContactEmail, provider: .sec,
                   purpose: "Filings, financial statements, insider transactions"),
             .init(key: .fredAPIKey, provider: .fred,
-                  purpose: "Macroeconomic series")
+                  purpose: "Index levels (S&P 500, Dow, Nasdaq, VIX) and macro series")
         ]
     }
 }
