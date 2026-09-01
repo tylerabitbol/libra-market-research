@@ -44,6 +44,7 @@ final class SecurityDetailViewModel {
     /// and are absent by design; what the free tier serves is the rating mix.
     private(set) var ratings: RatingSnapshotDTO?
     private(set) var insiderTransactions: [InsiderTransactionDTO] = []
+    private(set) var journal: [JournalEntryDTO] = []
 
     /// Section 10's summary rather than a raw list of Form 4 lines.
     var insiderSummary: InsiderActivity.Summary? {
@@ -272,6 +273,8 @@ final class SecurityDetailViewModel {
                 hydratedFromStore = true
             }
 
+            journal = (try? await snapshots.journal(symbol: symbol)) ?? []
+
             let storedFilings = try await snapshots.filings(symbol: symbol, limit: 15)
             if !storedFilings.isEmpty, filings.isEmpty {
                 filings = storedFilings
@@ -379,6 +382,46 @@ final class SecurityDetailViewModel {
         return filings
             .first { $0.filedAt == event.occurredAt && filingAnalyses[$0.accessionNumber] != nil }
             .flatMap { filingAnalyses[$0.accessionNumber] }
+    }
+
+    /// A blank note, stamped with the state of the world right now.
+    ///
+    /// The reference values are captured at write time rather than
+    /// reconstructed later. Reconstruction is unreliable — the store may hold
+    /// no bar for that exact session — and quietly picking a nearby day would
+    /// move the baseline in whichever direction happened to flatter the note.
+    func newJournalEntry() -> JournalEntryDTO {
+        JournalEntryDTO(
+            priceAtEntry: displayPrice,
+            sectorIndexAtEntry: sectorBars.last?.analysisClose,
+            marketIndexAtEntry: marketCloses.last?.close)
+    }
+
+    func saveJournal(_ entry: JournalEntryDTO, using snapshots: SnapshotStore?) async {
+        guard let snapshots, !entry.isEmpty else { return }
+        do {
+            try await snapshots.record(journal: entry, symbol: symbol)
+            journal = (try? await snapshots.journal(symbol: symbol)) ?? journal
+        } catch {
+            Self.logger.error("Journal save failed for \(self.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    func deleteJournal(_ entry: JournalEntryDTO, using snapshots: SnapshotStore?) async {
+        guard let snapshots else { return }
+        try? await snapshots.deleteJournal(symbol: symbol, createdAt: entry.createdAt)
+        journal = (try? await snapshots.journal(symbol: symbol)) ?? journal
+    }
+
+    /// What has happened since a note was written.
+    func comparison(for entry: JournalEntryDTO) -> ThesisComparison {
+        ThesisComparison(
+            entry: entry,
+            priceNow: displayPrice,
+            marketNow: marketCloses.last?.close,
+            sectorNow: sectorBars.last?.analysisClose,
+            sectorName: sectorBenchmark?.displayName,
+            eventsSince: events.filter { $0.occurredAt > entry.createdAt })
     }
 
     /// Restatements across the tracked concepts.

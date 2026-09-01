@@ -10,6 +10,7 @@ import Charts
 struct SecurityDetailView: View {
     @Environment(AppEnvironment.self) private var app
     @State private var model: SecurityDetailViewModel
+    @State private var editingEntry: JournalEntryDTO?
 
     init(symbol: String) {
         _model = State(initialValue: SecurityDetailViewModel(symbol: symbol))
@@ -28,6 +29,7 @@ struct SecurityDetailView: View {
                 valuationSection
                 fundamentalsSection
                 insiderSection
+                journalSection
                 filingsSection
             }
             .padding(16)
@@ -44,6 +46,11 @@ struct SecurityDetailView: View {
         }
         .refreshable { model.load(using: app.registry, snapshots: app.snapshots, force: true) }
         .task { model.load(using: app.registry, snapshots: app.snapshots) }
+        .sheet(item: $editingEntry) { entry in
+            JournalEditor(entry: entry) { edited in
+                Task { await model.saveJournal(edited, using: app.snapshots) }
+            }
+        }
     }
 
     // MARK: - Overview
@@ -501,6 +508,19 @@ struct SecurityDetailView: View {
             Text(value.map { "~\(Format.compactCurrency($0))" } ?? Format.notAvailable)
                 .font(.caption2).foregroundStyle(.tertiary)
         }
+    }
+
+    // MARK: - Journal
+
+    private var journalSection: some View {
+        JournalSection(
+            entries: model.journal,
+            comparison: { model.comparison(for: $0) },
+            onNew: { editingEntry = model.newJournalEntry() },
+            onEdit: { editingEntry = $0 },
+            onDelete: { entry in
+                Task { await model.deleteJournal(entry, using: app.snapshots) }
+            })
     }
 
     // MARK: - Filings

@@ -285,6 +285,73 @@ actor SnapshotStore {
         try modelContext.save()
     }
 
+    // MARK: - Journal
+
+    /// Writes a note, updating the existing one when it shares a creation time.
+    ///
+    /// The one place in this store where updating is right: a note is the
+    /// user's own text and revising it is the point. Everything else here is
+    /// append-only because it records what a source said at a moment, and a
+    /// note records what *you* thought — there is no restatement to preserve.
+    func record(journal entry: JournalEntryDTO, symbol: String) throws {
+        guard let security = try security(for: symbol) else { return }
+        let created = entry.createdAt
+        let key = security.symbol
+        let descriptor = FetchDescriptor<JournalEntry>(
+            predicate: #Predicate { $0.security?.symbol == key && $0.createdAt == created }
+        )
+
+        if let existing = try modelContext.fetch(descriptor).first {
+            existing.title = entry.title
+            existing.notes = entry.notes
+            existing.thesis = entry.thesis
+            existing.concerns = entry.concerns
+            existing.catalysts = entry.catalysts
+            existing.risks = entry.risks
+            existing.expectation = entry.expectation
+            existing.falsification = entry.falsification
+            existing.updatedAt = .now
+        } else {
+            let record = JournalEntry(
+                security: security, createdAt: entry.createdAt, title: entry.title,
+                notes: entry.notes, thesis: entry.thesis, concerns: entry.concerns,
+                catalysts: entry.catalysts, risks: entry.risks,
+                expectation: entry.expectation, falsification: entry.falsification,
+                priceAtEntry: entry.priceAtEntry,
+                sectorIndexAtEntry: entry.sectorIndexAtEntry,
+                marketIndexAtEntry: entry.marketIndexAtEntry)
+            modelContext.insert(record)
+        }
+        try modelContext.save()
+    }
+
+    /// Notes for one security, most recent first.
+    func journal(symbol: String) throws -> [JournalEntryDTO] {
+        let key = symbol.uppercased()
+        let descriptor = FetchDescriptor<JournalEntry>(
+            predicate: #Predicate { $0.security?.symbol == key },
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        return try modelContext.fetch(descriptor).map {
+            JournalEntryDTO(
+                createdAt: $0.createdAt, updatedAt: $0.updatedAt, title: $0.title,
+                notes: $0.notes, thesis: $0.thesis, concerns: $0.concerns,
+                catalysts: $0.catalysts, risks: $0.risks, expectation: $0.expectation,
+                falsification: $0.falsification, priceAtEntry: $0.priceAtEntry,
+                sectorIndexAtEntry: $0.sectorIndexAtEntry,
+                marketIndexAtEntry: $0.marketIndexAtEntry)
+        }
+    }
+
+    func deleteJournal(symbol: String, createdAt: Date) throws {
+        let key = symbol.uppercased()
+        let descriptor = FetchDescriptor<JournalEntry>(
+            predicate: #Predicate { $0.security?.symbol == key && $0.createdAt == createdAt }
+        )
+        for entry in try modelContext.fetch(descriptor) { modelContext.delete(entry) }
+        try modelContext.save()
+    }
+
     // MARK: - Visits
 
     /// When the user last opened this security, before the current visit.
