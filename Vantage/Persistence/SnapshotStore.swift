@@ -263,8 +263,9 @@ actor SnapshotStore {
     /// are not `Sendable`, and handing one out of the actor would let it be
     /// read on another thread against a context it does not belong to.
     func lastQuote(symbol: String, before date: Date) throws -> QuoteSnapshot? {
+        let key = symbol.uppercased()
         var descriptor = FetchDescriptor<QuoteObservation>(
-            predicate: #Predicate { $0.security?.symbol == symbol && $0.observedAt < date },
+            predicate: #Predicate { $0.security?.symbol == key && $0.observedAt < date },
             sortBy: [SortDescriptor(\.observedAt, order: .reverse)]
         )
         descriptor.fetchLimit = 1
@@ -272,9 +273,208 @@ actor SnapshotStore {
     }
 
     func observationCount(symbol: String) throws -> Int {
-        try modelContext.fetchCount(FetchDescriptor<QuoteObservation>(
-            predicate: #Predicate { $0.security?.symbol == symbol }
+        let key = symbol.uppercased()
+        return try modelContext.fetchCount(FetchDescriptor<QuoteObservation>(
+            predicate: #Predicate { $0.security?.symbol == key }
         ))
+    }
+
+    // MARK: - Reading the store back
+
+    /// Daily bars already held for a symbol, oldest first.
+    ///
+    /// The read half of `record(bars:symbol:resolution:)`, which until now had
+    /// none. Bars are the scarcest request in the app — Tiingo's free tier
+    /// refills roughly one token every 80 seconds — so a screen that can answer
+    /// from disk must not spend one. Bounds are inclusive and default to
+    /// everything stored.
+    func bars(
+        symbol: String,
+        from: Date? = nil,
+        to: Date? = nil,
+        resolution: BarResolution = .daily
+    ) throws -> [PriceBarDTO] {
+        let key = symbol.uppercased()
+        let resolutionKey = resolution.rawValue
+        // `#Predicate` cannot compare against an optional bound, so an absent
+        // bound becomes an unbounded one rather than a branch per combination.
+        let lower = from ?? .distantPast
+        let upper = to ?? .distantFuture
+
+        let descriptor = FetchDescriptor<PriceBar>(
+            predicate: #Predicate { bar in
+                bar.security?.symbol == key
+                    && bar.resolutionRaw == resolutionKey
+                    && bar.date >= lower
+                    && bar.date <= upper
+            },
+            sortBy: [SortDescriptor(\.date, order: .forward)]
+        )
+        return try modelContext.fetch(descriptor).map {
+            PriceBarDTO(date: $0.date, open: $0.open, high: $0.high, low: $0.low,
+                        close: $0.close, volume: $0.volume, adjustedClose: $0.adjustedClose)
+        }
+    }
+
+    /// Reported figures held for a symbol, oldest period first, with
+    /// restatements collapsed to the most recently filed figure per period.
+    ///
+    /// This is the *current* view of the company's history, which is what the
+    /// analysis layer wants. `factRevisions(symbol:concept:since:)` returns the
+    /// superseded rows alongside it — the question the append-only design
+    /// exists to answer, and the input the restatement detector needs.
+    ///
+    /// `since` bounds the period a figure describes, not when it was observed:
+    /// a 2024 quarter restated last week is still a 2024 quarter.
+    func facts(
+        symbol: String,
+        concepts: [FinancialConcept] = FinancialConcept.allCases,
+        since: Date? = nil
+    ) throws -> [FinancialFactDTO] {
+        let rows = try factRows(symbol: symbol, concepts: concepts, since: since)
+
+        // `deduplicated` keys on the period alone, because the provider calls
+        // it inside a single concept's loop where the concept is already fixed.
+        // Handing it a mixed-concept array would collapse revenue and net
+        // income for the same quarter into one row and silently discard the
+        // loser, so the rows are grouped by concept before it ever sees them.
+        return Dictionary(grouping: rows, by: \.concept)
+            .values
+            .flatMap(SECFundamentalsProvider.deduplicated)
+            .sorted { lhs, rhs in
+                lhs.periodEnd == rhs.periodEnd
+                    ? lhs.concept.rawValue < rhs.concept.rawValue
+                    : lhs.periodEnd < rhs.periodEnd
+            }
+    }
+
+    /// Every stored version of one concept, restatements included, ordered by
+    /// the period described and then by when each version was filed.
+    ///
+    /// Two rows sharing a period are an issuer revising a figure it had already
+    /// reported. Nothing else in the app can see that, because every other read
+    /// path deliberately collapses it away.
+    func factRevisions(
+        symbol: String,
+        concept: FinancialConcept,
+        since: Date? = nil
+    ) throws -> [FinancialFactDTO] {
+        try factRows(symbol: symbol, concepts: [concept], since: since)
+            .sorted { lhs, rhs in
+                lhs.periodEnd == rhs.periodEnd
+                    ? (lhs.filedAt ?? .distantPast) < (rhs.filedAt ?? .distantPast)
+                    : lhs.periodEnd < rhs.periodEnd
+            }
+    }
+
+    /// Filings held for a symbol, most recently filed first.
+    func filings(symbol: String, limit: Int = 50) throws -> [FilingDTO] {
+        let key = symbol.uppercased()
+        var descriptor = FetchDescriptor<FilingRecord>(
+            predicate: #Predicate { $0.security?.symbol == key },
+            sortBy: [SortDescriptor(\.filedAt, order: .reverse)]
+        )
+        descriptor.fetchLimit = limit
+        return try modelContext.fetch(descriptor).map {
+            FilingDTO(accessionNumber: $0.accessionNumber, formType: $0.formType,
+                      filedAt: $0.filedAt, periodOfReport: $0.periodOfReport,
+                      primaryDocumentURL: $0.primaryDocumentURL,
+                      filingIndexURL: $0.filingIndexURL)
+        }
+    }
+
+    /// When a stored series was last written, so a caller can decide whether to
+    /// spend a request before it makes one.
+    ///
+    /// Deliberately the *observation* time rather than the period a record
+    /// describes: the question is how old the held copy is, and a freshly
+    /// fetched five-year-old annual figure is not stale data.
+    func latestObservedAt(symbol: String, kind: StoredDataKind) throws -> Date? {
+        let key = symbol.uppercased()
+        switch kind {
+        case .quote:
+            var descriptor = FetchDescriptor<QuoteObservation>(
+                predicate: #Predicate { $0.security?.symbol == key },
+                sortBy: [SortDescriptor(\.observedAt, order: .reverse)])
+            descriptor.fetchLimit = 1
+            return try modelContext.fetch(descriptor).first?.observedAt
+        case .bars:
+            var descriptor = FetchDescriptor<PriceBar>(
+                predicate: #Predicate { $0.security?.symbol == key },
+                sortBy: [SortDescriptor(\.observedAt, order: .reverse)])
+            descriptor.fetchLimit = 1
+            return try modelContext.fetch(descriptor).first?.observedAt
+        case .facts:
+            var descriptor = FetchDescriptor<FinancialFactRecord>(
+                predicate: #Predicate { $0.security?.symbol == key },
+                sortBy: [SortDescriptor(\.observedAt, order: .reverse)])
+            descriptor.fetchLimit = 1
+            return try modelContext.fetch(descriptor).first?.observedAt
+        case .filings:
+            var descriptor = FetchDescriptor<FilingRecord>(
+                predicate: #Predicate { $0.security?.symbol == key },
+                sortBy: [SortDescriptor(\.observedAt, order: .reverse)])
+            descriptor.fetchLimit = 1
+            return try modelContext.fetch(descriptor).first?.observedAt
+        case .events:
+            var descriptor = FetchDescriptor<DetectedEvent>(
+                predicate: #Predicate { $0.security?.symbol == key },
+                sortBy: [SortDescriptor(\.detectedAt, order: .reverse)])
+            descriptor.fetchLimit = 1
+            return try modelContext.fetch(descriptor).first?.detectedAt
+        }
+    }
+
+    private func factRows(
+        symbol: String,
+        concepts: [FinancialConcept],
+        since: Date?
+    ) throws -> [FinancialFactDTO] {
+        guard !concepts.isEmpty else { return [] }
+        let key = symbol.uppercased()
+        let conceptKeys = Set(concepts.map(\.rawValue))
+        let lower = since ?? .distantPast
+
+        let descriptor = FetchDescriptor<FinancialFactRecord>(
+            predicate: #Predicate { record in
+                record.security?.symbol == key
+                    && conceptKeys.contains(record.concept)
+                    && record.periodEnd >= lower
+            },
+            sortBy: [SortDescriptor(\.periodEnd, order: .forward)]
+        )
+        return try modelContext.fetch(descriptor).compactMap(Self.factDTO)
+    }
+
+    /// Rebuilds the transport type from a stored row.
+    ///
+    /// Nil for a concept this build no longer understands: a row written by an
+    /// older version with a since-renamed concept is skipped rather than
+    /// crashing or being coerced into a neighbouring case.
+    private static func factDTO(_ record: FinancialFactRecord) -> FinancialFactDTO? {
+        guard let concept = FinancialConcept(rawValue: record.concept) else { return nil }
+        return FinancialFactDTO(
+            concept: concept,
+            rawTag: record.rawTag,
+            periodStart: record.periodStart,
+            periodEnd: record.periodEnd,
+            fiscalYear: record.fiscalYear,
+            fiscalQuarter: record.fiscalQuarter,
+            isAnnual: record.isAnnual,
+            // `periodKind` is not a stored column. It is re-derived from the
+            // period's own duration exactly as extraction derived it, so a row
+            // reconstitutes with the classification it was filtered on — and a
+            // cumulative figure could not have been stored in the first place.
+            periodKind: FiscalPeriodKind.classify(
+                days: record.periodStart.map {
+                    record.periodEnd.timeIntervalSince($0) / 86_400
+                }
+            ),
+            value: record.value,
+            unit: record.unit,
+            filedAt: record.filedAt,
+            accessionNumber: record.accessionNumber
+        )
     }
 
     // MARK: - Helpers
@@ -297,6 +497,16 @@ actor SnapshotStore {
     private static func factKey(concept: String, periodEnd: Date, accession: String?) -> String {
         "\(concept)|\(SECFundamentalsProvider.periodKey(periodEnd))|\(accession ?? "-")"
     }
+}
+
+
+/// A stored series, for asking how old the held copy is.
+///
+/// Named per series rather than per model because that is the granularity a
+/// refresh decision is made at: quotes go stale in a minute and filings in an
+/// hour, and `StalenessPolicy` already encodes exactly that difference.
+enum StoredDataKind: String, Sendable, CaseIterable {
+    case quote, bars, facts, filings, events
 }
 
 

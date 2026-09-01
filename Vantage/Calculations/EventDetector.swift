@@ -511,6 +511,10 @@ struct AnomalyMeasure: Sendable, Hashable {
     let exceededCount: Int
     /// Size of the shorter window the dispersion was measured over.
     let scaleSampleSize: Int
+    /// What the sample counts, for wording. Price data compares closed
+    /// sessions; fundamentals compare reported quarters, and calling those
+    /// "sessions" would misdescribe the comparison being made.
+    let unit: String
 
     var deviations: Double { (observation - median) / scale }
     /// 0–1. Position within the sample, not a probability.
@@ -521,8 +525,8 @@ struct AnomalyMeasure: Sendable, Hashable {
     /// the whole point of that reading is that nothing in the window beat it.
     var comparisonLine: String {
         exceededCount == sampleSize
-            ? "Larger than every one of the prior \(sampleSize) closed sessions"
-            : "Larger than \(exceededCount) of the prior \(sampleSize) closed sessions"
+            ? "Larger than every one of the prior \(sampleSize) \(unit)"
+            : "Larger than \(exceededCount) of the prior \(sampleSize) \(unit)"
     }
 
     /// Nil when the sample is too small or has no dispersion to measure
@@ -533,17 +537,29 @@ struct AnomalyMeasure: Sendable, Hashable {
     /// must reflect the *current* regime, so it uses the shorter window. Rank
     /// is a statement about how rare something is, and is better the more
     /// history it sees, so it uses the longer one.
-    static func measure(_ observation: Double, against sample: [Double]) -> AnomalyMeasure? {
+    ///
+    /// The windows are parameters rather than constants because the cadences
+    /// differ by an order of magnitude: 250 daily sessions of price history
+    /// against roughly 20 reported quarters. Defaults preserve the price
+    /// behaviour, so a caller that says nothing gets exactly what it got before.
+    static func measure(
+        _ observation: Double,
+        against sample: [Double],
+        minimumSample: Int = EventDetector.minimumSample,
+        scaleWindow: Int = EventDetector.scaleWindow,
+        rankWindow: Int = EventDetector.rankWindow,
+        unit: String = "closed sessions"
+    ) -> AnomalyMeasure? {
         let usable = sample.filter(\.isFinite)
-        guard observation.isFinite, usable.count >= EventDetector.minimumSample - 1
+        guard observation.isFinite, usable.count >= minimumSample - 1
         else { return nil }
 
-        let scaleSample = Array(usable.suffix(EventDetector.scaleWindow))
+        let scaleSample = Array(usable.suffix(scaleWindow))
         let median = Statistics.median(scaleSample)
         guard let scale = Statistics.robustScale(scaleSample, median: median), scale > 0
         else { return nil }
 
-        let rankSample = Array(usable.suffix(EventDetector.rankWindow))
+        let rankSample = Array(usable.suffix(rankWindow))
         let magnitude = abs(observation - median)
         return AnomalyMeasure(
             observation: observation,
@@ -551,7 +567,8 @@ struct AnomalyMeasure: Sendable, Hashable {
             scale: scale,
             sampleSize: rankSample.count,
             exceededCount: rankSample.filter { abs($0 - median) < magnitude }.count,
-            scaleSampleSize: scaleSample.count
+            scaleSampleSize: scaleSample.count,
+            unit: unit
         )
     }
 
@@ -564,8 +581,8 @@ struct AnomalyMeasure: Sendable, Hashable {
                       value: Format.signedPercent(median, precision: 2), source: nil),
                 .init(name: "robust scale",
                       value: Format.percent(scale, precision: 2), source: nil),
-                .init(name: "rank sample", value: "\(sampleSize) sessions", source: nil),
-                .init(name: "scale sample", value: "\(scaleSampleSize) sessions", source: nil)
+                .init(name: "rank sample", value: "\(sampleSize) \(unit)", source: nil),
+                .init(name: "scale sample", value: "\(scaleSampleSize) \(unit)", source: nil)
             ],
             result: "\(Format.multiple(abs(deviations), precision: 1)) typical"
         )

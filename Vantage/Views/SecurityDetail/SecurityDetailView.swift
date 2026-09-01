@@ -61,14 +61,25 @@ struct SecurityDetailView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(Format.currency(model.quote?.last))
+                Text(Format.currency(model.displayPrice))
                     .font(.system(.largeTitle, design: .rounded).weight(.medium))
                     .monospacedDigit()
-                DirectionalChangeText(percent: model.quote?.changePercent,
+                DirectionalChangeText(percent: model.displayChangePercent,
                                       font: .headline)
             }
 
-            if let error = model.quoteError {
+            // A failed refresh must not blank a page the store can fill. When
+            // it does fall back, the notice dates what is on screen rather than
+            // letting a stored close pass for a live price.
+            if model.isShowingSavedCopy {
+                Text(RelativeTimeText.status(for: .failed(
+                    previous: model.savedCopyAsOf,
+                    reason: model.quoteError?.shortDescription
+                        ?? model.historyError?.shortDescription
+                        ?? "no connection")))
+                    .font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let error = model.quoteError {
                 Text(error.recoverySuggestion ?? error.shortDescription)
                     .font(.caption).foregroundStyle(.orange)
             }

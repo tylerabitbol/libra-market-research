@@ -168,14 +168,22 @@ private struct WatchlistRowView: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                if let error = row.error {
+                if !row.hasValue, let error = row.error {
                     Text(error.shortDescription)
                         .font(.caption2).foregroundStyle(.orange)
                 } else {
-                    Text(Format.currency(row.quote?.last))
+                    // A price from disk beats an error message. The refresh
+                    // failing does not make the last known price untrue — it
+                    // makes it old, which is what the timestamp below says.
+                    Text(Format.currency(row.last))
                         .font(.system(.subheadline, design: .rounded).weight(.medium))
                         .monospacedDigit()
+                        .foregroundStyle(row.isStoredCopy ? .secondary : .primary)
                     DirectionalChangeText(percent: row.changePercent, font: .caption)
+                    if let asOf = row.asOf {
+                        Text(RelativeTimeText.string(for: asOf))
+                            .font(.caption2).foregroundStyle(.tertiary)
+                    }
                 }
             }
         }

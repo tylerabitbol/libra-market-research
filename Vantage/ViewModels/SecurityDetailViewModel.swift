@@ -55,6 +55,31 @@ final class SecurityDetailViewModel {
     /// already fetched rather than re-requesting.
     private var loadedBarWindow: (from: Date, to: Date)?
 
+    /// Observation times of what the store already holds, consulted before a
+    /// request is spent.
+    private var storedFreshness: [StoredDataKind: Date] = [:]
+    /// Set for the duration of a forced refresh, so pull-to-refresh reaches the
+    /// network even where the held copy would otherwise be considered fresh.
+    private var isForcingRefresh = false
+
+    /// Whether any section on this page was filled from the store.
+    private(set) var hydratedFromStore = false
+
+    /// The concepts this page works with, named once.
+    ///
+    /// The store read and the network fetch must ask for the same set, or a
+    /// hydrated page renders a series that the fetched page then drops.
+    static let trackedConcepts: [FinancialConcept] = [
+        .revenue, .netIncome, .grossProfit, .operatingIncome,
+        .operatingCashFlow, .capitalExpenditures,
+        .cashAndEquivalents, .totalDebt, .stockholdersEquity
+    ]
+
+    /// How far back fundamentals are asked for, on both paths.
+    static var fundamentalsSince: Date? {
+        Calendar.current.date(byAdding: .year, value: -6, to: .now)
+    }
+
     init(symbol: String) {
         self.symbol = symbol.uppercased()
     }
@@ -91,10 +116,99 @@ final class SecurityDetailViewModel {
         if !force, case .fresh = freshness { return }
         loadTask?.cancel()
         loadTask = Task { [weak self] in
+            self?.isForcingRefresh = force
+            await self?.hydrate(from: snapshots)
             await self?.performLoad(using: registry)
             await self?.detectChanges(using: snapshots)
             await self?.persist(using: snapshots)
+            self?.isForcingRefresh = false
         }
+    }
+
+    /// True when a fetch failed and the page fell back to what was on disk.
+    ///
+    /// Deliberately not "some of this came from the store": a section skipped
+    /// because the held copy is still fresh is not a degraded state and does
+    /// not need announcing. This is the case the user needs told about.
+    var isShowingSavedCopy: Bool {
+        hydratedFromStore && (historyError != nil || quoteError != nil)
+    }
+
+    /// When the saved copy on screen was observed.
+    var savedCopyAsOf: Date? { storedFreshness[.bars] }
+
+    /// The price to show, falling back to the last stored close when no live
+    /// quote arrived. Standing alone that would misrepresent a close as a
+    /// current price, so it is only ever rendered beneath the saved-copy
+    /// notice that dates it.
+    var displayPrice: Double? { quote?.last ?? bars.last?.analysisClose }
+
+    var displayChangePercent: Double? { quote?.changePercent ?? lastStoredSessionChange }
+
+    /// The most recent closed session's move, from bars alone.
+    private var lastStoredSessionChange: Double? {
+        let closes = bars.suffix(2).map(\.analysisClose)
+        guard closes.count == 2, closes[0] != 0 else { return nil }
+        return (closes[1] - closes[0]) / closes[0] * 100
+    }
+
+    /// Fills the page from what the store already holds, before any request.
+    ///
+    /// Three things follow that did not before. A previously visited security
+    /// renders instantly and works offline. A failed fetch degrades to the last
+    /// good copy rather than to an empty section. And a section whose held copy
+    /// is still fresh costs no request at all — which is what makes Tiingo's
+    /// 50-requests-per-hour budget survivable on a page that reads five years
+    /// of history.
+    private func hydrate(from snapshots: SnapshotStore?) async {
+        guard let snapshots else { return }
+        do {
+            for kind in StoredDataKind.allCases {
+                storedFreshness[kind] = try await snapshots.latestObservedAt(
+                    symbol: symbol, kind: kind)
+            }
+
+            let storedBars = try await snapshots.bars(
+                symbol: symbol, from: ChartRange.fiveYear.startDate())
+            if !storedBars.isEmpty, bars.isEmpty {
+                bars = storedBars.map {
+                    PriceBar(date: $0.date, resolution: .daily, open: $0.open, high: $0.high,
+                             low: $0.low, close: $0.close, volume: $0.volume,
+                             adjustedClose: $0.adjustedClose)
+                }
+                // What we actually hold, which is what `select(_:registry:)`
+                // needs to decide whether a longer range requires a request.
+                if let first = storedBars.first?.date, let last = storedBars.last?.date {
+                    loadedBarWindow = (first, last)
+                }
+                hydratedFromStore = true
+            }
+
+            let storedFacts = try await snapshots.facts(
+                symbol: symbol, concepts: Self.trackedConcepts, since: Self.fundamentalsSince)
+            if !storedFacts.isEmpty, fundamentals.isEmpty {
+                fundamentals = storedFacts
+                hydratedFromStore = true
+            }
+
+            let storedFilings = try await snapshots.filings(symbol: symbol, limit: 15)
+            if !storedFilings.isEmpty, filings.isEmpty {
+                filings = storedFilings
+                hydratedFromStore = true
+            }
+        } catch {
+            // Hydration is an optimisation, not a requirement. A store that
+            // cannot be read leaves the page exactly as it was before: empty,
+            // and about to fetch.
+            Self.logger.error("Hydration failed for \(self.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Whether the held copy is recent enough that fetching would buy nothing.
+    private func isHeldCopyFresh(_ kind: StoredDataKind, policy: StalenessPolicy) -> Bool {
+        guard !isForcingRefresh, let observed = storedFreshness[kind] else { return false }
+        if case .fresh = policy.evaluate(lastUpdated: observed) { return true }
+        return false
     }
 
     /// Whether this event postdates the user's previous visit.
@@ -121,6 +235,11 @@ final class SecurityDetailViewModel {
             + EventDetector.priceMoves(bars: bars, after: lastVisit)
             + EventDetector.volumeAnomalies(bars: bars, after: lastVisit)
             + EventDetector.newFilings(filings: filings, since: lastVisit)
+            // What the business did, as distinct from what the price did.
+            // Judged against the company's own reported history, on the same
+            // rank-not-probability terms as everything above.
+            + FundamentalDetector.detect(facts: fundamentals)
+            + (await restatementEvents(using: snapshots))
         // The live detector and the backfill can both reach the most recent
         // closed session. They describe it identically, so the list would show
         // the same card twice — the store deduplicates on the same key, but
@@ -145,6 +264,35 @@ final class SecurityDetailViewModel {
         } else {
             newSinceLastVisit = []
         }
+    }
+
+    /// Restatements across the tracked concepts.
+    ///
+    /// Needs the superseded rows, which only the store holds: the provider
+    /// returns the current view of a company's history, and every other read
+    /// path in the app collapses revisions away on purpose.
+    ///
+    /// The freshly fetched facts are merged in rather than read back after
+    /// persisting, because `persist` runs after this and would otherwise delay
+    /// every restatement by one visit — the amendment would land, be stored,
+    /// and only be noticed the next time the page was opened.
+    ///
+    /// `naturalKey` is one event per kind per day, so several concepts revised
+    /// in the same amendment collapse to a single stored row regardless. The
+    /// most recent is chosen deliberately rather than letting an arbitrary one
+    /// win the race; the others remain visible in the fundamentals section.
+    private func restatementEvents(using snapshots: SnapshotStore?) async -> [DetectedEventDTO] {
+        guard let snapshots else { return [] }
+        var found: [DetectedEventDTO] = []
+        for concept in Self.trackedConcepts {
+            let stored = (try? await snapshots.factRevisions(
+                symbol: symbol, concept: concept, since: Self.fundamentalsSince)) ?? []
+            let merged = stored + fundamentals.filter { $0.concept == concept }
+            if let event = FundamentalDetector.restatements(revisions: merged, concept: concept) {
+                found.append(event)
+            }
+        }
+        return found.max { $0.occurredAt < $1.occurredAt }.map { [$0] } ?? []
     }
 
     /// Records everything the load produced.
@@ -224,6 +372,13 @@ final class SecurityDetailViewModel {
     }
 
     private func loadHistory(using registry: ProviderRegistry) async {
+        // Bars are the scarcest request in the app. When hydration produced a
+        // copy that is still fresh, the page is already correct and the request
+        // is pure cost against a budget that refills one token every 80 seconds.
+        if !bars.isEmpty, isHeldCopyFresh(.bars, policy: .dailyCandles) {
+            historyError = nil
+            return
+        }
         // Fetch the widest range once. Five years of daily bars is a single
         // request and covers every shorter range without another.
         let from = ChartRange.fiveYear.startDate()
@@ -337,6 +492,18 @@ final class SecurityDetailViewModel {
 
     private func loadSECSections(using registry: ProviderRegistry) async {
         guard let sec = registry.sec else { return }
+
+        // Resolving the CIK is itself a request. With nothing left to fetch it
+        // buys nothing, so the check happens before it rather than inside each
+        // section below.
+        let filingsHeld = !filings.isEmpty && isHeldCopyFresh(.filings, policy: .filings)
+        let factsHeld = !fundamentals.isEmpty && isHeldCopyFresh(.facts, policy: .fundamentals)
+        if filingsHeld && factsHeld {
+            filingsError = nil
+            fundamentalsError = nil
+            return
+        }
+
         let cik: String
         do {
             // `??` takes an autoclosure, which cannot contain an await.
@@ -359,6 +526,10 @@ final class SecurityDetailViewModel {
     }
 
     private func loadFilings(cik: String, sec: any SECDataProvider) async {
+        if !filings.isEmpty, isHeldCopyFresh(.filings, policy: .filings) {
+            filingsError = nil
+            return
+        }
         do {
             filings = try await sec.filings(
                 cik: cik,
@@ -375,13 +546,15 @@ final class SecurityDetailViewModel {
 
     private func loadFundamentals(cik: String, registry: ProviderRegistry) async {
         guard let provider = registry.fundamentals else { return }
+        if !fundamentals.isEmpty, isHeldCopyFresh(.facts, policy: .fundamentals) {
+            fundamentalsError = nil
+            return
+        }
         do {
             fundamentals = try await provider.facts(
                 symbol: symbol, cik: cik,
-                concepts: [.revenue, .netIncome, .grossProfit, .operatingIncome,
-                           .operatingCashFlow, .capitalExpenditures,
-                           .cashAndEquivalents, .totalDebt, .stockholdersEquity],
-                since: Calendar.current.date(byAdding: .year, value: -6, to: .now)
+                concepts: Self.trackedConcepts,
+                since: Self.fundamentalsSince
             )
             fundamentalsError = nil
         } catch let error as APIError {
