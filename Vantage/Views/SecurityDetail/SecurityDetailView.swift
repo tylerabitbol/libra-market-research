@@ -24,6 +24,7 @@ struct SecurityDetailView: View {
                 changesSection
                 chartSection
                 relativeSection
+                researchProfileSection
                 valuationSection
                 fundamentalsSection
                 filingsSection
@@ -347,6 +348,24 @@ struct SecurityDetailView: View {
                 .foregroundStyle(isSubject ? .primary : .secondary)
             Spacer(minLength: 8)
             DirectionalChangeText(percent: percent, font: .subheadline)
+        }
+    }
+
+    // MARK: - Research profile
+
+    /// Sections 12 and 13, as components rather than a score.
+    @ViewBuilder
+    private var researchProfileSection: some View {
+        let profile = model.researchProfile
+        if !profile.measured.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Research profile").font(.headline)
+                Text("Each dimension measured against this company's own history, and "
+                     + "grouped by which way it points.")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ResearchProfileCard(profile: profile)
+            }
         }
     }
 
