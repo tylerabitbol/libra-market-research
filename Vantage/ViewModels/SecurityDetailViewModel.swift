@@ -145,13 +145,26 @@ final class SecurityDetailViewModel {
     /// detector, continue to see the daily series exclusively. The separation
     /// is what makes that guarantee structural instead of a convention someone
     /// has to remember.
-    private(set) var intradayBars: [PriceBar] = []
-    private(set) var intradayError: APIError?
+    /// Kept per resolution rather than as one array. 1D and 5D ask for
+    /// different resolutions, and clearing the series on every switch meant
+    /// toggling between them threw away a good chart and re-fetched it — and
+    /// left nothing on screen if that fetch failed.
+    private var intradayByResolution: [BarResolution: [PriceBar]] = [:]
+    private var intradayFetchedAt: [BarResolution: Date] = [:]
+    private var intradayErrors: [BarResolution: APIError] = [:]
     private(set) var isLoadingIntraday = false
-    /// Which resolution `intradayBars` holds, and when it was fetched. 1D and
-    /// 5D ask for different resolutions, so one is not a stand-in for the other.
-    private var intradayResolution: BarResolution?
-    private var intradayFetchedAt: Date?
+
+    var intradayBars: [PriceBar] { intradayByResolution[selectedRange.resolution] ?? [] }
+    var intradayError: APIError? { intradayErrors[selectedRange.resolution] }
+
+    /// Sessions are bounded by the exchange's day, not the device's. Grouping
+    /// on local midnight would split one session in two for anyone east of
+    /// New York.
+    private static let marketCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .gmt
+        return calendar
+    }()
 
     private var loadTask: Task<Void, Never>?
     /// Bars are the scarcest request in the app — Tiingo's free tier refills
@@ -259,8 +272,45 @@ final class SecurityDetailViewModel {
     /// otherwise. The only reader of `intradayBars` in the app.
     var chartBars: [PriceBar] {
         guard selectedRange.usesIntraday else { return visibleBars }
-        let start = selectedRange.startDate()
-        return intradayBars.filter { $0.date >= start }.sorted { $0.date < $1.date }
+        let series = intradayBars.filter(Self.isRegularHours).sorted { $0.date < $1.date }
+        guard selectedRange == .oneDay else {
+            return series.filter { $0.date >= selectedRange.startDate() }
+        }
+        // "1D" is the latest session, not a rolling 24 hours. The rolling
+        // window began mid-afternoon the previous day, so the chart opened
+        // with a straight line across the overnight gap — a move that never
+        // happened, drawn at the same weight as the ones that did.
+        guard let last = series.last else { return [] }
+        let day = Self.marketCalendar.startOfDay(for: last.date)
+        return series.filter { Self.marketCalendar.startOfDay(for: $0.date) == day }
+    }
+
+    /// Whether a bar falls inside the regular session, 9:30 to 16:00 New York.
+    ///
+    /// Alpaca returns extended-hours bars, and pre-market IEX trading is thin
+    /// enough that a single 7 a.m. print bridged to the open as one long
+    /// diagonal — the widest move on the chart, and an artefact of two sparse
+    /// bars rather than a move anyone could have traded.
+    private static func isRegularHours(_ bar: PriceBar) -> Bool {
+        let parts = marketCalendar.dateComponents([.hour, .minute], from: bar.date)
+        guard let hour = parts.hour, let minute = parts.minute else { return false }
+        let minutes = hour * 60 + minute
+        return minutes >= 9 * 60 + 30 && minutes < 16 * 60
+    }
+
+    /// Intraday bars split into trading sessions, oldest first.
+    ///
+    /// The chart draws one line per session and never joins them. The hours
+    /// between a close and the next open are not trading, and a segment across
+    /// them reads as a gradual move: on 5D that phantom segment spanned a
+    /// weekend and looked like a steady 1.5% decline.
+    var chartSessions: [ChartSession] {
+        let grouped = Dictionary(grouping: chartBars) {
+            Self.marketCalendar.startOfDay(for: $0.date)
+        }
+        return grouped.keys.sorted().map { day in
+            ChartSession(id: day, bars: (grouped[day] ?? []).sorted { $0.date < $1.date })
+        }
     }
 
     /// Whether the chart can be drawn, and if not, why.
@@ -270,28 +320,37 @@ final class SecurityDetailViewModel {
     /// forever. A range with too little data must say so, and the spinner now
     /// turns only while a request is genuinely in flight with nothing held.
     var chartAvailability: ChartAvailability {
+        // Anything drawable wins, and the error becomes a note underneath.
+        // Checking the error first meant a failed refresh — a rate limit, a
+        // dropped connection, a closed market — replaced a chart we could
+        // still draw with an error card. That is the chart "disappearing".
+        if chartBars.count >= 2 { return .ready }
+
         if selectedRange.usesIntraday {
+            if isLoadingIntraday { return .loading }
             if let intradayError {
                 return .unavailable(intradayError.recoverySuggestion
                                     ?? intradayError.shortDescription)
             }
-            if isLoadingIntraday && intradayBars.isEmpty { return .loading }
-            if chartBars.count < 2 {
-                return .unavailable("No intraday bars in this window. The market "
-                                    + "may not have opened yet, or IEX carried no "
-                                    + "trades in this symbol.")
-            }
-            return .ready
+            return .unavailable("No regular-session bars in this window. The "
+                                + "market may not have opened yet, or IEX carried "
+                                + "no trades in this symbol.")
         }
+        if isLoading { return .loading }
         if let historyError {
             return .unavailable(historyError.recoverySuggestion ?? historyError.shortDescription)
         }
-        if isLoading && bars.isEmpty { return .loading }
-        if chartBars.count < 2 {
-            return .unavailable("Only \(chartBars.count) bar\(chartBars.count == 1 ? "" : "s") "
-                                + "of price history is available for this range.")
-        }
-        return .ready
+        return .unavailable("Only \(chartBars.count) bar\(chartBars.count == 1 ? "" : "s") "
+                            + "of price history is available for this range.")
+    }
+
+    /// Said under a chart that is still drawable but out of date, so a failed
+    /// refresh is visible without the chart vanishing to report it.
+    var chartNote: String? {
+        guard chartBars.count >= 2 else { return nil }
+        let error = selectedRange.usesIntraday ? intradayError : historyError
+        guard let error else { return nil }
+        return "Showing the last copy held — the refresh failed. \(error.shortDescription)"
     }
 
     /// Price context over the visible range. "Down 18% from its peak" means a
@@ -333,25 +392,20 @@ final class SecurityDetailViewModel {
         let from = selectedRange.startDate()
         let to = Date.now
 
-        // 1D and 5D are different resolutions, so a series held for one is not
-        // an answer for the other.
-        if intradayResolution != resolution {
-            intradayBars = []
-            intradayFetchedAt = nil
-        }
-        if let fetchedAt = intradayFetchedAt, !isForcingRefresh, !intradayBars.isEmpty,
+        if let fetchedAt = intradayFetchedAt[resolution], !isForcingRefresh,
+           !(intradayByResolution[resolution] ?? []).isEmpty,
            case .fresh = StalenessPolicy.intradayCandles.evaluate(lastUpdated: fetchedAt) {
-            intradayError = nil
+            intradayErrors[resolution] = nil
             return
         }
         // Draw the held copy at once so the chart is not blank while the
         // request runs. It is never treated as current: `PriceBarDTO` carries
         // no observation time, so the age of a stored bar is unknowable here
         // and the fetch below goes ahead regardless.
-        if let snapshots, intradayBars.isEmpty {
+        if let snapshots, (intradayByResolution[resolution] ?? []).isEmpty {
             let held = (try? await snapshots.bars(symbol: symbol, from: from,
                                                   to: to, resolution: resolution)) ?? []
-            intradayBars = held.map {
+            intradayByResolution[resolution] = held.map {
                 PriceBar(date: $0.date, resolution: resolution, open: $0.open,
                          high: $0.high, low: $0.low, close: $0.close,
                          volume: $0.volume, adjustedClose: $0.adjustedClose)
@@ -364,23 +418,27 @@ final class SecurityDetailViewModel {
             let fetched = try await registry.marketData.bars(
                 symbol: symbol, resolution: resolution, from: from, to: to
             )
-            intradayBars = fetched.map {
-                PriceBar(date: $0.date, resolution: resolution, open: $0.open,
-                         high: $0.high, low: $0.low, close: $0.close,
-                         volume: $0.volume, adjustedClose: $0.adjustedClose)
+            // An empty response must not erase a series already held. Alpaca
+            // returns no bars for a window with no trades, and a public
+            // holiday is not a reason to blank yesterday's chart.
+            if !fetched.isEmpty || (intradayByResolution[resolution] ?? []).isEmpty {
+                intradayByResolution[resolution] = fetched.map {
+                    PriceBar(date: $0.date, resolution: resolution, open: $0.open,
+                             high: $0.high, low: $0.low, close: $0.close,
+                             volume: $0.volume, adjustedClose: $0.adjustedClose)
+                }
             }
-            intradayResolution = resolution
-            intradayFetchedAt = .now
-            intradayError = nil
+            intradayFetchedAt[resolution] = .now
+            intradayErrors[resolution] = nil
             if let snapshots {
                 try? await snapshots.record(bars: fetched, symbol: symbol,
                                             resolution: resolution)
             }
         } catch let error as APIError {
-            intradayError = error
+            intradayErrors[resolution] = error
             Self.logger.error("Intraday failed for \(self.symbol, privacy: .public): \(error.shortDescription, privacy: .public)")
         } catch {
-            intradayError = .transport(.alpaca, underlying: error.localizedDescription)
+            intradayErrors[resolution] = .transport(.alpaca, underlying: error.localizedDescription)
         }
     }
 
