@@ -11,6 +11,8 @@ struct SecurityDetailView: View {
     @Environment(AppEnvironment.self) private var app
     @State private var model: SecurityDetailViewModel
     @State private var isChoosingDate = false
+    /// `nil` until the reader opens or shuts "What changed" themselves.
+    @State private var changesExpanded: Bool?
     @State private var customDate = Date.now
 
     init(symbol: String) {
@@ -171,12 +173,73 @@ struct SecurityDetailView: View {
     private var changesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("What changed").font(.headline)
+                changesHeader
                 Spacer()
-                windowMenu
-                if !model.availableKinds.isEmpty { kindMenu }
+                if isShowingChanges {
+                    windowMenu
+                    if !model.availableKinds.isEmpty { kindMenu }
+                }
             }
 
+            if isShowingChanges {
+                changesBody
+            } else {
+                Text(collapsedChangesSummary)
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// Whether the panel is open.
+    ///
+    /// Until the reader says otherwise it follows the panel's own purpose:
+    /// open when something happened since the last visit, shut when nothing
+    /// did. A section with nothing new in it should not push the chart off
+    /// the screen to say so.
+    private var isShowingChanges: Bool {
+        changesExpanded ?? !model.newSinceLastVisit.isEmpty
+    }
+
+    private var changesHeader: some View {
+        Button {
+            withAnimation(.snappy(duration: 0.22)) {
+                changesExpanded = !isShowingChanges
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text("What changed").font(.headline).foregroundStyle(.primary)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(isShowingChanges ? 90 : 0))
+            }
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("What changed")
+        .accessibilityValue(isShowingChanges ? "Expanded" : "Collapsed")
+        .accessibilityHint(isShowingChanges ? "Hides the changes" : collapsedChangesSummary)
+    }
+
+    /// What the header stands in for while the panel is shut. A count only
+    /// helps if it says how far back it counted.
+    private var collapsedChangesSummary: String {
+        guard !model.events.isEmpty else {
+            return "Nothing unusual in this window."
+        }
+        let count = model.events.count
+        let new = model.newSinceLastVisit.count
+        var summary = "\(count) change\(count == 1 ? "" : "s")"
+        if new > 0 { summary += " · \(new) new" }
+        if let start = model.changeWindow.startDate(lastVisit: model.lastVisit) {
+            summary += " since \(Format.shortDate(start))"
+        }
+        return summary
+    }
+
+    @ViewBuilder
+    private var changesBody: some View {
+        VStack(alignment: .leading, spacing: 10) {
             if let start = model.changeWindow.startDate(lastVisit: model.lastVisit) {
                 Text("Since \(Format.shortDate(start))")
                     .font(.caption).foregroundStyle(.tertiary)
@@ -209,6 +272,7 @@ struct SecurityDetailView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var emptyChangesMessage: String {
@@ -356,7 +420,8 @@ struct SecurityDetailView: View {
                 if model.selectedRange.usesIntraday {
                     // The consolidated tape is not what drew this. Saying so is
                     // the condition on which intraday was adopted at all.
-                    Label("IEX only — about 2.5% of US volume. Shape, not levels.",
+                    Label("IEX only — about 2.5% of US volume. Shape, not "
+                          + "levels. Trading hours end to end, New York time.",
                           systemImage: "info.circle")
                         .font(.caption2).foregroundStyle(.secondary)
                 } else if model.rangeReturn?.isFullWindow == false {
@@ -399,12 +464,14 @@ struct SecurityDetailView: View {
         }
     }
 
-    /// One line per session, drawn straight between prints.
+    /// One line per session, plotted by position rather than by clock time.
     ///
-    /// Two deliberate differences from the daily chart. Sessions are separate
-    /// series, so nothing is drawn across the hours the market was shut — the
-    /// gap is left visibly empty instead of bridged by a move that did not
-    /// happen. And the interpolation is linear rather than monotone: a smooth
+    /// Three deliberate differences from the daily chart. The x-axis counts
+    /// bars, not hours: a wall-clock axis gave five sixths of the width to
+    /// hours in which nothing traded, and squeezed each session into a sliver.
+    /// Sessions are still separate series, so nothing is drawn across the
+    /// break between them — the boundary is a dashed rule, not a line implying
+    /// a move. And the interpolation is linear rather than monotone: a smooth
     /// curve between two five-minute prints invents a path the price never
     /// took, which matters more at this resolution than at daily.
     ///
@@ -412,29 +479,26 @@ struct SecurityDetailView: View {
     /// start at zero, so shading the space beneath the line gives weight to a
     /// quantity that is not being measured.
     private var intradayChart: some View {
-        Chart {
-            ForEach(model.chartSessions) { session in
-                ForEach(session.bars, id: \.date) { bar in
-                    LineMark(x: .value("Time", bar.date),
-                             y: .value("Close", bar.analysisClose),
-                             series: .value("Session", session.id))
-                        .foregroundStyle(Color.accentColor)
-                        .interpolationMethod(.linear)
-                }
-            }
+        let points = model.chartPoints
+        let ticks = model.chartAxisTicks
+        let labels = Dictionary(ticks.map { ($0.position, $0.label) },
+                                uniquingKeysWith: { first, _ in first })
+
+        return Chart(points) { point in
+            LineMark(x: .value("Position", point.position),
+                     y: .value("Close", point.close),
+                     series: .value("Session", point.session))
+                .foregroundStyle(Color.accentColor)
+                .interpolationMethod(.linear)
         }
         .chartYScale(domain: chartFloor...chartCeiling)
+        .chartXScale(domain: -0.5...(Double(max(points.count, 2)) - 0.5))
         .chartYAxis { AxisMarks(position: .trailing) }
         .chartXAxis {
-            if model.selectedRange == .oneDay {
-                AxisMarks(values: .stride(by: .hour)) { value in
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.hour().minute())
-                }
-            } else {
-                AxisMarks(values: .stride(by: .day)) { value in
-                    AxisGridLine()
-                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+            AxisMarks(values: ticks.map(\.position)) { value in
+                AxisGridLine()
+                if let position = value.as(Double.self), let label = labels[position] {
+                    AxisValueLabel(label)
                 }
             }
         }
