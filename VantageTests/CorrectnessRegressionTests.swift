@@ -191,10 +191,31 @@ struct CIKTests {
 struct SortOptionTests {
     @Test("Every offered sort produces a distinct ordering")
     func noDuplicateSorts() {
-        // "Most unusual" was byte-identical to "Biggest change" — two menu
-        // entries doing the same thing. It returns with the Phase 6 detectors.
-        #expect(WatchlistViewModel.SortOrder.allCases.count == 2)
-        #expect(!WatchlistViewModel.SortOrder.allCases.contains { $0.rawValue == "mostUnusual" })
+        // "Most unusual" was once byte-identical to "Biggest change" — two menu
+        // entries doing the same thing — and was withdrawn until the detectors
+        // could tell them apart. They can now, so the guard tests the property
+        // it always cared about rather than the absence of the option.
+        var rows: [WatchlistRow] = []
+        for (index, spec) in [("DELTA", 1.0, 0.99, 4, 3), ("ALPHA", 9.0, 0.10, 1, 2),
+                              ("CHARLIE", 5.0, 0.50, 3, 0), ("BRAVO", 2.0, 0.75, 2, 1)]
+            .enumerated() {
+            var row = WatchlistRow(symbol: spec.0, name: spec.0)
+            row.priority = spec.4
+            row.quote = QuoteDTO(symbol: spec.0, last: 100 * (1 + spec.1 / 100), open: nil,
+                                 high: nil, low: nil, previousClose: 100, volume: nil,
+                                 quoteTime: nil)
+            row.latestEvent = DetectedEventDTO(
+                kind: .unusualVolume,
+                occurredAt: Date(timeIntervalSince1970: 1_700_000_000 + Double(spec.3) * 86_400),
+                headline: "Event \(index)", unusualness: spec.2)
+            rows.append(row)
+        }
+
+        let orderings = WatchlistViewModel.SortOrder.allCases.map { order in
+            WatchlistViewModel.sorted(rows, by: order).map(\.symbol)
+        }
+        #expect(Set(orderings).count == WatchlistViewModel.SortOrder.allCases.count,
+                "Two menu entries producing the same order is worse than one honest entry")
     }
 }
 
