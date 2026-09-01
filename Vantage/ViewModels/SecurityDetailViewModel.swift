@@ -32,6 +32,14 @@ final class SecurityDetailViewModel {
     private(set) var marketIntradayMove: Double?
     private(set) var beta: Beta?
 
+    /// The sector this company maps to, and its history. Nil when the profile
+    /// carries no sector, or names one we do not track — better than silently
+    /// comparing a bank against the technology sector.
+    private(set) var sectorBenchmark: Benchmark?
+    private(set) var sectorBars: [PriceBar] = []
+    private(set) var sectorIntradayMove: Double?
+    private(set) var sectorFactor: SectorFactor?
+
     private(set) var quoteError: APIError?
     private(set) var historyError: APIError?
     private(set) var metricsError: APIError?
@@ -92,10 +100,46 @@ final class SecurityDetailViewModel {
         return StalenessPolicy.quote.evaluate(lastUpdated: lastRefreshedAt)
     }
 
+    /// The market series as bars, so it can go through the same return
+    /// machinery as everything else.
+    var marketBars: [PriceBar] {
+        marketCloses.map {
+            PriceBar(date: $0.date, resolution: .daily, open: $0.close, high: $0.close,
+                     low: $0.close, close: $0.close, adjustedClose: $0.close)
+        }
+    }
+
+    /// Return over the selected range for the sector and the market, on the
+    /// same window as `rangeReturn`.
+    var sectorRangeReturn: PeriodReturn? {
+        ReturnCalculator.trailingReturn(bars: sectorBars, window: selectedRange.dateInterval)
+    }
+
+    var marketRangeReturn: PeriodReturn? {
+        ReturnCalculator.trailingReturn(bars: marketBars, window: selectedRange.dateInterval)
+    }
+
+    /// Section 7, finally on screen: the arithmetic of out- or
+    /// under-performance, stated in percentage points rather than adjectives.
+    var relativeToSector: RelativePerformance? {
+        ReturnCalculator.relativePerformance(security: rangeReturn, benchmark: sectorRangeReturn)
+    }
+
+    var relativeToMarket: RelativePerformance? {
+        ReturnCalculator.relativePerformance(security: rangeReturn, benchmark: marketRangeReturn)
+    }
+
     /// Bars trimmed to the selected range, from the single wide fetch.
     var visibleBars: [PriceBar] {
         let start = selectedRange.startDate()
         return bars.filter { $0.date >= start }.sorted { $0.date < $1.date }
+    }
+
+    /// Price context over the visible range. "Down 18% from its peak" means a
+    /// different thing over a month than over five years, so it follows the
+    /// range the user chose rather than everything held.
+    var priceContext: PriceContext? {
+        ReturnCalculator.priceContext(bars: visibleBars)
     }
 
     /// Return over the selected range, computed from the visible bars.
@@ -121,7 +165,7 @@ final class SecurityDetailViewModel {
         loadTask = Task { [weak self] in
             self?.isForcingRefresh = force
             await self?.hydrate(from: snapshots)
-            await self?.performLoad(using: registry)
+            await self?.performLoad(using: registry, snapshots: snapshots)
             await self?.detectChanges(using: snapshots)
             await self?.persist(using: snapshots)
             self?.isForcingRefresh = false
@@ -369,7 +413,8 @@ final class SecurityDetailViewModel {
         }
     }
 
-    private func performLoad(using registry: ProviderRegistry) async {
+    private func performLoad(using registry: ProviderRegistry,
+                             snapshots: SnapshotStore?) async {
         isLoading = true
         defer { isLoading = false }
 
@@ -382,6 +427,9 @@ final class SecurityDetailViewModel {
         async let marketWork: Void = loadMarketContext(using: registry)
         _ = await (profileWork, quoteWork, historyWork, metricsWork, marketWork)
 
+        // Needs the profile's sector, so it follows the concurrent block
+        // rather than running inside it.
+        await loadSectorHistory(using: registry, snapshots: snapshots)
         computeBeta()
 
         // These need the CIK, which comes from the profile or a lookup, so they
@@ -473,11 +521,72 @@ final class SecurityDetailViewModel {
     private func computeBeta() {
         guard !bars.isEmpty, !marketCloses.isEmpty else {
             beta = nil
+            sectorFactor = nil
             return
         }
         beta = RelativeAnalysis.beta(
             RelativeAnalysis.align(security: bars, market: marketCloses)
         )
+
+        guard let sectorBenchmark, !sectorBars.isEmpty else {
+            sectorFactor = nil
+            return
+        }
+        sectorFactor = RelativeAnalysis.sectorFactor(
+            RelativeAnalysis.align(security: bars, market: marketCloses, sector: sectorBars),
+            name: sectorBenchmark.displayName,
+            isProxy: sectorBenchmark.isProxy || sectorBenchmark.fredSeriesID == nil)
+    }
+
+    /// The sector's history, when the company maps to one we track.
+    ///
+    /// One bars request per distinct sector, cached in the store afterwards —
+    /// eleven companies in the same sector share one series, which is what
+    /// makes this affordable against Tiingo's hourly budget.
+    private func loadSectorHistory(using registry: ProviderRegistry,
+                                   snapshots: SnapshotStore?) async {
+        guard let benchmark = Benchmark.sector(matching: profile?.sector),
+              let symbol = benchmark.etfSymbol,
+              symbol != self.symbol
+        else {
+            sectorBenchmark = nil
+            return
+        }
+        sectorBenchmark = benchmark
+
+        if let snapshots {
+            try? await snapshots.ensureBenchmark(symbol: symbol, name: benchmark.displayName)
+            let stored = (try? await snapshots.bars(
+                symbol: symbol, from: ChartRange.fiveYear.startDate())) ?? []
+            let observed = try? await snapshots.latestObservedAt(symbol: symbol, kind: .bars)
+            if !stored.isEmpty, let observed,
+               case .fresh = StalenessPolicy.dailyCandles.evaluate(lastUpdated: observed),
+               !isForcingRefresh {
+                sectorBars = stored.map(Self.priceBar)
+                return
+            }
+        }
+
+        do {
+            let fetched = try await registry.marketData.bars(
+                symbol: symbol, resolution: .daily,
+                from: ChartRange.fiveYear.startDate(), to: .now)
+            sectorBars = fetched.map(Self.priceBar)
+            if let snapshots {
+                try? await snapshots.record(bars: fetched, symbol: symbol, resolution: .daily)
+            }
+        } catch {
+            // Sector context is additional, exactly like market attribution.
+            // Losing it must not mark the page as failed.
+            Self.logger.error("Sector history unavailable for \(self.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        sectorIntradayMove = try? await registry.marketData.quote(symbol: symbol).changePercent
+    }
+
+    private static func priceBar(_ dto: PriceBarDTO) -> PriceBar {
+        PriceBar(date: dto.date, resolution: .daily, open: dto.open, high: dto.high,
+                 low: dto.low, close: dto.close, volume: dto.volume,
+                 adjustedClose: dto.adjustedClose)
     }
 
     /// How much of the most recent move the market accounts for.
@@ -505,11 +614,32 @@ final class SecurityDetailViewModel {
             isProxy = false
         }
 
+        // The sector leg must come from the same session as the market leg.
+        // An intraday reading needs the sector's live quote; a closed session
+        // needs its bar for that day.
+        let sectorMove: Double?
+        if reading.isIntraday {
+            sectorMove = sectorIntradayMove
+        } else {
+            let day = Calendar.current.startOfDay(for: reading.date)
+            let sorted = sectorBars.sorted { $0.date < $1.date }
+            if let index = sorted.lastIndex(where: {
+                Calendar.current.startOfDay(for: $0.date) == day
+            }), index > 0 {
+                sectorMove = ReturnCalculator.simpleReturn(
+                    from: sorted[index - 1].analysisClose, to: sorted[index].analysisClose)
+            } else {
+                sectorMove = nil
+            }
+        }
+
         return RelativeAnalysis.attribute(
             securityMove: reading.percent,
             marketMove: marketMove,
             marketName: isProxy ? "S&P 500 (SPY)" : "S&P 500",
             beta: beta,
+            sector: sectorFactor,
+            sectorMove: sectorMove,
             isMarketProxy: isProxy
         )
     }

@@ -35,6 +35,14 @@ struct AttributionCard: View {
                 }
             }
 
+            if attribution.sector?.isProxy == true {
+                Text("FRED publishes no sector index, so a sector ETF stands in. The "
+                     + "sector's own market exposure is removed before it is used, so "
+                     + "the market is not counted twice.")
+                    .font(.caption2).foregroundStyle(.tertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if attribution.isMarketProxy {
                 Text("The S&P 500 index publishes only at the close, so an ETF stands "
                      + "in for the open session. It tracks the index closely but not exactly.")
@@ -48,22 +56,31 @@ struct AttributionCard: View {
             if let beta = attribution.beta {
                 ClaimRow(claim: beta.claim)
             }
+            if let factor = attribution.sectorFactorClaim {
+                ClaimRow(claim: factor)
+            }
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
     }
 
-    /// Two bars on a shared scale. Deliberately not a pie or a percentage
-    /// split: the two parts can point in opposite directions — a stock can
-    /// rise on a falling market — and any "share of the move" framing breaks
-    /// down entirely when they do.
+    /// Bars on a shared scale. Deliberately not a pie or a percentage split:
+    /// the parts can point in opposite directions — a stock can rise on a
+    /// falling market, and a sector can fall while the market rises — and any
+    /// "share of the move" framing breaks down entirely when they do.
     private var split: some View {
+        let sector = attribution.sector
         let magnitude = max(abs(attribution.explainedByMarket),
-                            abs(attribution.residual), 0.0001)
+                            abs(attribution.residual),
+                            abs(sector?.explained ?? 0), 0.0001)
         return VStack(alignment: .leading, spacing: 6) {
             bar(label: "Market accounts for",
                 value: attribution.explainedByMarket, magnitude: magnitude)
-            bar(label: "Unexplained",
+            if let sector {
+                bar(label: "\(sector.name), beyond the market",
+                    value: sector.explained, magnitude: magnitude)
+            }
+            bar(label: sector == nil ? "Unexplained" : "Unexplained by either",
                 value: attribution.residual, magnitude: magnitude)
         }
     }

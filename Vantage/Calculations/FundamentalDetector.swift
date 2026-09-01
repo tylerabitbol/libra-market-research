@@ -320,8 +320,12 @@ enum FundamentalDetector {
         minimumChangePercent: Double = 1,
         sourceDetail: String = "SEC XBRL company facts"
     ) -> DetectedEventDTO? {
+        // Keyed on the duration as well as the date, exactly as `deduplicated`
+        // is. A fiscal year and its own fourth quarter end on the same day, so
+        // keying on the date alone pairs Apple's Q4 FY2020 revenue against its
+        // FY2020 revenue and reports a +324% restatement that never happened.
         let byPeriod = Dictionary(grouping: revisions.filter { $0.concept == concept }) {
-            SECFundamentalsProvider.periodKey($0.periodEnd)
+            "\(SECFundamentalsProvider.periodKey($0.periodEnd))|\($0.periodKind.rawValue)"
         }
 
         let revised = byPeriod.values.compactMap { versions -> (original: FinancialFactDTO,

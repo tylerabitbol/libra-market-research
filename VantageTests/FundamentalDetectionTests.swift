@@ -244,6 +244,29 @@ struct FundamentalDetectionTests {
         #expect(event.unusualness == 0)
     }
 
+    @Test("A quarter and a fiscal year ending the same day are not a restatement of each other")
+    func annualAndQuarterlyPeriodsAreNotConflated() {
+        // Found by looking at a rendered screen, not by a test: Apple's Q4
+        // FY2020 revenue of $64.7B was being paired against its FY2020 revenue
+        // of $275B and reported as a +324% restatement. Both periods end on
+        // 26 September 2020, and the grouping key was the date alone.
+        let period = calendar.date(from: DateComponents(year: 2020, month: 9, day: 26))!
+        func version(_ value: Double, kind: FiscalPeriodKind, accession: String) -> FinancialFactDTO {
+            FinancialFactDTO(
+                concept: .revenue, rawTag: nil,
+                periodStart: period.addingTimeInterval(kind == .annual ? -365 * 86_400
+                                                                       : -90 * 86_400),
+                periodEnd: period, fiscalYear: 2020, fiscalQuarter: kind == .annual ? nil : 4,
+                isAnnual: kind == .annual, periodKind: kind, value: value, unit: "USD",
+                filedAt: period.addingTimeInterval(30 * 86_400), accessionNumber: accession)
+        }
+
+        #expect(FundamentalDetector.restatements(
+            revisions: [version(64_700, kind: .quarter, accession: "10-K-q4"),
+                        version(274_500, kind: .annual, accession: "10-K-fy")],
+            concept: .revenue) == nil)
+    }
+
     @Test("A single filing of a period is not a restatement")
     func singleFilingIsNotRestatement() {
         let period = quarterEnd(4)

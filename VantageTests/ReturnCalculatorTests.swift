@@ -164,3 +164,67 @@ struct RelativePerformanceTests {
         #expect(claim.text.contains("underperformed"))
     }
 }
+
+/// Price context: where a price sits against its own averages and its peak.
+@Suite("Price context")
+struct PriceContextTests {
+    private func bars(_ closes: [Double], adjusted: [Double]? = nil) -> [PriceBar] {
+        closes.enumerated().map { index, close in
+            PriceBar(date: Date(timeIntervalSince1970: 1_700_000_000 + Double(index) * 86_400),
+                     resolution: .daily, open: close, high: close, low: close, close: close,
+                     adjustedClose: adjusted?[index] ?? close)
+        }
+    }
+
+    @Test("An average shorter than its window is not reported")
+    func averagesNeedTheirFullWindow() throws {
+        let context = try #require(ReturnCalculator.priceContext(bars: bars((0..<60).map { 100 + Double($0) })))
+        #expect(context.fiftyDayAverage != nil)
+        // A "200-session average" over 60 sessions is a different statistic
+        // wearing the same name.
+        #expect(context.twoHundredDayAverage == nil)
+    }
+
+    @Test("Distance from an average is stated against the average, not the peak")
+    func distanceFromAverage() throws {
+        // Fifty closes at 100, then one at 110. The 50-session average covers
+        // the last fifty: 49 hundreds and one 110.
+        let context = try #require(ReturnCalculator.priceContext(
+            bars: bars(Array(repeating: 100.0, count: 50) + [110])))
+        let average = try #require(context.fiftyDayAverage)
+        #expect(abs(average - 100.2) < 0.001)
+        #expect(context.distance(from: average).map { $0 > 9 } == true)
+    }
+
+    @Test("Drawdown from the peak is zero at a new high and never positive")
+    func drawdownAtAHigh() throws {
+        let context = try #require(ReturnCalculator.priceContext(bars: bars([100, 110, 120])))
+        #expect(context.drawdownFromPeak == 0)
+        #expect(context.peak == 120)
+        #expect(context.drawdownClaim.text.contains("highest close"))
+    }
+
+    @Test("The deepest fall within the period is found even after a recovery")
+    func deepestDrawdownSurvivesRecovery() throws {
+        // 100 → 50 → 120. The current drawdown is zero; the deepest was -50%.
+        let context = try #require(ReturnCalculator.priceContext(bars: bars([100, 50, 120])))
+        #expect(context.drawdownFromPeak == 0)
+        #expect(abs(context.deepestDrawdown - -50) < 0.001)
+    }
+
+    @Test("Context is computed from the adjusted close, so a split is not a crash")
+    func splitsDoNotLookLikeDrawdowns() throws {
+        // A 2-for-1 split halves the raw close and leaves the adjusted series
+        // continuous. Reading the raw series would report a 50% collapse that
+        // never happened.
+        let context = try #require(ReturnCalculator.priceContext(
+            bars: bars([200, 200, 100], adjusted: [100, 100, 100])))
+        #expect(context.deepestDrawdown == 0)
+        #expect(context.last == 100)
+    }
+
+    @Test("A single bar has no context to give")
+    func singleBarHasNoContext() {
+        #expect(ReturnCalculator.priceContext(bars: bars([100])) == nil)
+    }
+}

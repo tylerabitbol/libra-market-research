@@ -146,3 +146,109 @@ struct RelativePerformance: Sendable, Hashable {
         )
     }
 }
+
+/// Where a price sits relative to its own recent averages and its peak.
+///
+/// Deliberately three figures. Section 5 asks for context and then says
+/// explicitly not to turn the page into a technical-analysis dashboard, so
+/// there is no oscillator suite here — only what answers "is this high or low
+/// for this security lately, and how far has it fallen from its best".
+///
+/// Every figure is computed from the adjusted close, because a split would
+/// otherwise show up as a 50% drawdown that never happened.
+struct PriceContext: Sendable, Hashable {
+    let last: Double
+    /// Nil when fewer sessions are held than the average needs. A "200-day
+    /// average" of 60 sessions is a different statistic wearing the same name.
+    let fiftyDayAverage: Double?
+    let twoHundredDayAverage: Double?
+    /// The current fall from the highest close in the window, in percent.
+    /// Zero at a new high, never positive.
+    let drawdownFromPeak: Double
+    /// The largest peak-to-trough fall within the window, in percent.
+    let deepestDrawdown: Double
+    let peak: Double
+    let windowStart: Date
+    let windowEnd: Date
+
+    /// Distance from an average, in percent. Nil when that average is nil.
+    func distance(from average: Double?) -> Double? {
+        guard let average, average > 0 else { return nil }
+        return (last - average) / average * 100
+    }
+
+    var fiftyDayClaim: Claim? { averageClaim(average: fiftyDayAverage, sessions: 50) }
+    var twoHundredDayClaim: Claim? { averageClaim(average: twoHundredDayAverage, sessions: 200) }
+
+    private func averageClaim(average: Double?, sessions: Int) -> Claim? {
+        guard let average, let distance = distance(from: average) else { return nil }
+        let direction = distance >= 0 ? "above" : "below"
+        return Claim(
+            kind: .calculation,
+            text: "Trading \(Format.percent(abs(distance), precision: 1)) \(direction) its "
+                + "\(sessions)-session average close.",
+            derivation: Derivation(
+                formula: "(last - average) ÷ average",
+                inputs: [
+                    .init(name: "last", value: Format.currency(last), source: nil),
+                    .init(name: "\(sessions)-session average",
+                          value: Format.currency(average), source: nil)
+                ],
+                result: Format.signedPercent(distance, precision: 1)))
+    }
+
+    var drawdownClaim: Claim {
+        Claim(
+            kind: .calculation,
+            text: drawdownFromPeak >= -0.05
+                ? "At its highest close of the period."
+                : "Down \(Format.percent(abs(drawdownFromPeak), precision: 1)) from its "
+                    + "highest close of the period.",
+            derivation: Derivation(
+                formula: "(last - peak) ÷ peak",
+                inputs: [
+                    .init(name: "last", value: Format.currency(last), source: nil),
+                    .init(name: "peak close", value: Format.currency(peak), source: nil),
+                    .init(name: "period", value: "\(Format.shortDate(windowStart)) – "
+                          + Format.shortDate(windowEnd), source: nil)
+                ],
+                result: Format.signedPercent(drawdownFromPeak, precision: 1)))
+    }
+}
+
+extension ReturnCalculator {
+    /// Price context over the bars given, which is the visible range rather
+    /// than everything held: "down 18% from its peak" means a different thing
+    /// over one month than over five years, and the window is stated.
+    static func priceContext(bars: [PriceBar]) -> PriceContext? {
+        let sorted = bars.sorted { $0.date < $1.date }
+        guard let last = sorted.last, let first = sorted.first, sorted.count > 1 else { return nil }
+        let closes = sorted.map(\.analysisClose)
+
+        var runningPeak = closes[0]
+        var deepest = 0.0
+        for close in closes {
+            runningPeak = max(runningPeak, close)
+            guard runningPeak > 0 else { continue }
+            deepest = min(deepest, (close - runningPeak) / runningPeak * 100)
+        }
+        let peak = closes.max() ?? closes[0]
+
+        return PriceContext(
+            last: last.analysisClose,
+            fiftyDayAverage: average(closes, sessions: 50),
+            twoHundredDayAverage: average(closes, sessions: 200),
+            drawdownFromPeak: peak > 0 ? (last.analysisClose - peak) / peak * 100 : 0,
+            deepestDrawdown: deepest,
+            peak: peak,
+            windowStart: first.date,
+            windowEnd: last.date)
+    }
+
+    /// Mean of the most recent `sessions` closes, or nil if there are fewer.
+    private static func average(_ closes: [Double], sessions: Int) -> Double? {
+        guard closes.count >= sessions else { return nil }
+        let window = closes.suffix(sessions)
+        return window.reduce(0, +) / Double(window.count)
+    }
+}

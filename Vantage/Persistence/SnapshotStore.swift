@@ -477,6 +477,27 @@ actor SnapshotStore {
         )
     }
 
+    // MARK: - Benchmarks
+
+    /// Ensures a row exists for a benchmark symbol so its history can be
+    /// stored and hydrated like any other.
+    ///
+    /// `security(for:)` deliberately creates nothing — history is only recorded
+    /// for companies the user actually follows, so a stray symbol cannot
+    /// quietly populate the store. A sector ETF is the exception the
+    /// `isBenchmark` flag was added for: the app needs its bars to answer "how
+    /// did this company do against its sector", and re-fetching five years of
+    /// XLK on every visit would spend the scarcest request in the app on a
+    /// series that eleven companies share.
+    func ensureBenchmark(symbol: String, name: String) throws {
+        let key = symbol.uppercased()
+        if try security(for: key) != nil { return }
+        let benchmark = Security(symbol: key, name: name)
+        benchmark.isBenchmark = true
+        modelContext.insert(benchmark)
+        try modelContext.save()
+    }
+
     // MARK: - Helpers
 
     /// Looks up the security, creating nothing: history is only recorded for
