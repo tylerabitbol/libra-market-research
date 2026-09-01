@@ -43,6 +43,12 @@ final class SecurityDetailViewModel {
     /// Published analyst ratings. Estimate revisions need a paid Finnhub tier
     /// and are absent by design; what the free tier serves is the rating mix.
     private(set) var ratings: RatingSnapshotDTO?
+    private(set) var insiderTransactions: [InsiderTransactionDTO] = []
+
+    /// Section 10's summary rather than a raw list of Form 4 lines.
+    var insiderSummary: InsiderActivity.Summary? {
+        InsiderActivity.summarize(insiderTransactions)
+    }
 
     private(set) var quoteError: APIError?
     private(set) var historyError: APIError?
@@ -153,8 +159,8 @@ final class SecurityDetailViewModel {
             fundamentals: fundamentals,
             metrics: metrics,
             ratings: ratings,
-            insiderPurchases: nil,
-            insiderSales: nil))
+            insiderPurchases: insiderSummary?.purchaseCount,
+            insiderSales: insiderSummary?.saleCount))
     }
 
     /// Bars trimmed to the selected range, from the single wide fetch.
@@ -315,6 +321,7 @@ final class SecurityDetailViewModel {
             // Judged against the company's own reported history, on the same
             // rank-not-probability terms as everything above.
             + FundamentalDetector.detect(facts: fundamentals)
+            + InsiderActivity.events(insiderTransactions, since: lastVisit)
             + (await restatementEvents(using: snapshots))
         // The live detector and the backfill can both reach the most recent
         // closed session. They describe it identically, so the list would show
@@ -425,6 +432,9 @@ final class SecurityDetailViewModel {
             }
             if !filings.isEmpty {
                 try await snapshots.record(filings: filings, symbol: symbol)
+            }
+            if !insiderTransactions.isEmpty {
+                try await snapshots.record(insiders: insiderTransactions, symbol: symbol)
             }
             if !events.isEmpty {
                 try await snapshots.record(events: events, symbol: symbol)
@@ -726,7 +736,8 @@ final class SecurityDetailViewModel {
 
         async let filingWork: Void = loadFilings(cik: cik, sec: sec)
         async let factWork: Void = loadFundamentals(cik: cik, registry: registry)
-        _ = await (filingWork, factWork)
+        async let insiderWork: Void = loadInsiders(cik: cik, sec: sec)
+        _ = await (filingWork, factWork, insiderWork)
     }
 
     private func loadFilings(cik: String, sec: any SECDataProvider) async {
@@ -746,6 +757,16 @@ final class SecurityDetailViewModel {
         } catch {
             filingsError = .transport(.sec, underlying: error.localizedDescription)
         }
+    }
+
+    /// Form 4 lines for the past year.
+    ///
+    /// Costs one EDGAR request per ownership document, which is why it is
+    /// bounded by a date rather than pulling a prolific filer's whole history.
+    /// Its failure is swallowed: insider activity is one dimension of eleven.
+    private func loadInsiders(cik: String, sec: any SECDataProvider) async {
+        let since = Calendar.current.date(byAdding: .year, value: -1, to: .now)
+        insiderTransactions = (try? await sec.insiderTransactions(cik: cik, since: since)) ?? []
     }
 
     private func loadFundamentals(cik: String, registry: ProviderRegistry) async {

@@ -27,6 +27,7 @@ struct SecurityDetailView: View {
                 researchProfileSection
                 valuationSection
                 fundamentalsSection
+                insiderSection
                 filingsSection
             }
             .padding(16)
@@ -450,6 +451,56 @@ struct SecurityDetailView: View {
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+    }
+
+    // MARK: - Insider activity
+
+    /// Section 10: summaries, never a raw list, and never an implication that
+    /// insider activity predicts anything.
+    @ViewBuilder
+    private var insiderSection: some View {
+        if let summary = model.insiderSummary {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Insider activity").font(.headline)
+                    Spacer()
+                    Text("PRIMARY SOURCE")
+                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(.quaternary.opacity(0.6), in: .rect(cornerRadius: 4))
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 20) {
+                        insiderCount("Bought", summary.purchaseCount, summary.purchaseValue)
+                        insiderCount("Sold", summary.saleCount, summary.saleValue)
+                    }
+                    if summary.scheduledCount + summary.routineCount > 0 {
+                        // Stated rather than silently dropped: a reader who
+                        // counts Form 4s elsewhere should be able to reconcile.
+                        Text("\(summary.scheduledCount) scheduled-plan and "
+                             + "\(summary.routineCount) routine transactions excluded.")
+                            .font(.caption2).foregroundStyle(.tertiary)
+                    }
+                    Divider()
+                    ClaimRow(claim: summary.claim)
+                }
+                .padding(14)
+                .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+            }
+        }
+    }
+
+    private func insiderCount(_ label: String, _ count: Int, _ value: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.caption).foregroundStyle(.secondary)
+            Text("\(count)")
+                .font(.system(.title3, design: .rounded).weight(.medium))
+                .monospacedDigit()
+            Text(value.map { "~\(Format.compactCurrency($0))" } ?? Format.notAvailable)
+                .font(.caption2).foregroundStyle(.tertiary)
+        }
     }
 
     // MARK: - Filings
