@@ -285,6 +285,50 @@ actor SnapshotStore {
         try modelContext.save()
     }
 
+    // MARK: - Screening
+
+    /// Every security the app holds data for, with the figures a screen can
+    /// test — read entirely from disk, issuing no requests.
+    ///
+    /// Benchmarks are excluded: a sector ETF is not a company, and screening
+    /// one on revenue growth would return nothing while looking like a result.
+    func screenSubjects() throws -> [ScreenSubject] {
+        let securities = try modelContext.fetch(FetchDescriptor<Security>())
+        var subjects: [ScreenSubject] = []
+
+        for security in securities where !security.isBenchmark {
+            var subject = ScreenSubject(symbol: security.symbol, name: security.name,
+                                        sector: security.sector)
+
+            if let quote = try lastQuote(symbol: security.symbol, before: .now) {
+                subject.price = quote.last
+                subject.dailyChangePercent = quote.changePercent
+            }
+
+            let facts = try facts(symbol: security.symbol)
+            if let growth = FundamentalDetector.yearOverYear(
+                FundamentalDetector.quarterly(facts, .revenue)).last, growth.prior > 0 {
+                subject.revenueGrowth = (growth.current - growth.prior) / growth.prior * 100
+            }
+            subject.grossMargin = FundamentalDetector
+                .marginSeries(facts: facts, numerator: .grossProfit).last?.value
+            subject.operatingMargin = FundamentalDetector
+                .marginSeries(facts: facts, numerator: .operatingIncome).last?.value
+
+            let debt = FundamentalDetector.instant(facts, .totalDebt).last?.value
+            let cash = FundamentalDetector.instant(facts, .cashAndEquivalents).last?.value
+            if let debt, let cash { subject.netCash = cash - debt }
+
+            if let event = try events(symbol: security.symbol, limit: 1).first {
+                subject.latestUnusualness = event.unusualness
+                subject.daysSinceLastEvent = Date.now.timeIntervalSince(event.occurredAt) / 86_400
+            }
+
+            subjects.append(subject)
+        }
+        return subjects.sorted { $0.symbol < $1.symbol }
+    }
+
     // MARK: - Journal
 
     /// Writes a note, updating the existing one when it shares a creation time.
