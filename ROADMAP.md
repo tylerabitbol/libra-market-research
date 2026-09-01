@@ -20,17 +20,17 @@ From the original specification. Status as of the latest commit.
 | 1 | **Foundation** — project architecture, SwiftData models, API abstraction, networking, secrets, navigation, basic dashboard | ✅ Complete |
 | 2 | **Market data** — quotes, historical prices, volume, watchlist, charts | ✅ Complete — providers, watchlist with search/add/persistence, and range charts |
 | 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | ✅ Complete — XBRL extraction, valuation percentiles, Security Detail UI, and append-only persistence |
-| 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | 🟡 Provider + filings done; Form 4 XML parsing outstanding |
-| 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings + earnings surprises available; estimate revisions blocked by tier |
-| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Profile, contradictory evidence | 🟡 Price/volume/volatility and fundamental detectors, read-through store, backfill, Research feed and market attribution (beta-adjusted) built; sector leg, Research Profile and contradictory evidence outstanding |
-| 7 | **Personal research** — journal, thesis tracking, saved screens, historical comparisons | ⬜ |
-| 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | ⬜ |
+| 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | ✅ Complete — filings, Form 4 parsing, insider summaries, and per-filing figure analysis |
+| 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings wired into the research profile; estimate revisions blocked by tier; news fetched but not surfaced |
+| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Profile, contradictory evidence | ✅ Complete — price, volume, volatility and fundamental detectors; read-through store; two-factor attribution with an orthogonalised sector leg; Research Profile as components with no score; disconfirming evidence |
+| 7 | **Personal research** — journal, thesis tracking, saved screens, historical comparisons | ✅ Complete — journal with "since your note", screener over held data with saved screens |
+| 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | 🟡 Read-through caching and offline fallback done; accessibility pass on drawn elements done; iPad layout and Dynamic Type sweep outstanding |
 
 Five product areas: Dashboard, Watchlist, Security Detail, Research/Investigation,
 Settings. Dashboard, Watchlist, Security Detail and Research are built; Screener
 is still a placeholder.
 
-**286 tests**, all passing. Every wrong number caught in the last four commits
+**370 tests**, all passing. Every wrong number caught in the last four commits
 was found by looking at rendered output on a real symbol — the suite stayed
 green throughout. Treat a screen check as part of "done", not optional polish;
 see *Build and verify* below.
