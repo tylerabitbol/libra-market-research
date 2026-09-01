@@ -13,9 +13,9 @@ private final class FixtureAnchor {}
 /// exactly the surprises worth catching — Finnhub's zero-filled quotes for
 /// unknown symbols, FRED's "." for market holidays.
 enum Fixture {
-    static func data(_ name: String) throws -> Data {
+    static func data(_ name: String, extension ext: String = "json") throws -> Data {
         let bundle = Bundle(for: FixtureAnchor.self)
-        guard let url = bundle.url(forResource: name, withExtension: "json") else {
+        guard let url = bundle.url(forResource: name, withExtension: ext) else {
             throw FixtureError.missing(name)
         }
         return try Data(contentsOf: url)

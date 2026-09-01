@@ -117,16 +117,18 @@ final class InsiderTransaction {
     }
 
     var nature: InsiderTransactionNature {
-        if isUnderTradingPlan { return .scheduledPlan }
-        switch transactionCode.uppercased() {
-        case "P": return .openMarketPurchase
-        case "S": return .openMarketSale
-        case "A": return .grant
-        case "M": return .optionExercise
-        case "F": return .taxWithholding
-        case "G": return .gift
-        default: return .other
-        }
+        .classify(code: transactionCode, isUnderTradingPlan: isUnderTradingPlan)
+    }
+}
+
+extension InsiderTransactionDTO {
+    var approximateValue: Double? {
+        guard let shares, let pricePerShare else { return nil }
+        return shares * pricePerShare
+    }
+
+    var nature: InsiderTransactionNature {
+        .classify(code: transactionCode, isUnderTradingPlan: isUnderTradingPlan)
     }
 }
 
@@ -150,6 +152,27 @@ enum InsiderTransactionNature: String, Sendable, CaseIterable {
         case .taxWithholding: "Shares withheld for tax"
         case .gift: "Gift"
         case .other: "Other"
+        }
+    }
+
+    /// Classifies a transaction code, with the trading-plan flag taking
+    /// precedence over everything else.
+    ///
+    /// Shared by the stored row and the transport type rather than written
+    /// twice: a sale classified as discretionary in one and scheduled in the
+    /// other is the sort of disagreement nobody notices until it is on screen.
+    static func classify(code: String, isUnderTradingPlan: Bool) -> InsiderTransactionNature {
+        // A pre-arranged sale carries no opinion whatever code it was filed
+        // under, so the plan flag is checked before the code and not after.
+        if isUnderTradingPlan { return .scheduledPlan }
+        switch code.uppercased().trimmingCharacters(in: .whitespaces) {
+        case "P": return .openMarketPurchase
+        case "S": return .openMarketSale
+        case "A": return .grant
+        case "M": return .optionExercise
+        case "F": return .taxWithholding
+        case "G": return .gift
+        default: return .other
         }
     }
 

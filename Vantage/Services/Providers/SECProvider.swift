@@ -127,12 +127,62 @@ struct SECProvider: SECDataProvider {
         return Array(filtered.prefix(limit))
     }
 
-    /// Form 4 ownership documents are XML, not JSON, and each must be fetched
-    /// and parsed individually. Listing them is in place; extracting the
-    /// transaction lines is Phase 4 proper, and returning an empty array here
-    /// would read as "this insider made no trades", so it refuses instead.
+    /// Form 4 ownership documents are XML, and each must be fetched and parsed
+    /// individually.
+    ///
+    /// One request per filing. EDGAR is free and allows roughly ten a second,
+    /// so the cost is latency rather than quota — but it is still bounded by
+    /// `documentLimit`, because a prolific filer can lodge hundreds a year and
+    /// no screen shows them all.
+    ///
+    /// A document that fails to fetch or parse is skipped rather than failing
+    /// the batch. One malformed filing among twenty must not turn the other
+    /// nineteen into "no insider trades" — the reading this method refused to
+    /// produce when it was unimplemented.
     func insiderTransactions(cik: String, since: Date?) async throws -> [InsiderTransactionDTO] {
-        throw APIError.noData(.sec, endpoint: "Form 4 parsing not yet implemented")
+        let forms = try await filings(cik: cik, formTypes: ["4"], limit: Self.documentLimit)
+        let relevant = since.map { cutoff in forms.filter { $0.filedAt >= cutoff } } ?? forms
+        guard !relevant.isEmpty else { return [] }
+
+        var collected: [InsiderTransactionDTO] = []
+        for filing in relevant {
+            guard let url = Self.ownershipXMLURL(for: filing) else { continue }
+            let endpoint = Endpoint(
+                provider: .sec,
+                baseURL: url,
+                path: "",
+                headers: try userAgentHeaders(),
+                label: "form4")
+            guard let data = try? await client.data(for: endpoint),
+                  let parsed = try? Form4Parser.parse(
+                    data, accessionNumber: filing.accessionNumber, filedAt: filing.filedAt)
+            else { continue }
+            collected += parsed
+        }
+        return collected.sorted { $0.transactionDate > $1.transactionDate }
+    }
+
+    /// How many ownership documents one call will fetch.
+    static let documentLimit = 20
+
+    /// The raw XML behind a Form 4, rather than the styled version.
+    ///
+    /// The submissions feed's `primaryDocument` for an ownership form usually
+    /// points at an XSL-rendered copy under a `xslF345X0N/` directory. That
+    /// path serves HTML; the machine-readable document is the same filename one
+    /// level up, so the styling directory is dropped when present.
+    static func ownershipXMLURL(for filing: FilingDTO) -> URL? {
+        guard let url = filing.primaryDocumentURL else { return nil }
+        var components = url.pathComponents
+        if let index = components.firstIndex(where: { $0.lowercased().hasPrefix("xsl") }) {
+            components.remove(at: index)
+        }
+        let path = components.joined(separator: "/").replacingOccurrences(of: "//", with: "/")
+        guard var rebuilt = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        rebuilt.path = path.hasPrefix("/") ? path : "/" + path
+        return rebuilt.url
     }
 }
 

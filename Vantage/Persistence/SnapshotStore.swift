@@ -154,6 +154,52 @@ actor SnapshotStore {
         return inserted
     }
 
+    // MARK: - Insider transactions
+
+    /// Records insider transactions, one row per Form 4 line.
+    ///
+    /// Keyed on the accession *and* the line's own date and code: a single
+    /// filing reports several transactions, so deduplicating on the accession
+    /// alone would keep one line and discard the rest.
+    @discardableResult
+    func record(insiders: [InsiderTransactionDTO], symbol: String) throws -> Int {
+        guard !insiders.isEmpty, let security = try security(for: symbol) else { return 0 }
+
+        let symbolKey = security.symbol
+        let descriptor = FetchDescriptor<InsiderTransaction>(
+            predicate: #Predicate { $0.security?.symbol == symbolKey }
+        )
+        let existing = Set((try? modelContext.fetch(descriptor))?.map {
+            "\($0.accessionNumber)|\($0.transactionDate.timeIntervalSince1970)|\($0.transactionCode)"
+        } ?? [])
+
+        var inserted = 0
+        for transaction in insiders {
+            let key = "\(transaction.accessionNumber)|"
+                + "\(transaction.transactionDate.timeIntervalSince1970)|"
+                + transaction.transactionCode
+            guard !existing.contains(key) else { continue }
+            modelContext.insert(InsiderTransaction(
+                security: security,
+                accessionNumber: transaction.accessionNumber,
+                insiderName: transaction.insiderName,
+                insiderTitle: transaction.insiderTitle,
+                isDirector: transaction.isDirector,
+                isOfficer: transaction.isOfficer,
+                isTenPercentOwner: transaction.isTenPercentOwner,
+                transactionDate: transaction.transactionDate,
+                filedAt: transaction.filedAt,
+                transactionCode: transaction.transactionCode,
+                isUnderTradingPlan: transaction.isUnderTradingPlan,
+                shares: transaction.shares,
+                pricePerShare: transaction.pricePerShare,
+                sharesOwnedAfter: transaction.sharesOwnedAfter))
+            inserted += 1
+        }
+        if inserted > 0 { try modelContext.save() }
+        return inserted
+    }
+
     // MARK: - Detected events
 
     /// Records detected events, one per kind per day per security.
