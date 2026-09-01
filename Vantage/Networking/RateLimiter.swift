@@ -92,6 +92,11 @@ actor RateLimiter {
     /// we pace to 45/hour with a small burst for interactive use.
     static func tiingo() -> RateLimiter { RateLimiter(requests: 45, per: 3600, burst: 6, provider: .tiingo) }
 
+    /// Alpaca's free plan documents 200 requests/minute. Intraday charts are
+    /// interactive — a range tap should redraw at once — so the whole minute's
+    /// allowance is available as burst.
+    static func alpaca() -> RateLimiter { RateLimiter(requests: 200, per: 60, burst: 30, provider: .alpaca) }
+
     /// FRED permits 120 requests/minute.
     static func fred() -> RateLimiter { RateLimiter(requests: 100, per: 60, burst: 20, provider: .fred) }
 }

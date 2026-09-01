@@ -146,6 +146,10 @@ enum ChartRange: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Whether this range needs a series finer than daily — and therefore a
+    /// different vendor, with a different share of the tape behind it.
+    var usesIntraday: Bool { !resolution.isDailyOrCoarser }
+
     var dateInterval: DateComponents {
         switch self {
         case .oneDay: DateComponents(day: -1)
@@ -161,4 +165,16 @@ enum ChartRange: String, CaseIterable, Identifiable, Sendable {
     func startDate(from end: Date = .now, calendar: Calendar = .current) -> Date {
         calendar.date(byAdding: dateInterval, to: end) ?? end
     }
+}
+
+
+/// Whether a chart can be drawn, and what to say when it cannot.
+///
+/// Exists because "no bars" and "still loading" were previously the same
+/// state on screen, which is how 1D and 5D came to show a spinner that never
+/// resolved for a range that had nothing to load.
+enum ChartAvailability: Equatable, Sendable {
+    case ready
+    case loading
+    case unavailable(String)
 }

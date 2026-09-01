@@ -328,7 +328,7 @@ struct SecurityDetailView: View {
 
             Picker("Range", selection: Binding(
                 get: { model.selectedRange },
-                set: { model.select($0, registry: app.registry) }
+                set: { model.select($0, registry: app.registry, snapshots: app.snapshots) }
             )) {
                 ForEach(ChartRange.allCases) { range in
                     Text(range.rawValue).tag(range)
@@ -336,18 +336,25 @@ struct SecurityDetailView: View {
             }
             .pickerStyle(.segmented)
 
-            if let error = model.historyError {
+            switch model.chartAvailability {
+            case .loading:
+                ProgressView().frame(maxWidth: .infinity, minHeight: 180)
+            case .unavailable(let reason):
                 ContentUnavailableView {
                     Label("Price history unavailable", systemImage: "chart.xyaxis.line")
                 } description: {
-                    Text(error.recoverySuggestion ?? error.shortDescription)
+                    Text(reason)
                 }
                 .frame(height: 180)
-            } else if model.visibleBars.count < 2 {
-                ProgressView().frame(maxWidth: .infinity, minHeight: 180)
-            } else {
+            case .ready:
                 priceChart
-                if model.rangeReturn?.isFullWindow == false {
+                if model.selectedRange.usesIntraday {
+                    // The consolidated tape is not what drew this. Saying so is
+                    // the condition on which intraday was adopted at all.
+                    Label("IEX only — about 2.5% of US volume. Shape, not levels.",
+                          systemImage: "info.circle")
+                        .font(.caption2).foregroundStyle(.secondary)
+                } else if model.rangeReturn?.isFullWindow == false {
                     Text("Less history available than the selected range.")
                         .font(.caption2).foregroundStyle(.orange)
                 }
@@ -379,7 +386,7 @@ struct SecurityDetailView: View {
     }
 
     private var priceChart: some View {
-        Chart(model.visibleBars, id: \.date) { bar in
+        Chart(model.chartBars, id: \.date) { bar in
             AreaMark(x: .value("Date", bar.date),
                      yStart: .value("Low", chartFloor),
                      yEnd: .value("Close", bar.analysisClose))
@@ -402,7 +409,7 @@ struct SecurityDetailView: View {
     /// degenerate chart domain, so the padding falls back to a fraction of the
     /// value itself rather than of a zero spread.
     private var chartBounds: (floor: Double, ceiling: Double) {
-        let values = model.visibleBars.map(\.analysisClose)
+        let values = model.chartBars.map(\.analysisClose)
         guard let low = values.min(), let high = values.max() else { return (0, 1) }
         let spread = high - low
         let padding = spread > 0 ? spread * 0.08 : max(abs(high) * 0.02, 0.5)

@@ -1,19 +1,23 @@
 import Foundation
 
-/// Presents Finnhub and Tiingo as one `MarketDataProvider`.
+/// Presents Finnhub, Tiingo and Alpaca as one `MarketDataProvider`.
 ///
-/// The split exists because no single free tier covers both needs: Finnhub has
-/// live quotes but no history, Tiingo has deep adjusted history but no
-/// intraday. That is a data-sourcing detail, not something view models should
-/// know about — `DashboardViewModel` and every view continue to depend only on
+/// The split exists because no single free tier covers every need: Finnhub has
+/// live quotes but no history, Tiingo has deep adjusted history but nothing
+/// intraday, Alpaca has intraday but only IEX's share of the tape. That is a
+/// data-sourcing detail, not something view models should know about —
+/// `DashboardViewModel` and every view continue to depend only on
 /// `MarketDataProvider`, exactly as they did against the mocks.
 struct CompositeMarketDataProvider: MarketDataProvider {
     let id: DataProviderID = .finnhub
 
     /// Live prices, company profiles, symbol search.
     let quotes: FinnhubProvider
-    /// Daily and coarser price history.
+    /// Daily and coarser price history: consolidated and split-adjusted.
     let history: TiingoProvider
+    /// Intraday bars, when an Alpaca key pair has been entered. Optional
+    /// because the other two are enough for every range but 1D and 5D.
+    var intraday: AlpacaProvider?
 
     func isConfigured() async -> Bool {
         // Sequenced rather than `&&`, whose right operand is an autoclosure and
@@ -27,13 +31,26 @@ struct CompositeMarketDataProvider: MarketDataProvider {
         try await quotes.quote(symbol: symbol)
     }
 
+    /// Routes by resolution: intraday to Alpaca, daily and coarser to Tiingo.
+    ///
+    /// Deliberately never falls back across that line. Serving daily bars when
+    /// five-minute ones were asked for would mislabel the resolution, and every
+    /// calculation built on top of it would be wrong while looking fine.
     func bars(
         symbol: String,
         resolution: BarResolution,
         from: Date,
         to: Date
     ) async throws -> [PriceBarDTO] {
-        try await history.bars(symbol: symbol, resolution: resolution, from: from, to: to)
+        guard resolution.isDailyOrCoarser else {
+            guard let intraday else {
+                throw APIError.missingCredentials(.alpaca)
+            }
+            return try await intraday.bars(symbol: symbol, resolution: resolution,
+                                           from: from, to: to)
+        }
+        return try await history.bars(symbol: symbol, resolution: resolution,
+                                      from: from, to: to)
     }
 
     /// Prefers Finnhub, which carries sector, market cap and shares

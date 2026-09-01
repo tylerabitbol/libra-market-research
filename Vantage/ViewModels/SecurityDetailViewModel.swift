@@ -135,6 +135,24 @@ final class SecurityDetailViewModel {
     private(set) var lastRefreshedAt: Date?
     private(set) var selectedRange: ChartRange = .oneYear
 
+    /// Intraday bars from Alpaca's IEX feed, for the 1D and 5D charts.
+    ///
+    /// Kept in its own property rather than merged into `bars` on purpose.
+    /// IEX is roughly 2.5% of US equity volume, so a volume anomaly measured
+    /// against it would be meaningless and a return computed from its prints
+    /// can differ from the consolidated tape. Nothing but the chart reads this:
+    /// `visibleBars`, and therefore `priceContext`, `rangeReturn` and every
+    /// detector, continue to see the daily series exclusively. The separation
+    /// is what makes that guarantee structural instead of a convention someone
+    /// has to remember.
+    private(set) var intradayBars: [PriceBar] = []
+    private(set) var intradayError: APIError?
+    private(set) var isLoadingIntraday = false
+    /// Which resolution `intradayBars` holds, and when it was fetched. 1D and
+    /// 5D ask for different resolutions, so one is not a stand-in for the other.
+    private var intradayResolution: BarResolution?
+    private var intradayFetchedAt: Date?
+
     private var loadTask: Task<Void, Never>?
     /// Bars are the scarcest request in the app — Tiingo's free tier refills
     /// about one token every 80 seconds — so a range change reuses what we
@@ -237,6 +255,45 @@ final class SecurityDetailViewModel {
         return bars.filter { $0.date >= start }.sorted { $0.date < $1.date }
     }
 
+    /// What the chart draws: the IEX series for 1D and 5D, the daily series
+    /// otherwise. The only reader of `intradayBars` in the app.
+    var chartBars: [PriceBar] {
+        guard selectedRange.usesIntraday else { return visibleBars }
+        let start = selectedRange.startDate()
+        return intradayBars.filter { $0.date >= start }.sorted { $0.date < $1.date }
+    }
+
+    /// Whether the chart can be drawn, and if not, why.
+    ///
+    /// Replaces a bare `visibleBars.count < 2` spinner that never resolved:
+    /// with Tiingo refusing intraday, 1D and 5D had nothing to load and span
+    /// forever. A range with too little data must say so, and the spinner now
+    /// turns only while a request is genuinely in flight with nothing held.
+    var chartAvailability: ChartAvailability {
+        if selectedRange.usesIntraday {
+            if let intradayError {
+                return .unavailable(intradayError.recoverySuggestion
+                                    ?? intradayError.shortDescription)
+            }
+            if isLoadingIntraday && intradayBars.isEmpty { return .loading }
+            if chartBars.count < 2 {
+                return .unavailable("No intraday bars in this window. The market "
+                                    + "may not have opened yet, or IEX carried no "
+                                    + "trades in this symbol.")
+            }
+            return .ready
+        }
+        if let historyError {
+            return .unavailable(historyError.recoverySuggestion ?? historyError.shortDescription)
+        }
+        if isLoading && bars.isEmpty { return .loading }
+        if chartBars.count < 2 {
+            return .unavailable("Only \(chartBars.count) bar\(chartBars.count == 1 ? "" : "s") "
+                                + "of price history is available for this range.")
+        }
+        return .ready
+    }
+
     /// Price context over the visible range. "Down 18% from its peak" means a
     /// different thing over a month than over five years, so it follows the
     /// range the user chose rather than everything held.
@@ -249,12 +306,82 @@ final class SecurityDetailViewModel {
         ReturnCalculator.trailingReturn(bars: bars, window: selectedRange.dateInterval)
     }
 
-    func select(_ range: ChartRange, registry: ProviderRegistry) {
+    func select(_ range: ChartRange, registry: ProviderRegistry,
+                snapshots: SnapshotStore? = nil) {
         selectedRange = range
+        // Intraday is a different series from a different vendor, so it has its
+        // own fetch rather than widening the daily window.
+        if range.usesIntraday {
+            Task { await loadIntraday(using: registry, snapshots: snapshots) }
+            return
+        }
         // Only re-fetch when the new range reaches back further than what we hold.
         let needed = range.startDate()
         if let window = loadedBarWindow, window.from <= needed { return }
         Task { await loadHistory(using: registry) }
+    }
+
+    /// Fetches the intraday series for the selected range.
+    ///
+    /// Alpaca allows 200 requests a minute, so unlike the daily bars this is
+    /// not a scarce request — but a five-minute-old copy is still current
+    /// enough to redraw from, which is what `StalenessPolicy.intradayCandles`
+    /// was defined for and never used on.
+    private func loadIntraday(using registry: ProviderRegistry,
+                              snapshots: SnapshotStore?) async {
+        let resolution = selectedRange.resolution
+        let from = selectedRange.startDate()
+        let to = Date.now
+
+        // 1D and 5D are different resolutions, so a series held for one is not
+        // an answer for the other.
+        if intradayResolution != resolution {
+            intradayBars = []
+            intradayFetchedAt = nil
+        }
+        if let fetchedAt = intradayFetchedAt, !isForcingRefresh, !intradayBars.isEmpty,
+           case .fresh = StalenessPolicy.intradayCandles.evaluate(lastUpdated: fetchedAt) {
+            intradayError = nil
+            return
+        }
+        // Draw the held copy at once so the chart is not blank while the
+        // request runs. It is never treated as current: `PriceBarDTO` carries
+        // no observation time, so the age of a stored bar is unknowable here
+        // and the fetch below goes ahead regardless.
+        if let snapshots, intradayBars.isEmpty {
+            let held = (try? await snapshots.bars(symbol: symbol, from: from,
+                                                  to: to, resolution: resolution)) ?? []
+            intradayBars = held.map {
+                PriceBar(date: $0.date, resolution: resolution, open: $0.open,
+                         high: $0.high, low: $0.low, close: $0.close,
+                         volume: $0.volume, adjustedClose: $0.adjustedClose)
+            }
+        }
+
+        isLoadingIntraday = true
+        defer { isLoadingIntraday = false }
+        do {
+            let fetched = try await registry.marketData.bars(
+                symbol: symbol, resolution: resolution, from: from, to: to
+            )
+            intradayBars = fetched.map {
+                PriceBar(date: $0.date, resolution: resolution, open: $0.open,
+                         high: $0.high, low: $0.low, close: $0.close,
+                         volume: $0.volume, adjustedClose: $0.adjustedClose)
+            }
+            intradayResolution = resolution
+            intradayFetchedAt = .now
+            intradayError = nil
+            if let snapshots {
+                try? await snapshots.record(bars: fetched, symbol: symbol,
+                                            resolution: resolution)
+            }
+        } catch let error as APIError {
+            intradayError = error
+            Self.logger.error("Intraday failed for \(self.symbol, privacy: .public): \(error.shortDescription, privacy: .public)")
+        } catch {
+            intradayError = .transport(.alpaca, underlying: error.localizedDescription)
+        }
     }
 
     func load(

@@ -43,6 +43,18 @@ enum ConnectionTest {
                 }
                 return .success(detail: "\(bars.count) daily bars received.")
 
+            case .alpaca:
+                // Asked for over the last four days so the window spans a
+                // weekend without the test reading as a failure on a Monday.
+                let intraday = try await registry.marketData.bars(
+                    symbol: "AAPL", resolution: .fifteenMinute,
+                    from: Date.now.addingTimeInterval(-4 * 86_400), to: .now
+                )
+                guard !intraday.isEmpty else {
+                    return .failure(.noData(.alpaca, endpoint: "alpaca bars"))
+                }
+                return .success(detail: "\(intraday.count) 15-minute IEX bars received.")
+
             case .fred:
                 guard let macro = registry.macro else {
                     return .failure(.missingCredentials(.fred))

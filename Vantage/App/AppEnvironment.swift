@@ -80,12 +80,18 @@ final class AppEnvironment {
 
         let finnhub = FinnhubProvider(client: httpClient, secrets: secrets)
         let tiingo = TiingoProvider(client: httpClient, secrets: secrets)
+        // Both halves of the pair, or nothing: one alone authenticates no
+        // request. Absent, 1D and 5D say they need a key rather than spin.
+        let alpacaReady = hasKey(.alpacaKeyID) && hasKey(.alpacaSecretKey)
+        let alpaca = alpacaReady
+            ? AlpacaProvider(client: httpClient, secrets: secrets)
+            : nil
 
         // Quotes and history come from different vendors; the composite needs
         // both keys. With only one, mocks stay in place rather than serving a
         // half-populated screen that looks real.
         let marketData: any MarketDataProvider = (finnhubReady && tiingoReady)
-            ? CompositeMarketDataProvider(quotes: finnhub, history: tiingo)
+            ? CompositeMarketDataProvider(quotes: finnhub, history: tiingo, intraday: alpaca)
             : MockMarketDataProvider()
 
         registry = ProviderRegistry(
@@ -110,6 +116,10 @@ final class AppEnvironment {
             hasKey(.finnhubAPIKey) ? .ready : .needsSetup("Add your Finnhub API key.")
         case .tiingo:
             hasKey(.tiingoAPIKey) ? .ready : .needsSetup("Add your Tiingo API key.")
+        case .alpaca:
+            hasKey(.alpacaKeyID) && hasKey(.alpacaSecretKey)
+                ? .ready
+                : .needsSetup("Add both halves of your Alpaca key pair for intraday charts.")
         case .fred:
             hasKey(.fredAPIKey)
                 ? .ready

@@ -1,0 +1,13 @@
+{
+  "_comment": "HAND-AUTHORED, not captured. Unlike every other fixture here, this one was not recorded from a live response — writing it needed an Alpaca account. It follows the documented v2/stocks/bars shape and deliberately includes the awkward cases: a bar with fractional seconds, a bar without them, a bar missing its close, and an out-of-order row. Replace it with a captured payload once a key pair exists.",
+  "bars": {
+    "AAPL": [
+      { "t": "2026-08-28T13:30:00Z", "o": 315.20, "h": 316.05, "l": 315.10, "c": 315.88, "v": 41230, "n": 512, "vw": 315.61 },
+      { "t": "2026-08-28T13:35:00.000Z", "o": 315.90, "h": 317.42, "l": 315.85, "c": 317.10, "v": 38115, "n": 470, "vw": 316.55 },
+      { "t": "2026-08-28T13:45:00Z", "o": 316.80, "h": 317.00, "l": 316.10, "c": 316.44, "v": 22940, "n": 301, "vw": 316.52 },
+      { "t": "2026-08-28T13:40:00Z", "o": 317.10, "h": 317.30, "l": 316.40, "c": 316.75, "v": 29880, "n": 388, "vw": 316.83 },
+      { "t": "2026-08-28T13:50:00Z", "o": 316.40, "h": 316.90, "l": 316.20, "v": 15110, "n": 190, "vw": 316.55 }
+    ]
+  },
+  "next_page_token": null
+}
