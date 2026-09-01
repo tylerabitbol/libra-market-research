@@ -9,9 +9,19 @@ struct WatchlistRow: Identifiable, Sendable {
     let symbol: String
     let name: String
     var quote: QuoteDTO?
+    /// The last reading recorded on disk. Shown until a live quote arrives,
+    /// and kept on screen if none does — a row that has a price from an hour
+    /// ago is more useful than a row showing only an error.
+    var stored: QuoteSnapshot?
     var error: APIError?
 
-    var changePercent: Double? { quote?.changePercent }
+    var last: Double? { quote?.last ?? stored?.last }
+    var changePercent: Double? { quote?.changePercent ?? stored?.changePercent }
+
+    /// True when what is on screen came from disk rather than this refresh.
+    var isStoredCopy: Bool { quote == nil && stored != nil }
+    var asOf: Date? { quote == nil ? stored?.observedAt : nil }
+    var hasValue: Bool { last != nil }
 }
 
 /// Backs the watchlist (Section 15).
@@ -81,8 +91,28 @@ final class WatchlistViewModel {
         if !force, case .fresh = freshness { return }
         loadTask?.cancel()
         loadTask = Task { [weak self] in
+            await self?.hydrate(from: snapshots)
             await self?.refreshQuotes(registry: registry)
             await self?.persist(using: snapshots)
+        }
+    }
+
+    /// Fills each row with the last price recorded on disk, before any request.
+    ///
+    /// The watchlist already rendered names from disk while prices loaded; this
+    /// extends the same idea to the prices themselves, so the list is readable
+    /// offline and shows a stale number rather than a column of errors.
+    private func hydrate(from snapshots: SnapshotStore?) async {
+        guard let snapshots else { return }
+        var stored: [String: QuoteSnapshot] = [:]
+        for symbol in rows.map(\.symbol) {
+            stored[symbol] = try? await snapshots.lastQuote(symbol: symbol, before: .now)
+        }
+        guard !Task.isCancelled else { return }
+        rows = rows.map { row in
+            var updated = row
+            updated.stored = stored[row.symbol]
+            return updated
         }
     }
 

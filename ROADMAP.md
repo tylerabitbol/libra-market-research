@@ -22,7 +22,7 @@ From the original specification. Status as of the latest commit.
 | 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | ✅ Complete — XBRL extraction, valuation percentiles, Security Detail UI, and append-only persistence |
 | 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | 🟡 Provider + filings done; Form 4 XML parsing outstanding |
 | 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings + earnings surprises available; estimate revisions blocked by tier |
-| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Signal, contradictory evidence | 🟡 Detectors, storage, backfill, Research feed and market attribution (beta-adjusted) built; Research Signal and contradictory evidence outstanding |
+| 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Profile, contradictory evidence | 🟡 Price/volume/volatility and fundamental detectors, read-through store, backfill, Research feed and market attribution (beta-adjusted) built; sector leg, Research Profile and contradictory evidence outstanding |
 | 7 | **Personal research** — journal, thesis tracking, saved screens, historical comparisons | ⬜ |
 | 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | ⬜ |
 
@@ -30,15 +30,17 @@ Five product areas: Dashboard, Watchlist, Security Detail, Research/Investigatio
 Settings. Dashboard, Watchlist, Security Detail and Research are built; Screener
 is still a placeholder.
 
-**242 tests**, all passing as of `880f9b4`. Every wrong number caught in the
-last three commits was found by looking at rendered output on a real symbol —
-the suite stayed green throughout. Treat a screen check as part of "done", not
-optional polish; see *Build and verify* below.
+**286 tests**, all passing. Every wrong number caught in the last four commits
+was found by looking at rendered output on a real symbol — the suite stayed
+green throughout. Treat a screen check as part of "done", not optional polish;
+see *Build and verify* below.
 
-**Next, in priority order**, picking up Phase 6: sector-relative attribution
-(wire the declared sector ETFs into `RelativeAnalysis` alongside the market
-leg), backfill volatility shifts the same way price and volume already are,
-then Research Signal / contradictory evidence, then Phase 4's Form 4 parsing.
+**Next, in priority order**: sector-relative attribution (wire the declared
+sector ETFs into `RelativeAnalysis` alongside the market leg, and the built but
+uncalled `ReturnCalculator.relativePerformance` into Security Detail), then
+watchlist intelligence, then contradictory evidence and the Research Profile,
+then Form 4 parsing. Working plan in
+`~/.claude/plans/this-is-the-current-pure-storm.md`.
 
 ## Provider capabilities (measured against live keys, not assumed)
 
@@ -99,6 +101,37 @@ so they never enter a command line.
   is the worst outcome available in this app.
 - **SEC identifiers are parsed strictly.** `Int(cik) ?? 0` builds a well-formed
   request for CIK 0000000000 — a silent wrong question rather than a failure.
+- **The store is read before the network is asked.** `SnapshotStore` was
+  write-only for its whole existence: bars, facts and filings were recorded on
+  every visit and never read back, so each visit re-fetched five years of
+  history it already held, and a security opened a hundred times still showed
+  nothing offline. Hydration now fills the page from disk first, and a section
+  whose held copy is still fresh costs no request at all.
+- **Fundamentals are compared year-over-year, never quarter-over-quarter.**
+  Most businesses are seasonal. A retailer's Q4 gross margin is not comparable
+  to its Q3, and a detector built on consecutive quarters fires every December
+  and reports the calendar as a change.
+- **The year-earlier period is matched by date, not by counting back four.** A
+  52/53-week fiscal calendar moves the closing date between years, and a
+  concept an issuer skipped for one quarter would otherwise pair a period
+  against the wrong year with no signal that it had.
+- **Cash flow is compared in percentage points, not percent.** Free cash flow
+  crosses zero regularly, and a percentage change through zero is either
+  infinite or sign-flipped: a company going from -$10M to +$10M has improved,
+  and "-200%" describes that improvement as a collapse. Margins in pp do not
+  have this failure.
+- **A fundamental event is dated to when it was filed, not to the period it
+  covers.** A June quarter disclosed in August is news in August; dating it to
+  June files it behind price events the user has already seen and defeats "what
+  changed since I last looked".
+- **`AnomalyMeasure` windows are parameters, not constants.** Price history is
+  250 daily sessions; fundamentals are roughly 20 reported quarters. The same
+  rank-and-MAD machinery serves both, but a 40-observation minimum applied to
+  quarterly filings would mean saying nothing for a decade.
+- **Restatement detection merges the freshly fetched facts with the stored
+  ones.** Detection runs before persistence, so reading the store alone would
+  delay every amendment by one visit — it would land, be stored, and only be
+  noticed the next time the page was opened.
 - **Never edit navigation to capture a screenshot.** Use `-VantageOpenSymbol`.
   A hand-edit for a screenshot once reached a commit and left the Watchlist tab
   wired to a hardcoded symbol.
@@ -194,6 +227,15 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
   regime change that began on a day the app was not opened is still reported
   only from the current window. `EventDetector.priceMoves(bars:after:)` is the
   pattern to follow.
+- **A stored event loses its derivation.** `DetectedEvent.snapshot` rebuilds the
+  DTO without one, so an event read back from the store renders through
+  `headlineClaim` as a FACT rather than the CALCULATION it was — the app
+  mislabelling its own epistemic status, which Section 24 exists to prevent.
+  Affects the Research feed, where every card is read from the store.
+  Persisting it needs `Derivation` to become `Codable`.
+- **Only the most recent reported period is judged.** A second filing arriving
+  inside one gap between visits leaves the older of the two unreported. Price
+  moves are backfilled across the gap; fundamentals are not.
 - **Attribution is market-only.** Sector-relative comparison (spec §7) needs a
   sector benchmark per security; the sector ETFs are declared but not wired to
   the detail page. A move the market does not explain is currently attributed
