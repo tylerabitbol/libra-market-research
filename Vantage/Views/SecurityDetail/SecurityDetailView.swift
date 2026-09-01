@@ -465,20 +465,19 @@ struct SecurityDetailView: View {
         }
     }
 
-    /// One line per session, plotted by position rather than by clock time.
+    /// The intraday line, plotted by position rather than by clock time.
     ///
-    /// Three deliberate differences from the daily chart. The x-axis counts
+    /// Two deliberate differences from the daily chart. The x-axis counts
     /// bars, not hours: a wall-clock axis gave five sixths of the width to
     /// hours in which nothing traded, and squeezed each session into a sliver.
-    /// Sessions are still separate series, so nothing is drawn across the
-    /// break between them — the boundary is a dashed rule, not a line implying
-    /// a move. And the interpolation is linear rather than monotone: a smooth
-    /// curve between two five-minute prints invents a path the price never
-    /// took, which matters more at this resolution than at daily.
+    /// And the interpolation is linear rather than monotone: a smooth curve
+    /// between two five-minute prints invents a path the price never took,
+    /// which matters more at this resolution than at daily.
     ///
-    /// No area fill either. The y-axis here spans a few dollars and does not
-    /// start at zero, so shading the space beneath the line gives weight to a
-    /// quantity that is not being measured.
+    /// The fill beneath is the same one the daily chart uses. Neither chart's
+    /// y-axis starts at zero, so if the shading is misleading here it is
+    /// misleading there too; drawing the same series two different ways was
+    /// the worse of the two answers.
     private var intradayChart: some View {
         let points = model.chartPoints
         let ticks = model.chartAxisTicks
@@ -486,6 +485,7 @@ struct SecurityDetailView: View {
                                 uniquingKeysWith: { first, _ in first })
 
         return Chart {
+            intradayFill(points)
             ForEach(model.chartSegments) { segment in
                 segmentMarks(segment)
             }
@@ -504,6 +504,22 @@ struct SecurityDetailView: View {
             }
         }
         .frame(height: 190)
+    }
+
+    /// One unbroken area under the whole window, including under the step
+    /// between sessions — a notch of bare background at each break would read
+    /// as missing data, which was the complaint that started all of this.
+    @ChartContentBuilder
+    private func intradayFill(_ points: [ChartPoint]) -> some ChartContent {
+        ForEach(points) { point in
+            AreaMark(x: .value("Position", point.position),
+                     yStart: .value("Low", chartFloor),
+                     yEnd: .value("Close", point.close))
+                .foregroundStyle(.linearGradient(
+                    colors: [.accentColor.opacity(0.25), .accentColor.opacity(0.02)],
+                    startPoint: .top, endPoint: .bottom))
+                .interpolationMethod(.linear)
+        }
     }
 
     /// A traded run is the full-weight line; the step between two sessions is
