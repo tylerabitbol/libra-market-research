@@ -157,37 +157,75 @@ private struct WatchlistRowView: View {
     let row: WatchlistRow
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.symbol)
-                    .font(.system(.subheadline, design: .monospaced).weight(.semibold))
-                Text(row.name)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                if !row.hasValue, let error = row.error {
-                    Text(error.shortDescription)
-                        .font(.caption2).foregroundStyle(.orange)
-                } else {
-                    // A price from disk beats an error message. The refresh
-                    // failing does not make the last known price untrue — it
-                    // makes it old, which is what the timestamp below says.
-                    Text(Format.currency(row.last))
-                        .font(.system(.subheadline, design: .rounded).weight(.medium))
-                        .monospacedDigit()
-                        .foregroundStyle(row.isStoredCopy ? .secondary : .primary)
-                    DirectionalChangeText(percent: row.changePercent, font: .caption)
-                    if let asOf = row.asOf {
-                        Text(RelativeTimeText.string(for: asOf))
-                            .font(.caption2).foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(row.symbol)
+                        .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                    Text(row.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    if !row.hasValue, let error = row.error {
+                        Text(error.shortDescription)
+                            .font(.caption2).foregroundStyle(.orange)
+                    } else {
+                        // A price from disk beats an error message. The refresh
+                        // failing does not make the last known price untrue —
+                        // it makes it old, which is what the stamp below says.
+                        Text(Format.currency(row.last))
+                            .font(.system(.subheadline, design: .rounded).weight(.medium))
+                            .monospacedDigit()
+                            .foregroundStyle(row.isStoredCopy ? .secondary : .primary)
+                        DirectionalChangeText(percent: row.changePercent, font: .caption)
+                        if let asOf = row.asOf {
+                            Text(RelativeTimeText.string(for: asOf))
+                                .font(.caption2).foregroundStyle(.tertiary)
+                        }
                     }
                 }
             }
+            context
         }
         .padding(.vertical, 2)
+    }
+
+    /// What the detectors last recorded, and how this moved against the market.
+    ///
+    /// Both come from data already in hand — the event from the store, the
+    /// benchmark from one quote shared by every row. Nothing here costs a
+    /// request that scales with the length of the list.
+    @ViewBuilder
+    private var context: some View {
+        if row.latestEvent != nil || row.versusMarket != nil {
+            HStack(spacing: 6) {
+                if let event = row.latestEvent {
+                    Image(systemName: event.kind.systemImage)
+                        .font(.caption2).foregroundStyle(.secondary)
+                    Text(event.kind.displayName)
+                        .font(.caption2).foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    if event.unusualness >= 0.9 {
+                        Text("RARE")
+                            .font(.system(.caption2, design: .monospaced).weight(.semibold))
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(.tint.opacity(0.15), in: .rect(cornerRadius: 3))
+                            .foregroundStyle(.tint)
+                    }
+                }
+                Spacer(minLength: 4)
+                if let versus = row.versusMarket {
+                    // Percentage points, not percent, and labelled: this is a
+                    // difference between two returns, not a return.
+                    Text("\(Format.percentagePoints(versus)) vs S&P")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+        }
     }
 }
 

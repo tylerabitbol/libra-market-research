@@ -8,6 +8,8 @@ struct WatchlistRow: Identifiable, Sendable {
     var id: String { symbol }
     let symbol: String
     let name: String
+    /// The user's own ordering, from `WatchlistEntry.priority`. Lower first.
+    var priority: Int = 0
     var quote: QuoteDTO?
     /// The last reading recorded on disk. Shown until a live quote arrives,
     /// and kept on screen if none does — a row that has a price from an hour
@@ -15,8 +17,38 @@ struct WatchlistRow: Identifiable, Sendable {
     var stored: QuoteSnapshot?
     var error: APIError?
 
+    /// The sector this security belongs to, from the stored profile. Nil until
+    /// the detail page has been opened once and written one.
+    var sector: String?
+    /// The most recent change the detectors have recorded for this security.
+    var latestEvent: DetectedEventDTO?
+    /// The market's move for the same session, fetched once for the whole list.
+    var marketPercent: Double?
+    /// This row's sector's move, fetched once per distinct sector on the list.
+    var sectorPercent: Double?
+
     var last: Double? { quote?.last ?? stored?.last }
     var changePercent: Double? { quote?.changePercent ?? stored?.changePercent }
+
+    /// Difference in percentage points against the market and the sector.
+    ///
+    /// A plain difference, not beta-adjusted — that belongs on the detail page
+    /// where a beta can be fitted and shown. Here it is labelled for what it
+    /// is: how much more or less this moved than the benchmark today.
+    var versusMarket: Double? {
+        guard let changePercent, let marketPercent else { return nil }
+        return changePercent - marketPercent
+    }
+
+    var versusSector: Double? {
+        guard let changePercent, let sectorPercent else { return nil }
+        return changePercent - sectorPercent
+    }
+
+    /// How unusual the most recent recorded change was, for sorting.
+    var unusualness: Double { latestEvent?.unusualness ?? 0 }
+    /// When the most recent recorded change occurred.
+    var latestEventAt: Date? { latestEvent?.occurredAt }
 
     /// True when what is on screen came from disk rather than this refresh.
     var isStoredCopy: Bool { quote == nil && stored != nil }
@@ -44,13 +76,16 @@ final class WatchlistViewModel {
     /// Phase 6 detectors; offering them now would mean two menu entries
     /// producing identical orderings, which is worse than one honest entry.
     enum SortOrder: String, CaseIterable, Identifiable {
-        case symbol, biggestChange
+        case symbol, biggestChange, mostUnusual, newestInformation, priority
         var id: String { rawValue }
 
         var displayName: String {
             switch self {
             case .symbol: "Symbol"
             case .biggestChange: "Biggest change"
+            case .mostUnusual: "Most unusual"
+            case .newestInformation: "Newest information"
+            case .priority: "Your priority"
             }
         }
     }
@@ -60,14 +95,34 @@ final class WatchlistViewModel {
         return StalenessPolicy.quote.evaluate(lastUpdated: lastRefreshedAt)
     }
 
-    var sortedRows: [WatchlistRow] {
-        switch sort {
+    var sortedRows: [WatchlistRow] { Self.sorted(rows, by: sort) }
+
+    /// The orderings, as a free function so tests exercise the shipped
+    /// comparison rather than a copy of it. They used to re-implement it,
+    /// which meant a change here would not have been caught there.
+    /// Pure over `Sendable` values, so it carries no actor isolation and can be
+    /// checked from anywhere.
+    nonisolated static func sorted(_ rows: [WatchlistRow], by order: SortOrder) -> [WatchlistRow] {
+        switch order {
         case .symbol:
             rows.sorted { $0.symbol < $1.symbol }
         case .biggestChange:
             // Absolute magnitude: a 5% fall is as notable as a 5% rise, and
             // this screen is about what moved, not about what went up.
             rows.sorted { abs($0.changePercent ?? 0) > abs($1.changePercent ?? 0) }
+        case .mostUnusual:
+            // Unusual relative to each security's own history, which is not
+            // the same ordering as the biggest move: a 2% day can be extreme
+            // for a utility and unremarkable for a small-cap biotech.
+            rows.sorted { $0.unusualness > $1.unusualness }
+        case .newestInformation:
+            rows.sorted {
+                ($0.latestEventAt ?? .distantPast) > ($1.latestEventAt ?? .distantPast)
+            }
+        case .priority:
+            rows.sorted {
+                $0.priority == $1.priority ? $0.symbol < $1.symbol : $0.priority < $1.priority
+            }
         }
     }
 
@@ -83,9 +138,16 @@ final class WatchlistViewModel {
         snapshots: SnapshotStore? = nil,
         force: Bool = false
     ) {
-        let members = entries.compactMap(\.security).map { ($0.symbol, $0.name) }
-        // Show names from disk immediately; prices follow.
-        rows = members.map { WatchlistRow(symbol: $0.0, name: $0.1) }
+        // Everything the store already knows, read before any request: names,
+        // sectors and the user's own ordering all render immediately.
+        let members = entries.compactMap { entry -> WatchlistRow? in
+            guard let security = entry.security else { return nil }
+            var row = WatchlistRow(symbol: security.symbol, name: security.name)
+            row.sector = security.sector
+            row.priority = entry.priority
+            return row
+        }
+        rows = members
         guard !members.isEmpty else { return }
 
         if !force, case .fresh = freshness { return }
@@ -93,6 +155,7 @@ final class WatchlistViewModel {
         loadTask = Task { [weak self] in
             await self?.hydrate(from: snapshots)
             await self?.refreshQuotes(registry: registry)
+            await self?.loadBenchmarkMoves(registry: registry)
             await self?.persist(using: snapshots)
         }
     }
@@ -105,13 +168,19 @@ final class WatchlistViewModel {
     private func hydrate(from snapshots: SnapshotStore?) async {
         guard let snapshots else { return }
         var stored: [String: QuoteSnapshot] = [:]
+        var events: [String: DetectedEventDTO] = [:]
         for symbol in rows.map(\.symbol) {
             stored[symbol] = try? await snapshots.lastQuote(symbol: symbol, before: .now)
+            // The feed of recorded changes, read rather than recomputed. A
+            // watchlist that re-ran detection per row would need every row's
+            // history, which is the one thing this screen must never fetch.
+            events[symbol] = (try? await snapshots.events(symbol: symbol, limit: 1))?.first
         }
         guard !Task.isCancelled else { return }
         rows = rows.map { row in
             var updated = row
             updated.stored = stored[row.symbol]
+            updated.latestEvent = events[row.symbol]
             return updated
         }
     }
@@ -155,6 +224,46 @@ final class WatchlistViewModel {
             return updated
         }
         lastRefreshedAt = .now
+    }
+
+    /// The market's move, and one move per distinct sector on the list.
+    ///
+    /// Bounded by the number of *sectors*, not by the number of rows: eleven
+    /// sectors exist, so a hundred-row watchlist costs at most twelve extra
+    /// quotes. A per-row benchmark would cost a hundred, which is the mistake
+    /// that makes this screen unusable on a free tier.
+    ///
+    /// Quotes only, never history — the same rule the rows themselves follow.
+    private func loadBenchmarkMoves(registry: ProviderRegistry) async {
+        let sectors = Set(rows.compactMap { row in
+            Benchmark.sector(matching: row.sector)?.etfSymbol
+        })
+        let provider = registry.marketData
+
+        async let marketWork = try? await provider
+            .quote(symbol: Benchmark.marketProxySymbol).changePercent
+        async let sectorWork = withTaskGroup(of: (String, Double?).self) { group in
+            for symbol in sectors {
+                group.addTask {
+                    (symbol, try? await provider.quote(symbol: symbol).changePercent)
+                }
+            }
+            var moves: [String: Double?] = [:]
+            for await (symbol, move) in group { moves[symbol] = move }
+            return moves
+        }
+
+        let (market, sectorMoves) = await (marketWork, sectorWork)
+        guard !Task.isCancelled else { return }
+
+        rows = rows.map { row in
+            var updated = row
+            updated.marketPercent = market
+            if let symbol = Benchmark.sector(matching: row.sector)?.etfSymbol {
+                updated.sectorPercent = sectorMoves[symbol] ?? nil
+            }
+            return updated
+        }
     }
 
     /// Records each quote so the watchlist accrues history simply by being
