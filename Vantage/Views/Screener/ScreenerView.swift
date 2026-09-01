@@ -170,6 +170,8 @@ private struct ResultRow: View {
                     .font(.system(.subheadline, design: .monospaced).weight(.semibold))
                 Text(subject.name).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(subject.symbol), \(subject.name)")
             // Show the figures the screen actually tested, so a result can be
             // checked rather than taken on faith.
             HStack(spacing: 10) {

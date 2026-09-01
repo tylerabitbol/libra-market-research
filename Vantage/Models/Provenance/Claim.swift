@@ -126,14 +126,19 @@ struct Claim: Sendable, Hashable, Identifiable {
 }
 
 /// The arithmetic behind a `.calculation` claim, in a form the UI can display.
-struct Derivation: Sendable, Hashable {
+///
+/// `Codable` so a stored event can carry its arithmetic back out of the store.
+/// Without it, an event read from disk had no derivation, and `headlineClaim`
+/// therefore badged a measured calculation as a FACT — the app misdescribing
+/// its own epistemic status, which is the one thing Section 24 exists to stop.
+struct Derivation: Sendable, Hashable, Codable {
     /// e.g. "(revenue - revenuePriorYear) / revenuePriorYear"
     let formula: String
     /// Named inputs with their values, e.g. ("revenue", "30,040,000,000").
     let inputs: [Input]
     let result: String
 
-    struct Input: Sendable, Hashable, Identifiable {
+    struct Input: Sendable, Hashable, Identifiable, Codable {
         var id: String { name }
         let name: String
         let value: String

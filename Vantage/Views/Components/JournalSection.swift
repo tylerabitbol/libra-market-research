@@ -62,6 +62,9 @@ private struct JournalEntryCard: View {
                 Text(Format.shortDate(entry.createdAt))
                     .font(.caption).foregroundStyle(.tertiary).monospacedDigit()
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(entry.title.isEmpty ? "Untitled note" : entry.title), "
+                + "written \(Format.shortDate(entry.createdAt))")
 
             if let claim = comparison.claim {
                 ClaimRow(claim: claim)

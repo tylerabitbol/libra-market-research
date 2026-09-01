@@ -35,6 +35,13 @@ final class DetectedEvent {
     var sourceDetails: [String]
     var sourceURLs: [URL]
 
+    /// The arithmetic, encoded.
+    ///
+    /// Optional and defaulted so an existing store migrates without work, and
+    /// so an event that genuinely had no derivation — a filing, which is a FACT
+    /// — stays without one rather than acquiring an empty shell.
+    var derivationJSON: Data?
+
     init(
         security: Security? = nil,
         kind: EventKind,
@@ -46,7 +53,8 @@ final class DetectedEvent {
         unusualness: Double = 0,
         isAcknowledged: Bool = false,
         sourceDetails: [String] = [],
-        sourceURLs: [URL] = []
+        sourceURLs: [URL] = [],
+        derivation: Derivation? = nil
     ) {
         self.security = security
         self.kindRaw = kind.rawValue
@@ -59,6 +67,7 @@ final class DetectedEvent {
         self.isAcknowledged = isAcknowledged
         self.sourceDetails = sourceDetails
         self.sourceURLs = sourceURLs
+        self.derivationJSON = derivation.flatMap { try? JSONEncoder().encode($0) }
     }
 
     var kind: EventKind { EventKind(rawValue: kindRaw) ?? .other }
@@ -278,7 +287,10 @@ extension DetectedEvent {
             context: context,
             unusualness: unusualness,
             sourceDetails: sourceDetails,
-            sourceURLs: sourceURLs
+            sourceURLs: sourceURLs,
+            derivation: derivationJSON.flatMap {
+                try? JSONDecoder().decode(Derivation.self, from: $0)
+            }
         )
     }
 }
