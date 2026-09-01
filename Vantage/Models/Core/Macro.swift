@@ -66,3 +66,25 @@ struct MacroIndicator: Sendable, Hashable, Identifiable {
 enum MacroUnit: String, Sendable, Hashable {
     case percent, index, currency
 }
+
+extension PriceBar {
+    /// FRED's index series as bars.
+    ///
+    /// FRED publishes closes only, so every bar carries the same value for
+    /// open, high and low. That is fine for return arithmetic, which reads
+    /// `analysisClose` — but it means these bars must never be drawn as a
+    /// range or a candle, and must never reach a detector that reasons about
+    /// intraday extremes.
+    ///
+    /// One function rather than two, because the dashboard row and the
+    /// benchmark chart were building this same fiction independently.
+    static func closeOnly(from observations: [MacroObservationDTO]) -> [PriceBar] {
+        observations
+            .sorted { $0.date < $1.date }
+            .map {
+                PriceBar(date: $0.date, resolution: .daily,
+                         open: $0.value, high: $0.value, low: $0.value, close: $0.value,
+                         adjustedClose: $0.value)
+            }
+    }
+}

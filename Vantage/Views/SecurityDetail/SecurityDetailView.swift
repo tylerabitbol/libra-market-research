@@ -1,5 +1,4 @@
 import SwiftUI
-import Charts
 
 /// The research page for one security (Section 5).
 ///
@@ -456,145 +455,13 @@ struct SecurityDetailView: View {
         }
     }
 
-    @ViewBuilder
     private var priceChart: some View {
-        if model.selectedRange.usesIntraday {
-            intradayChart
-        } else {
-            dailyChart
-        }
+        PriceChartView(bars: model.chartBars,
+                       points: model.chartPoints,
+                       segments: model.chartSegments,
+                       ticks: model.chartAxisTicks,
+                       isIntraday: model.selectedRange.usesIntraday)
     }
-
-    /// The intraday line, plotted by position rather than by clock time.
-    ///
-    /// Two deliberate differences from the daily chart. The x-axis counts
-    /// bars, not hours: a wall-clock axis gave five sixths of the width to
-    /// hours in which nothing traded, and squeezed each session into a sliver.
-    /// And the interpolation is linear rather than monotone: a smooth curve
-    /// between two five-minute prints invents a path the price never took,
-    /// which matters more at this resolution than at daily.
-    ///
-    /// The fill beneath is the same one the daily chart uses. Neither chart's
-    /// y-axis starts at zero, so if the shading is misleading here it is
-    /// misleading there too; drawing the same series two different ways was
-    /// the worse of the two answers.
-    private var intradayChart: some View {
-        let points = model.chartPoints
-        let ticks = model.chartAxisTicks
-        let labels = Dictionary(ticks.map { ($0.position, $0.label) },
-                                uniquingKeysWith: { first, _ in first })
-
-        return Chart {
-            intradayFill(points)
-            ForEach(model.chartSegments) { segment in
-                segmentMarks(segment)
-            }
-        }
-        .accessibilityLabel(intradayChartLabel)
-        .accessibilityValue(intradayChartValue)
-        .chartYScale(domain: chartFloor...chartCeiling)
-        .chartXScale(domain: -0.5...(Double(max(points.count, 2)) - 0.5))
-        .chartYAxis { AxisMarks(position: .trailing) }
-        .chartXAxis {
-            AxisMarks(values: ticks.map(\.position)) { value in
-                AxisGridLine()
-                if let position = value.as(Double.self), let label = labels[position] {
-                    AxisValueLabel(label)
-                }
-            }
-        }
-        .frame(height: 190)
-    }
-
-    /// One unbroken area under the whole window, including under the step
-    /// between sessions — a notch of bare background at each break would read
-    /// as missing data, which was the complaint that started all of this.
-    @ChartContentBuilder
-    private func intradayFill(_ points: [ChartPoint]) -> some ChartContent {
-        ForEach(points) { point in
-            AreaMark(x: .value("Position", point.position),
-                     yStart: .value("Low", chartFloor),
-                     yEnd: .value("Close", point.close))
-                .foregroundStyle(.linearGradient(
-                    colors: [.accentColor.opacity(0.25), .accentColor.opacity(0.02)],
-                    startPoint: .top, endPoint: .bottom))
-                .interpolationMethod(.linear)
-        }
-    }
-
-    /// A traded run is the full-weight line; the step between two sessions is
-    /// thinner and dashed, so the stroke's weight tracks whether anyone could
-    /// have traded along it.
-    @ChartContentBuilder
-    private func segmentMarks(_ segment: ChartSegment) -> some ChartContent {
-        let traded = segment.kind == .traded
-        let colour: Color = traded ? .accentColor : .accentColor.opacity(0.4)
-        let stroke = traded
-            ? StrokeStyle(lineWidth: 2)
-            : StrokeStyle(lineWidth: 1, dash: [2, 2])
-
-        ForEach(segment.points) { point in
-            LineMark(x: .value("Position", point.position),
-                     y: .value("Close", point.close),
-                     series: .value("Run", segment.id))
-                .foregroundStyle(colour)
-                .lineStyle(stroke)
-                .interpolationMethod(.linear)
-        }
-    }
-
-    /// A positional axis says nothing aloud, so the chart states in words
-    /// what it covers and where it ended up.
-    private var intradayChartLabel: String {
-        let sessions = model.chartSegments.filter { $0.kind == .traded }.count
-        return sessions == 1
-            ? "Intraday price chart, one trading session"
-            : "Intraday price chart, \(sessions) trading sessions"
-    }
-
-    private var intradayChartValue: String {
-        let points = model.chartPoints
-        guard let first = points.first, let last = points.last else {
-            return "No bars"
-        }
-        let move = first.close == 0 ? 0 : (last.close - first.close) / first.close
-        return "\(Format.currency(first.close)) to \(Format.currency(last.close)), "
-            + "\(Format.signedPercent(move)) across the window"
-    }
-
-    private var dailyChart: some View {
-        Chart(model.chartBars, id: \.date) { bar in
-            AreaMark(x: .value("Date", bar.date),
-                     yStart: .value("Low", chartFloor),
-                     yEnd: .value("Close", bar.analysisClose))
-                .foregroundStyle(.linearGradient(
-                    colors: [.accentColor.opacity(0.25), .accentColor.opacity(0.02)],
-                    startPoint: .top, endPoint: .bottom))
-            LineMark(x: .value("Date", bar.date),
-                     y: .value("Close", bar.analysisClose))
-                .foregroundStyle(Color.accentColor)
-                .interpolationMethod(.monotone)
-        }
-        .chartYScale(domain: chartFloor...chartCeiling)
-        .chartYAxis { AxisMarks(position: .trailing) }
-        .frame(height: 190)
-    }
-
-    /// Padded bounds so the line never sits flush against the frame, and so a
-    /// quiet period doesn't get magnified into apparent volatility.
-    /// Padded bounds. A flat range would otherwise give floor == ceiling and a
-    /// degenerate chart domain, so the padding falls back to a fraction of the
-    /// value itself rather than of a zero spread.
-    private var chartBounds: (floor: Double, ceiling: Double) {
-        let values = model.chartBars.map(\.analysisClose)
-        guard let low = values.min(), let high = values.max() else { return (0, 1) }
-        let spread = high - low
-        let padding = spread > 0 ? spread * 0.08 : max(abs(high) * 0.02, 0.5)
-        return (low - padding, high + padding)
-    }
-
-    private var chartFloor: Double { chartBounds.floor }
-    private var chartCeiling: Double { chartBounds.ceiling }
 
     // MARK: - Relative performance
 

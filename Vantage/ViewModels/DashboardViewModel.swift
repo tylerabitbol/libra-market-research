@@ -186,11 +186,7 @@ final class DashboardViewModel {
             throw APIError.noData(.fred, endpoint: seriesID)
         }
 
-        let bars = observations.map {
-            PriceBar(date: $0.date, resolution: .daily,
-                     open: $0.value, high: $0.value, low: $0.value, close: $0.value,
-                     adjustedClose: $0.value)
-        }
+        let bars = PriceBar.closeOnly(from: observations)
 
         return BenchmarkPerformance(
             benchmark: benchmark,
