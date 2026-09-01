@@ -223,6 +223,30 @@ struct ChartPoint: Identifiable {
 }
 
 
+/// A run of the intraday line that is drawn as one stroke.
+///
+/// Sessions and the moves between them are drawn differently but belong to
+/// one line. Splitting the chart into disconnected per-session lines was a
+/// defence against a wall-clock axis, where the weekend spanned a fifth of
+/// the width; on a positional axis the space between a close and the next
+/// open is a single bar, and a stroke that narrow reads as the jump it is.
+struct ChartSegment: Identifiable {
+    enum Kind {
+        /// Bars that traded, consecutively, within one session.
+        case traded
+        /// The step from one session's last close to the next session's open.
+        /// Exactly two points, one position apart.
+        case overnight
+    }
+
+    /// Also the chart's series key, which is why it is a `String` for both
+    /// kinds — Swift Charts wants one type across every mark.
+    let id: String
+    let kind: Kind
+    let points: [ChartPoint]
+}
+
+
 /// A labelled position on the intraday chart's x-axis.
 struct ChartAxisTick: Identifiable {
     let id: Int

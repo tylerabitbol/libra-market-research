@@ -499,6 +499,67 @@ struct ChartPersistenceTests {
         #expect(ticks.allSatisfy { tick in points.contains { $0.id == tick.id } })
         #expect(ticks.allSatisfy { !$0.label.isEmpty })
     }
+
+    @Test("Sessions are joined by a link exactly one bar wide")
+    func overnightLinksAreOneBarWide() async throws {
+        let container = AppModelContainer.preview
+        let context = ModelContext(container)
+        context.insert(Security(symbol: "TEST", name: "Test Corp"))
+        try context.save()
+
+        let registry = ProviderRegistry(
+            marketData: SessionSeriesProvider(sessions: 8),
+            fundamentals: nil, analyst: nil, metrics: nil, sec: nil,
+            macro: nil, news: nil, isUsingSampleData: false)
+
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.load(using: registry, snapshots: SnapshotStore(modelContainer: container))
+        try await Task.sleep(for: .milliseconds(700))
+        model.select(.fiveDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(600))
+
+        let traded = model.chartSegments.filter { $0.kind == .traded }
+        let overnight = model.chartSegments.filter { $0.kind == .overnight }
+
+        #expect(traded.count == 5)
+        #expect(overnight.count == 4, "One link between each pair of sessions")
+
+        // A link spans a single position. That is the whole argument for
+        // drawing it: a stroke that narrow reads as the jump it is, where the
+        // same move across a wall-clock weekend read as a steady decline.
+        for link in overnight {
+            #expect(link.points.count == 2)
+            guard link.points.count == 2 else { continue }
+            #expect(link.points[1].id - link.points[0].id == 1)
+            #expect(link.points[0].session != link.points[1].session)
+        }
+
+        // Nothing is dropped or duplicated by the grouping.
+        let rejoined = traded.flatMap(\.points).map(\.id)
+        #expect(rejoined == model.chartPoints.map(\.id))
+    }
+
+    @Test("One session has nothing to link across")
+    func oneDayHasNoOvernightLink() async throws {
+        let container = AppModelContainer.preview
+        let context = ModelContext(container)
+        context.insert(Security(symbol: "TEST", name: "Test Corp"))
+        try context.save()
+
+        let registry = ProviderRegistry(
+            marketData: SessionSeriesProvider(sessions: 8),
+            fundamentals: nil, analyst: nil, metrics: nil, sec: nil,
+            macro: nil, news: nil, isUsingSampleData: false)
+
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.load(using: registry, snapshots: SnapshotStore(modelContainer: container))
+        try await Task.sleep(for: .milliseconds(700))
+        model.select(.oneDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(600))
+
+        #expect(model.chartSegments.filter { $0.kind == .traded }.count == 1)
+        #expect(model.chartSegments.filter { $0.kind == .overnight }.isEmpty)
+    }
 }
 
 /// Serves a whole number of regular sessions, most recent last.
