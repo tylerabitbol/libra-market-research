@@ -16,7 +16,6 @@ enum AppModelContainer {
         FilingRecord.self,
         InsiderTransaction.self,
         DetectedEvent.self,
-        JournalEntry.self,
         MacroObservation.self
     ])
 

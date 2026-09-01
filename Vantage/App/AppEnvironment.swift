@@ -118,7 +118,7 @@ final class AppEnvironment {
             hasKey(.secContactEmail)
                 ? .ready
                 : .needsSetup("The SEC requires a contact email before EDGAR requests are allowed.")
-        case .computed, .userJournal:
+        case .computed:
             .ready
         }
     }
