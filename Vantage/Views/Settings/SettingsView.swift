@@ -82,6 +82,13 @@ struct SettingsView: View {
                   purpose: "Live quotes, company profiles, ratings, news"),
             .init(key: .tiingoAPIKey, provider: .tiingo,
                   purpose: "Daily price history — charts, volatility, momentum"),
+            // Both halves of the pair, as two rows — the same shape the SEC
+            // entries already use. Optional: without them every range but 1D
+            // and 5D still works.
+            .init(key: .alpacaKeyID, provider: .alpaca,
+                  purpose: "Optional — intraday bars for the 1D and 5D charts (IEX feed)"),
+            .init(key: .alpacaSecretKey, provider: .alpaca,
+                  purpose: "Optional — the secret half of the Alpaca key pair"),
             .init(key: .secContactEmail, provider: .sec,
                   purpose: "Filings, financial statements, insider transactions"),
             .init(key: .secOrganizationName, provider: .sec,

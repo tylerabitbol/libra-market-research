@@ -75,6 +75,7 @@ enum DataProviderID: String, Codable, Sendable, CaseIterable {
     case sec
     case finnhub
     case tiingo
+    case alpaca
     case fred
     case computed
 
@@ -83,6 +84,7 @@ enum DataProviderID: String, Codable, Sendable, CaseIterable {
         case .sec: "SEC EDGAR"
         case .finnhub: "Finnhub"
         case .tiingo: "Tiingo"
+        case .alpaca: "Alpaca (IEX)"
         case .fred: "FRED"
         case .computed: "Calculated locally"
         }

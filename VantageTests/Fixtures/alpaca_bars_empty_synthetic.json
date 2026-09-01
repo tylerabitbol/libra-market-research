@@ -1,0 +1,5 @@
+{
+  "_comment": "HAND-AUTHORED. What Alpaca returns for a window containing no trades — a weekend, or a session that has not opened. The `bars` map is absent rather than empty, which is the case that separates 'no trades' from a failed request.",
+  "bars": null,
+  "next_page_token": null
+}

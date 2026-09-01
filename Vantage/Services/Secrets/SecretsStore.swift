@@ -11,6 +11,9 @@ import Security
 enum SecretKey: String, CaseIterable, Sendable {
     case finnhubAPIKey
     case tiingoAPIKey
+    /// Alpaca authenticates with a key *pair*, both halves sent as headers.
+    case alpacaKeyID
+    case alpacaSecretKey
     case fredAPIKey
     case anthropicAPIKey
     /// Not a credential, but it belongs with them: SEC EDGAR's fair-access
@@ -25,6 +28,8 @@ enum SecretKey: String, CaseIterable, Sendable {
         switch self {
         case .finnhubAPIKey: "Finnhub API key"
         case .tiingoAPIKey: "Tiingo API key"
+        case .alpacaKeyID: "Alpaca key ID"
+        case .alpacaSecretKey: "Alpaca secret key"
         case .fredAPIKey: "FRED API key"
         case .anthropicAPIKey: "Anthropic API key"
         case .secContactEmail: "SEC contact email"
@@ -38,6 +43,10 @@ enum SecretKey: String, CaseIterable, Sendable {
             "Free key from finnhub.io. Used for quotes, company profiles, fundamentals and news."
         case .tiingoAPIKey:
             "Free key from tiingo.com. Used for daily price history — charts, moving averages and volatility all depend on it."
+        case .alpacaKeyID:
+            "Free from alpaca.markets — no funding required. Used only for the 1D and 5D intraday charts."
+        case .alpacaSecretKey:
+            "The secret half of the Alpaca key pair. Both halves are needed; neither works alone."
         case .fredAPIKey:
             "Free key from fred.stlouisfed.org. Used for macroeconomic series."
         case .anthropicAPIKey:
