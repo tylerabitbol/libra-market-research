@@ -294,6 +294,44 @@ final class SecurityDetailViewModel {
         }
     }
 
+    /// The intraday line broken into the runs the chart strokes differently:
+    /// one per session, and one across each break between them.
+    ///
+    /// The overnight runs hold exactly two points, one position apart, so the
+    /// move between a close and the next open is drawn at the width of a
+    /// single bar. That is the whole argument for drawing it at all — at that
+    /// width it cannot be mistaken for a gradual drift, and leaving it out
+    /// turned one instrument into five floating fragments.
+    var chartSegments: [ChartSegment] {
+        let points = chartPoints
+        guard !points.isEmpty else { return [] }
+
+        var traded: [ChartSegment] = []
+        var run: [ChartPoint] = []
+        for point in points {
+            if let first = run.first, first.session != point.session {
+                traded.append(ChartSegment(id: "session-\(first.session.timeIntervalSince1970)",
+                                           kind: .traded, points: run))
+                run = []
+            }
+            run.append(point)
+        }
+        if let first = run.first {
+            traded.append(ChartSegment(id: "session-\(first.session.timeIntervalSince1970)",
+                                       kind: .traded, points: run))
+        }
+
+        let overnight = zip(traded, traded.dropFirst()).compactMap { earlier, later
+            -> ChartSegment? in
+            guard let close = earlier.points.last, let open = later.points.first else {
+                return nil
+            }
+            return ChartSegment(id: "overnight-\(close.id)", kind: .overnight,
+                                points: [close, open])
+        }
+        return traded + overnight
+    }
+
     /// Where to label the intraday axis: each hour on 1D, each session on 5D.
     ///
     /// Positions are not evenly spaced in time — a session with thin trading

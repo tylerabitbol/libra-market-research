@@ -421,7 +421,8 @@ struct SecurityDetailView: View {
                     // The consolidated tape is not what drew this. Saying so is
                     // the condition on which intraday was adopted at all.
                     Label("IEX only — about 2.5% of US volume. Shape, not "
-                          + "levels. Trading hours end to end, New York time.",
+                          + "levels. Trading hours end to end, New York time; "
+                          + "dashed where the market was shut.",
                           systemImage: "info.circle")
                         .font(.caption2).foregroundStyle(.secondary)
                 } else if model.rangeReturn?.isFullWindow == false {
@@ -484,13 +485,13 @@ struct SecurityDetailView: View {
         let labels = Dictionary(ticks.map { ($0.position, $0.label) },
                                 uniquingKeysWith: { first, _ in first })
 
-        return Chart(points) { point in
-            LineMark(x: .value("Position", point.position),
-                     y: .value("Close", point.close),
-                     series: .value("Session", point.session))
-                .foregroundStyle(Color.accentColor)
-                .interpolationMethod(.linear)
+        return Chart {
+            ForEach(model.chartSegments) { segment in
+                segmentMarks(segment)
+            }
         }
+        .accessibilityLabel(intradayChartLabel)
+        .accessibilityValue(intradayChartValue)
         .chartYScale(domain: chartFloor...chartCeiling)
         .chartXScale(domain: -0.5...(Double(max(points.count, 2)) - 0.5))
         .chartYAxis { AxisMarks(position: .trailing) }
@@ -503,6 +504,46 @@ struct SecurityDetailView: View {
             }
         }
         .frame(height: 190)
+    }
+
+    /// A traded run is the full-weight line; the step between two sessions is
+    /// thinner and dashed, so the stroke's weight tracks whether anyone could
+    /// have traded along it.
+    @ChartContentBuilder
+    private func segmentMarks(_ segment: ChartSegment) -> some ChartContent {
+        let traded = segment.kind == .traded
+        let colour: Color = traded ? .accentColor : .accentColor.opacity(0.4)
+        let stroke = traded
+            ? StrokeStyle(lineWidth: 2)
+            : StrokeStyle(lineWidth: 1, dash: [2, 2])
+
+        ForEach(segment.points) { point in
+            LineMark(x: .value("Position", point.position),
+                     y: .value("Close", point.close),
+                     series: .value("Run", segment.id))
+                .foregroundStyle(colour)
+                .lineStyle(stroke)
+                .interpolationMethod(.linear)
+        }
+    }
+
+    /// A positional axis says nothing aloud, so the chart states in words
+    /// what it covers and where it ended up.
+    private var intradayChartLabel: String {
+        let sessions = model.chartSegments.filter { $0.kind == .traded }.count
+        return sessions == 1
+            ? "Intraday price chart, one trading session"
+            : "Intraday price chart, \(sessions) trading sessions"
+    }
+
+    private var intradayChartValue: String {
+        let points = model.chartPoints
+        guard let first = points.first, let last = points.last else {
+            return "No bars"
+        }
+        let move = first.close == 0 ? 0 : (last.close - first.close) / first.close
+        return "\(Format.currency(first.close)) to \(Format.currency(last.close)), "
+            + "\(Format.signedPercent(move)) across the window"
     }
 
     private var dailyChart: some View {
