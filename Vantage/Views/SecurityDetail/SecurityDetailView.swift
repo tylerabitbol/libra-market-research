@@ -23,6 +23,7 @@ struct SecurityDetailView: View {
                 overview
                 changesSection
                 chartSection
+                relativeSection
                 valuationSection
                 fundamentalsSection
                 filingsSection
@@ -224,10 +225,31 @@ struct SecurityDetailView: View {
                     Text("Less history available than the selected range.")
                         .font(.caption2).foregroundStyle(.orange)
                 }
+                priceContextRows
             }
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+    }
+
+    /// Three figures, not a technical-analysis panel. Section 5 asks for
+    /// context and then rules out the dashboard, so this is where the line is.
+    @ViewBuilder
+    private var priceContextRows: some View {
+        if let context = model.priceContext {
+            Divider().padding(.vertical, 2)
+            VStack(alignment: .leading, spacing: 8) {
+                if let claim = context.twoHundredDayClaim ?? context.fiftyDayClaim {
+                    ClaimRow(claim: claim)
+                }
+                ClaimRow(claim: context.drawdownClaim)
+                if context.deepestDrawdown < -0.05 {
+                    Text("Deepest fall within this period: "
+                         + Format.percent(abs(context.deepestDrawdown), precision: 1))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     private var priceChart: some View {
@@ -263,6 +285,70 @@ struct SecurityDetailView: View {
 
     private var chartFloor: Double { chartBounds.floor }
     private var chartCeiling: Double { chartBounds.ceiling }
+
+    // MARK: - Relative performance
+
+    /// Section 7: how this security did against its sector and the market over
+    /// the selected range, stated as arithmetic rather than as adjectives.
+    ///
+    /// Hidden entirely rather than shown empty when neither comparison can be
+    /// made — an absent benchmark is not a finding the way "nothing unusual" is.
+    @ViewBuilder
+    private var relativeSection: some View {
+        if model.relativeToMarket != nil || model.relativeToSector != nil {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Relative performance").font(.headline)
+                    Spacer()
+                    Text(model.selectedRange.rawValue)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    returnRow(model.symbol, model.rangeReturn?.percent, isSubject: true)
+                    if let sector = model.sectorBenchmark {
+                        Divider()
+                        returnRow(sector.displayName, model.sectorRangeReturn?.percent,
+                                  isSubject: false)
+                    }
+                    Divider()
+                    returnRow("S&P 500", model.marketRangeReturn?.percent, isSubject: false)
+                }
+                .padding(14)
+                .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+
+                VStack(alignment: .leading, spacing: 10) {
+                    if let sector = model.relativeToSector, let benchmark = model.sectorBenchmark {
+                        ClaimRow(claim: sector.claim(securityName: model.symbol,
+                                                     benchmarkName: benchmark.displayName))
+                    }
+                    if let market = model.relativeToMarket {
+                        ClaimRow(claim: market.claim(securityName: model.symbol,
+                                                     benchmarkName: "the S&P 500"))
+                    }
+                    if let note = model.sectorBenchmark?.proxyNote {
+                        Text(note).font(.caption2).foregroundStyle(.tertiary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(14)
+                .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 12))
+            }
+        }
+    }
+
+    private func returnRow(_ label: String, _ percent: Double?, isSubject: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(isSubject
+                      ? .system(.subheadline, design: .monospaced).weight(.semibold)
+                      : .subheadline)
+                .foregroundStyle(isSubject ? .primary : .secondary)
+            Spacer(minLength: 8)
+            DirectionalChangeText(percent: percent, font: .subheadline)
+        }
+    }
 
     // MARK: - Valuation
 
