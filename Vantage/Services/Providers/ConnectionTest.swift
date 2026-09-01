@@ -68,7 +68,7 @@ enum ConnectionTest {
                     detail: "CIK \(cik) resolved, \(filings.count) recent filings."
                 )
 
-            case .computed, .userJournal:
+            case .computed:
                 return .failure(.noData(provider, endpoint: "connection test"))
             }
         } catch let error as APIError {

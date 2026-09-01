@@ -52,9 +52,6 @@ final class Security {
     @Relationship(deleteRule: .cascade, inverse: \FilingRecord.security)
     var filings: [FilingRecord] = []
 
-    @Relationship(deleteRule: .cascade, inverse: \JournalEntry.security)
-    var journalEntries: [JournalEntry] = []
-
     @Relationship(deleteRule: .cascade, inverse: \DetectedEvent.security)
     var events: [DetectedEvent] = []
 

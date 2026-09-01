@@ -77,7 +77,6 @@ enum DataProviderID: String, Codable, Sendable, CaseIterable {
     case tiingo
     case fred
     case computed
-    case userJournal
 
     var displayName: String {
         switch self {
@@ -86,7 +85,6 @@ enum DataProviderID: String, Codable, Sendable, CaseIterable {
         case .tiingo: "Tiingo"
         case .fred: "FRED"
         case .computed: "Calculated locally"
-        case .userJournal: "Your notes"
         }
     }
 
