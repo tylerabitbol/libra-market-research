@@ -437,6 +437,105 @@ struct ChartPersistenceTests {
         // artefact of two sparse bars, not a move anyone could have traded.
         #expect(minutes.allSatisfy { $0 >= 9 * 60 + 30 && $0 < 16 * 60 })
     }
+
+    @Test("5D counts trading sessions, not calendar days")
+    func fiveDayCountsSessions() async throws {
+        let container = AppModelContainer.preview
+        let context = ModelContext(container)
+        context.insert(Security(symbol: "TEST", name: "Test Corp"))
+        try context.save()
+
+        let registry = ProviderRegistry(
+            marketData: SessionSeriesProvider(sessions: 8),
+            fundamentals: nil, analyst: nil, metrics: nil, sec: nil,
+            macro: nil, news: nil, isUsingSampleData: false)
+
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.load(using: registry, snapshots: SnapshotStore(modelContainer: container))
+        try await Task.sleep(for: .milliseconds(700))
+        model.select(.fiveDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(600))
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .gmt
+        let days = Set(model.chartBars.map { calendar.startOfDay(for: $0.date) })
+
+        // Five calendar days back from a Monday reaches the previous
+        // Wednesday, and the chart drew three sessions while calling itself
+        // five. Sessions are what the range counts.
+        #expect(days.count == 5)
+
+        model.select(.oneDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(400))
+        let oneDay = Set(model.chartBars.map { calendar.startOfDay(for: $0.date) })
+        #expect(oneDay.count == 1)
+    }
+
+    @Test("The intraday axis is positional, and every tick is labelled")
+    func axisTicksSitOnBars() async throws {
+        let container = AppModelContainer.preview
+        let context = ModelContext(container)
+        context.insert(Security(symbol: "TEST", name: "Test Corp"))
+        try context.save()
+
+        let registry = ProviderRegistry(
+            marketData: SessionSeriesProvider(sessions: 8),
+            fundamentals: nil, analyst: nil, metrics: nil, sec: nil,
+            macro: nil, news: nil, isUsingSampleData: false)
+
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.load(using: registry, snapshots: SnapshotStore(modelContainer: container))
+        try await Task.sleep(for: .milliseconds(700))
+        model.select(.fiveDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(600))
+
+        let points = model.chartPoints
+        let ticks = model.chartAxisTicks
+
+        // Positions run 0..<count with no holes: the axis spends its width on
+        // trading rather than on the seventeen hours a day that are not.
+        #expect(points.map(\.id) == Array(0..<points.count))
+        #expect(ticks.count == 5, "One label per session")
+        #expect(ticks.allSatisfy { tick in points.contains { $0.id == tick.id } })
+        #expect(ticks.allSatisfy { !$0.label.isEmpty })
+    }
+}
+
+/// Serves a whole number of regular sessions, most recent last.
+private struct SessionSeriesProvider: MarketDataProvider {
+    let id: DataProviderID = .finnhub
+    let sessions: Int
+
+    func isConfigured() async -> Bool { true }
+    func quote(symbol: String) async throws -> QuoteDTO {
+        throw APIError.transport(.finnhub, underlying: "not part of this test")
+    }
+    func bars(symbol: String, resolution: BarResolution,
+              from: Date, to: Date) async throws -> [PriceBarDTO] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .gmt
+        let latest = FailingAfterFirstProvider.lastRegularClose()
+
+        var bars: [PriceBarDTO] = []
+        for session in 0..<sessions {
+            guard let day = calendar.date(byAdding: .day, value: -session, to: latest),
+                  let open = calendar.date(bySettingHour: 9, minute: 30, second: 0, of: day)
+            else { continue }
+            // 09:30 to 15:45 in fifteen-minute steps.
+            for step in 0..<26 {
+                let price = 100 + Double((session + step) % 5)
+                bars.append(PriceBarDTO(
+                    date: open.addingTimeInterval(Double(step) * 900),
+                    open: price, high: price + 1, low: price - 1, close: price,
+                    volume: 7, adjustedClose: nil))
+            }
+        }
+        return bars.sorted { $0.date < $1.date }
+    }
+    func profile(symbol: String) async throws -> CompanyProfileDTO {
+        throw APIError.notFound(.finnhub, endpoint: "profile")
+    }
+    func search(query: String) async throws -> [CompanyProfileDTO] { [] }
 }
 
 /// Serves one session that begins before the open and runs past the close.

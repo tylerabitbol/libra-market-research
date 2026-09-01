@@ -273,16 +273,75 @@ final class SecurityDetailViewModel {
     var chartBars: [PriceBar] {
         guard selectedRange.usesIntraday else { return visibleBars }
         let series = intradayBars.filter(Self.isRegularHours).sorted { $0.date < $1.date }
-        guard selectedRange == .oneDay else {
-            return series.filter { $0.date >= selectedRange.startDate() }
+        guard let wanted = selectedRange.intradaySessions else { return series }
+        // Counted in sessions, not in hours. "1D" as a rolling 24 hours began
+        // mid-afternoon the previous day and opened with a straight line
+        // across the overnight gap; "5D" as five calendar days reached back
+        // to Wednesday and drew three sessions.
+        let days = Set(series.map { Self.marketCalendar.startOfDay(for: $0.date) })
+        let kept = Set(days.sorted().suffix(wanted))
+        return series.filter { kept.contains(Self.marketCalendar.startOfDay(for: $0.date)) }
+    }
+
+    /// The intraday series laid out end to end, one position per bar.
+    ///
+    /// The only reader is the chart. Nothing downstream of this treats the
+    /// position as time.
+    var chartPoints: [ChartPoint] {
+        chartBars.enumerated().map { index, bar in
+            ChartPoint(id: index, date: bar.date, close: bar.analysisClose,
+                       session: Self.marketCalendar.startOfDay(for: bar.date))
         }
-        // "1D" is the latest session, not a rolling 24 hours. The rolling
-        // window began mid-afternoon the previous day, so the chart opened
-        // with a straight line across the overnight gap — a move that never
-        // happened, drawn at the same weight as the ones that did.
-        guard let last = series.last else { return [] }
-        let day = Self.marketCalendar.startOfDay(for: last.date)
-        return series.filter { Self.marketCalendar.startOfDay(for: $0.date) == day }
+    }
+
+    /// Where to label the intraday axis: each hour on 1D, each session on 5D.
+    ///
+    /// Positions are not evenly spaced in time — a session with thin trading
+    /// holds fewer bars — so the labels are placed on the bars themselves
+    /// rather than computed by stride.
+    var chartAxisTicks: [ChartAxisTick] {
+        let points = chartPoints
+        guard !points.isEmpty else { return [] }
+
+        if selectedRange == .oneDay {
+            var ticks: [ChartAxisTick] = []
+            var seen: Int?
+            for point in points {
+                let parts = Self.marketCalendar.dateComponents([.hour, .minute],
+                                                               from: point.date)
+                guard let hour = parts.hour, hour != seen else { continue }
+                seen = hour
+                // The session opens at 9:30, and labelling that bar "9 AM"
+                // both misstated it by half an hour and crowded the 10 AM
+                // label beside it. A tick has to sit near the hour it names.
+                guard (parts.minute ?? 0) <= 10 else { continue }
+                ticks.append(ChartAxisTick(id: point.id,
+                                           label: Self.hourLabel(point.date)))
+            }
+            return ticks
+        }
+
+        var ticks: [ChartAxisTick] = []
+        var seen: Date?
+        for point in points where point.session != seen {
+            seen = point.session
+            ticks.append(ChartAxisTick(id: point.id,
+                                       label: Self.sessionLabel(point.date)))
+        }
+        return ticks
+    }
+
+    /// Axis labels are in market time, matching the session the bars belong
+    /// to. A reader in another time zone would otherwise see a session that
+    /// appears to open at 6:30.
+    private static func hourLabel(_ date: Date) -> String {
+        date.formatted(Date.FormatStyle(timeZone: marketCalendar.timeZone)
+            .hour(.defaultDigits(amPM: .abbreviated)))
+    }
+
+    private static func sessionLabel(_ date: Date) -> String {
+        date.formatted(Date.FormatStyle(timeZone: marketCalendar.timeZone)
+            .month(.abbreviated).day())
     }
 
     /// Whether a bar falls inside the regular session, 9:30 to 16:00 New York.
@@ -296,21 +355,6 @@ final class SecurityDetailViewModel {
         guard let hour = parts.hour, let minute = parts.minute else { return false }
         let minutes = hour * 60 + minute
         return minutes >= 9 * 60 + 30 && minutes < 16 * 60
-    }
-
-    /// Intraday bars split into trading sessions, oldest first.
-    ///
-    /// The chart draws one line per session and never joins them. The hours
-    /// between a close and the next open are not trading, and a segment across
-    /// them reads as a gradual move: on 5D that phantom segment spanned a
-    /// weekend and looked like a steady 1.5% decline.
-    var chartSessions: [ChartSession] {
-        let grouped = Dictionary(grouping: chartBars) {
-            Self.marketCalendar.startOfDay(for: $0.date)
-        }
-        return grouped.keys.sorted().map { day in
-            ChartSession(id: day, bars: (grouped[day] ?? []).sorted { $0.date < $1.date })
-        }
     }
 
     /// Whether the chart can be drawn, and if not, why.
@@ -389,7 +433,7 @@ final class SecurityDetailViewModel {
     private func loadIntraday(using registry: ProviderRegistry,
                               snapshots: SnapshotStore?) async {
         let resolution = selectedRange.resolution
-        let from = selectedRange.startDate()
+        let from = selectedRange.intradayFetchStart()
         let to = Date.now
 
         if let fetchedAt = intradayFetchedAt[resolution], !isForcingRefresh,
