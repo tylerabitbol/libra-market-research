@@ -10,6 +10,8 @@ import Charts
 struct SecurityDetailView: View {
     @Environment(AppEnvironment.self) private var app
     @State private var model: SecurityDetailViewModel
+    @State private var isChoosingDate = false
+    @State private var customDate = Date.now
 
     init(symbol: String) {
         _model = State(initialValue: SecurityDetailViewModel(symbol: symbol))
@@ -44,6 +46,34 @@ struct SecurityDetailView: View {
         }
         .refreshable { model.load(using: app.registry, snapshots: app.snapshots, force: true) }
         .task { model.load(using: app.registry, snapshots: app.snapshots) }
+        .sheet(isPresented: $isChoosingDate) { customDateSheet }
+    }
+
+    /// A date the user picks by hand, for windows the fixed options miss —
+    /// an earnings date, the day a thesis was formed.
+    private var customDateSheet: some View {
+        NavigationStack {
+            DatePicker("Show changes since",
+                       selection: $customDate,
+                       in: ...Date.now,
+                       displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .padding(16)
+                .navigationTitle("Since")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { isChoosingDate = false }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Apply") {
+                            model.changeWindow = .custom(customDate)
+                            isChoosingDate = false
+                        }
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
     }
 
     // MARK: - Overview
@@ -143,10 +173,16 @@ struct SecurityDetailView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("What changed").font(.headline)
                 Spacer()
-                if let lastVisit = model.lastVisit {
-                    Text("Since \(Format.shortDate(lastVisit))")
-                        .font(.caption).foregroundStyle(.tertiary)
-                }
+                windowMenu
+                if !model.availableKinds.isEmpty { kindMenu }
+            }
+
+            if let start = model.changeWindow.startDate(lastVisit: model.lastVisit) {
+                Text("Since \(Format.shortDate(start))")
+                    .font(.caption).foregroundStyle(.tertiary)
+            }
+            if let coverage = model.coverageNote {
+                Text(coverage).font(.caption2).foregroundStyle(.tertiary)
             }
 
             if model.events.isEmpty {
@@ -186,8 +222,96 @@ struct SecurityDetailView: View {
                 + "At least \(EventDetector.minimumSample) are needed before "
                 + "\"unusual\" means anything."
         }
-        return "Nothing unusual in the recent price, volume, or volatility, "
-            + "and no new filings since your last visit."
+        if !model.kindFilter.isEmpty {
+            let names = model.kindFilter.map(\.displayName).sorted()
+            return "Nothing of the selected kind"
+                + (names.count == 1 ? " (\(names[0]))" : "s")
+                + " in this window. Widen the window or clear the filter."
+        }
+        if case .lastVisit = model.changeWindow, model.lastVisit == nil {
+            return "Nothing unusual in the recent price, volume, or volatility. "
+                + "This is your first visit, so there is no earlier point to "
+                + "compare against — choose a window above to look further back."
+        }
+        return "Nothing unusual in the price, volume, or volatility over this "
+            + "window, and no new filings in it."
+    }
+
+    // MARK: - What changed: controls
+
+    /// Follows the `Menu` pattern already in `ResearchView.sortMenu`.
+    private var windowMenu: some View {
+        Menu {
+            ForEach(ChangeWindow.offered) { window in
+                Button {
+                    model.changeWindow = window
+                } label: {
+                    if model.changeWindow == window {
+                        Label(window.displayName, systemImage: "checkmark")
+                    } else {
+                        Text(window.displayName)
+                    }
+                }
+            }
+            Divider()
+            Button("Custom date…") { isChoosingDate = true }
+        } label: {
+            Label(model.changeWindow.displayName, systemImage: "calendar")
+                .font(.caption)
+        }
+    }
+
+    private var kindMenu: some View {
+        Menu {
+            Button {
+                model.kindFilter = []
+            } label: {
+                if model.kindFilter.isEmpty {
+                    Label("All kinds", systemImage: "checkmark")
+                } else {
+                    Text("All kinds")
+                }
+            }
+            ForEach(model.availableKindsByCategory, id: \.category) { group in
+                Section(group.category.displayName) {
+                    // The category header toggles its whole group.
+                    Button("All \(group.category.displayName.lowercased())") {
+                        toggle(group.kinds)
+                    }
+                    ForEach(group.kinds, id: \.self) { kind in
+                        Button {
+                            toggle([kind])
+                        } label: {
+                            if model.kindFilter.contains(kind) {
+                                Label(kind.displayName, systemImage: "checkmark")
+                            } else {
+                                Text(kind.displayName)
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(kindMenuTitle, systemImage: "line.3.horizontal.decrease.circle")
+                .font(.caption)
+        }
+    }
+
+    private var kindMenuTitle: String {
+        switch model.kindFilter.count {
+        case 0: "All kinds"
+        case 1: model.kindFilter.first?.displayName ?? "1 kind"
+        case let count: "\(count) kinds"
+        }
+    }
+
+    /// Adds the group if any of it is missing, removes it once it is all there.
+    private func toggle(_ kinds: [EventKind]) {
+        if kinds.allSatisfy(model.kindFilter.contains) {
+            model.kindFilter.subtract(kinds)
+        } else {
+            model.kindFilter.formUnion(kinds)
+        }
     }
 
     // MARK: - Chart

@@ -56,12 +56,80 @@ final class SecurityDetailViewModel {
     private(set) var fundamentalsError: APIError?
     private(set) var filingsError: APIError?
 
-    /// Changes detected from the data just loaded, most recent first.
+    /// The changes on screen: the pools below, narrowed to the chosen window
+    /// and kinds, most recent first.
     private(set) var events: [DetectedEventDTO] = []
+    private(set) var lastVisit: Date?
+
+    /// Changes that describe the present rather than a moment — the open
+    /// session, the latest reported period, the newest restatement. They are
+    /// shown whatever window is chosen, including none, because they are not
+    /// dated into a window in the first place.
+    private var standingEvents: [DetectedEventDTO] = []
+    /// Changes that happened at a point in time, over all the history loaded,
+    /// plus everything previously detected and stored. These are what a window
+    /// selects from.
+    private var windowedEvents: [DetectedEventDTO] = []
+
+    /// How far back the panel looks. Changing it re-filters what is already
+    /// in hand; it never costs a request.
+    var changeWindow: ChangeWindow = .lastVisit {
+        didSet { applyChangeFilter() }
+    }
+    /// Which kinds to show. Empty means all — an explicit "no kinds" selection
+    /// would show an empty panel and is not a thing anyone means.
+    var kindFilter: Set<EventKind> = [] {
+        didSet { applyChangeFilter() }
+    }
+
     /// The subset the user has not seen — everything that occurred after their
     /// previous visit. Empty on a first visit by design.
-    private(set) var newSinceLastVisit: [DetectedEventDTO] = []
-    private(set) var lastVisit: Date?
+    ///
+    /// Deliberately measured against the pools rather than `events`: what is
+    /// new to the user does not change because they narrowed the panel to one
+    /// kind.
+    var newSinceLastVisit: [DetectedEventDTO] {
+        guard let lastVisit else { return [] }
+        return (standingEvents + windowedEvents).filter { $0.occurredAt > lastVisit }
+    }
+
+    /// The kinds actually present in what was loaded, in enum order.
+    ///
+    /// Ten of the eighteen `EventKind`s have a producer today. Offering a
+    /// toggle that can never match is the same defect as a sort that cannot
+    /// reorder anything, so the menu is derived from the events in hand.
+    var availableKinds: [EventKind] {
+        let present = Set((standingEvents + windowedEvents).map(\.kind))
+        return EventKind.allCases.filter(present.contains)
+    }
+
+    /// `availableKinds`, grouped under the Section 12 evidence buckets.
+    var availableKindsByCategory: [(category: EvidenceCategory, kinds: [EventKind])] {
+        let grouped = Dictionary(grouping: availableKinds, by: \.evidenceCategory)
+        return EvidenceCategory.allCases.compactMap { category in
+            grouped[category].map { (category, $0) }
+        }
+    }
+
+    /// What the chosen window cannot reach, or `nil` when it is fully covered.
+    ///
+    /// A window that starts before the earliest bar held returns less than was
+    /// asked for. Saying so is the difference between "the period was quiet"
+    /// and "the period was not examined".
+    var coverageNote: String? {
+        guard let start = changeWindow.startDate(lastVisit: lastVisit) else { return nil }
+        var notes: [String] = []
+        if let earliest = bars.map(\.date).min(), start < earliest {
+            notes.append("Price and volume history begins \(Format.shortDate(earliest)), "
+                         + "so nothing before that date was examined.")
+        }
+        if changeWindow.widensPast(lastVisit: lastVisit) {
+            notes.append("Fundamental changes are judged on the latest reported period "
+                         + "only, so earlier ones appear here as they are detected on "
+                         + "future visits rather than retroactively.")
+        }
+        return notes.isEmpty ? nil : notes.joined(separator: " ")
+    }
 
     private(set) var isLoading = false
     private(set) var lastRefreshedAt: Date?
@@ -311,28 +379,50 @@ final class SecurityDetailViewModel {
         }
         analyseFilings()
         // The quote carries today; the bars stop at the previous close.
-        // The backfill covers the sessions in between — a large move on a day
-        // the app was not opened is still a change the user has not seen.
-        let detected = EventDetector.detect(bars: bars, quote: quote)
-            + EventDetector.priceMoves(bars: bars, after: lastVisit)
-            + EventDetector.volumeAnomalies(bars: bars, after: lastVisit)
-            + EventDetector.newFilings(filings: filings, since: lastVisit)
+        // These judge the present, so no window applies to them.
+        let standing = EventDetector.detect(bars: bars, quote: quote)
             // What the business did, as distinct from what the price did.
             // Judged against the company's own reported history, on the same
             // rank-not-probability terms as everything above.
             + FundamentalDetector.detect(facts: fundamentals)
-            + InsiderActivity.events(insiderTransactions, since: lastVisit)
             + (await restatementEvents(using: snapshots))
+
+        // The backfill runs over everything loaded rather than over the gap
+        // since the last visit, so widening the window is a filter rather than
+        // a re-detection. The limits are raised to match: at the old default
+        // of ten, a ninety-day window would silently stop at the tenth event.
+        let backfilled = EventDetector.priceMoves(bars: bars, after: .distantPast, limit: 50)
+            + EventDetector.volumeAnomalies(bars: bars, after: .distantPast, limit: 50)
+            + EventDetector.newFilings(filings: filings, since: .distantPast, limit: 50)
+            + InsiderActivity.events(insiderTransactions, since: .distantPast, limit: 25)
+        // Previously detected events, which is where fundamental changes older
+        // than the latest reported period come from — `FundamentalDetector`
+        // has no backfill, so that depth accrues with use.
+        var stored: [DetectedEventDTO] = []
+        if let snapshots {
+            stored = (try? await snapshots.events(symbol: symbol, limit: 200)) ?? []
+        }
+
         // The live detector and the backfill can both reach the most recent
         // closed session. They describe it identically, so the list would show
         // the same card twice — the store deduplicates on the same key, but
-        // the screen has no such protection.
+        // the screen has no such protection. Freshly detected wins over the
+        // stored copy, which may predate a restatement.
         var seen: Set<String> = []
-        events = detected
+        standingEvents = standing
+            .filter { seen.insert($0.naturalKey).inserted }
+            .sorted { $0.occurredAt > $1.occurredAt }
+        windowedEvents = (backfilled + stored)
             .filter { seen.insert($0.naturalKey).inserted }
             .sorted { $0.occurredAt > $1.occurredAt }
 
+        // A kind can disappear between loads — a filter pinned to one that is
+        // no longer present would empty the panel with no way to tell why.
+        kindFilter.formIntersection(availableKinds)
+        applyChangeFilter()
+
         #if DEBUG
+        let detected = standingEvents + windowedEvents
         if let reading = EventDetector.latestReading(bars: bars, quote: quote) {
             let measure = AnomalyMeasure.measure(
                 reading.reading.percent, against: reading.priors.map(\.percent)
@@ -342,11 +432,27 @@ final class SecurityDetailViewModel {
             Self.logger.notice("DETECT \(self.symbol, privacy: .public) no reading available")
         }
         #endif
-        if let lastVisit {
-            newSinceLastVisit = events.filter { $0.occurredAt > lastVisit }
-        } else {
-            newSinceLastVisit = []
+    }
+
+    /// Narrows the pools to the chosen window and kinds.
+    ///
+    /// Pure filtering over data already in hand, so the menus respond without
+    /// a request — the point of detecting over all history up front.
+    private func applyChangeFilter() {
+        let start = changeWindow.startDate(lastVisit: lastVisit)
+        let kinds = kindFilter
+        func passesKind(_ event: DetectedEventDTO) -> Bool {
+            kinds.isEmpty || kinds.contains(event.kind)
         }
+        // With no window — a first visit, before any prior visit is recorded —
+        // only the standing events show. Reporting five years of history as
+        // "what changed" on first open would be false.
+        let dated = start.map { start in
+            windowedEvents.filter { $0.occurredAt > start }
+        } ?? []
+        events = (standingEvents + dated)
+            .filter(passesKind)
+            .sorted { $0.occurredAt > $1.occurredAt }
     }
 
     /// Joins each periodic filing to the figures it reported.
