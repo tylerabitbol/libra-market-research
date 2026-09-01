@@ -40,6 +40,10 @@ final class SecurityDetailViewModel {
     private(set) var sectorIntradayMove: Double?
     private(set) var sectorFactor: SectorFactor?
 
+    /// Published analyst ratings. Estimate revisions need a paid Finnhub tier
+    /// and are absent by design; what the free tier serves is the rating mix.
+    private(set) var ratings: RatingSnapshotDTO?
+
     private(set) var quoteError: APIError?
     private(set) var historyError: APIError?
     private(set) var metricsError: APIError?
@@ -127,6 +131,30 @@ final class SecurityDetailViewModel {
 
     var relativeToMarket: RelativePerformance? {
         ReturnCalculator.relativePerformance(security: rangeReturn, benchmark: marketRangeReturn)
+    }
+
+    /// How the sector itself did against the market — Section 13's "sector
+    /// strength", which is about the industry rather than this company.
+    var sectorVersusMarket: RelativePerformance? {
+        ReturnCalculator.relativePerformance(security: sectorRangeReturn,
+                                             benchmark: marketRangeReturn)
+    }
+
+    /// The eleven dimensions of Section 13, and with them Section 12's
+    /// disconfirming evidence. Recomputed from what is loaded rather than
+    /// stored, so it can never disagree with the figures above it.
+    var researchProfile: ResearchProfile {
+        ResearchProfileBuilder.build(ResearchProfileBuilder.Inputs(
+            bars: bars,
+            rangeReturn: rangeReturn,
+            relativeToMarket: relativeToMarket,
+            sectorRelativeToMarket: sectorVersusMarket,
+            sectorName: sectorBenchmark?.displayName,
+            fundamentals: fundamentals,
+            metrics: metrics,
+            ratings: ratings,
+            insiderPurchases: nil,
+            insiderSales: nil))
     }
 
     /// Bars trimmed to the selected range, from the single wide fetch.
@@ -424,8 +452,9 @@ final class SecurityDetailViewModel {
         async let quoteWork: Void = loadQuote(using: registry)
         async let historyWork: Void = loadHistory(using: registry)
         async let metricsWork: Void = loadMetrics(using: registry)
+        async let ratingsWork: Void = loadRatings(using: registry)
         async let marketWork: Void = loadMarketContext(using: registry)
-        _ = await (profileWork, quoteWork, historyWork, metricsWork, marketWork)
+        _ = await (profileWork, quoteWork, historyWork, metricsWork, marketWork, ratingsWork)
 
         // Needs the profile's sector, so it follows the concurrent block
         // rather than running inside it.
@@ -654,6 +683,15 @@ final class SecurityDetailViewModel {
         } catch {
             metricsError = .transport(.finnhub, underlying: error.localizedDescription)
         }
+    }
+
+    /// Ratings, where the tier serves them.
+    ///
+    /// Swallows its failure like the other context sections: the rating mix is
+    /// one dimension of eleven, and losing it must not mark the page as failed.
+    private func loadRatings(using registry: ProviderRegistry) async {
+        guard let analyst = registry.analyst else { return }
+        ratings = try? await analyst.ratings(symbol: symbol).last
     }
 
     private func loadSECSections(using registry: ProviderRegistry) async {
