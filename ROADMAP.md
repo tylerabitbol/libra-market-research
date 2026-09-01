@@ -35,12 +35,12 @@ was found by looking at rendered output on a real symbol — the suite stayed
 green throughout. Treat a screen check as part of "done", not optional polish;
 see *Build and verify* below.
 
-**Next, in priority order**: sector-relative attribution (wire the declared
-sector ETFs into `RelativeAnalysis` alongside the market leg, and the built but
-uncalled `ReturnCalculator.relativePerformance` into Security Detail), then
-watchlist intelligence, then contradictory evidence and the Research Profile,
-then Form 4 parsing. Working plan in
-`~/.claude/plans/this-is-the-current-pure-storm.md`.
+**Next, in priority order**: verify everything against live data with real API
+keys — nothing built after the store-reads commit has been checked against a
+real symbol, only against fixtures and sample data. Then surface company news,
+which is fetched and displayed nowhere. Then the Dynamic Type and iPad sweep.
+The AI layer is optional, last, and the only component with a cost. Working
+plan in `~/.claude/plans/this-is-the-current-pure-storm.md`.
 
 ## Provider capabilities (measured against live keys, not assumed)
 
@@ -216,11 +216,18 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 
 ## Known gaps
 
+- **Nothing built after the store-reads commit has been verified against live
+  data.** Every screen check ran on sample data, because the simulator holds no
+  keys. The arithmetic is unit-tested against fixtures; the figures have not
+  been compared with a real filing.
+- **Company news is fetched and shown nowhere.** `FinnhubNewsProvider` works
+  and no view consumes it.
+- **The Form 4 fixture is hand-authored**, like the two `sec_submissions_*`
+  fixtures. Parsing has not been run against a real ownership document, which
+  needs an SEC contact email in the Keychain.
 - **Estimate revisions** (spec §8) need a paid Finnhub tier. Rating changes and
   earnings surprises work. The gap surfaces as "not in your plan", never an
   empty chart.
-- **Form 4 parsing** — XML, fetched per-document. Currently refuses rather than
-  returning an empty array, which would read as "no insider trades".
 - **Intraday index levels** — FRED is end-of-day. An intraday ETF overlay is
   deliberately deferred.
 - **Volatility shifts are not backfilled.** Price moves and volume are; a
@@ -236,10 +243,6 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 - **Only the most recent reported period is judged.** A second filing arriving
   inside one gap between visits leaves the older of the two unreported. Price
   moves are backfilled across the gap; fundamentals are not.
-- **Attribution is market-only.** Sector-relative comparison (spec §7) needs a
-  sector benchmark per security; the sector ETFs are declared but not wired to
-  the detail page. A move the market does not explain is currently attributed
-  to "this company or its industry" without separating the two.
 - **Tiingo's 50 req/hour** is the binding constraint on any screen wanting
   history for many symbols. Budget accordingly; the rate limiter now refuses
   past a wait budget rather than blocking silently.
