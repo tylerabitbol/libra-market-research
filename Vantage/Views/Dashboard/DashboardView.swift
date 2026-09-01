@@ -34,6 +34,7 @@ struct DashboardView: View {
             .padding(.bottom, 44)
         }
         .background(Color(.systemGroupedBackground))
+        .navigationDestination(for: Benchmark.self) { BenchmarkDetailView(benchmark: $0) }
         .overlay(alignment: .bottom) { footer }
         .refreshable { model.load(using: app.registry, force: true) }
         .task(id: app.registry.isUsingSampleData) {
@@ -49,7 +50,10 @@ struct DashboardView: View {
             SectionHeader(title: title)
             VStack(spacing: 0) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
-                    BenchmarkRow(performance: row)
+                    NavigationLink(value: row.benchmark) {
+                        BenchmarkRow(performance: row)
+                    }
+                    .buttonStyle(.plain)
                     if index < rows.count - 1 { Divider().padding(.leading, 12) }
                 }
             }
@@ -78,7 +82,10 @@ struct DashboardView: View {
                 SectionHeader(title: "Sectors", subtitle: "Daily change")
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), spacing: 8)], spacing: 8) {
                     ForEach(model.sectors) { row in
-                        SectorTile(performance: row)
+                        NavigationLink(value: row.benchmark) {
+                            SectorTile(performance: row)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -114,7 +121,6 @@ private struct SectionHeader: View {
 
 private struct BenchmarkRow: View {
     let performance: BenchmarkPerformance
-    @State private var isShowingSourceNote = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -123,17 +129,19 @@ private struct BenchmarkRow: View {
                     HStack(spacing: 4) {
                         Text(performance.benchmark.displayName)
                             .font(.subheadline.weight(.medium))
-                        Button {
-                            isShowingSourceNote = true
-                        } label: {
-                            Image(systemName: performance.benchmark.isProxy
-                                  ? "exclamationmark.circle" : "info.circle")
-                                .font(.caption2)
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(performance.benchmark.isProxy
-                                         ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
-                        .accessibilityLabel("About this data source")
+                        // A marker, not a button. This was a button opening an
+                        // alert until the row became tappable — a control
+                        // inside a NavigationLink's label swallowed the row's
+                        // own tap, and the explanation has a better home on
+                        // the page the row now opens.
+                        Image(systemName: performance.benchmark.isProxy
+                              ? "exclamationmark.circle" : "info.circle")
+                            .font(.caption2)
+                            .foregroundStyle(performance.benchmark.isProxy
+                                             ? AnyShapeStyle(.orange) : AnyShapeStyle(.tertiary))
+                            .accessibilityLabel(performance.benchmark.isProxy
+                                                ? "Shows a proxy, not the index itself"
+                                                : "The index itself, published end-of-day")
                     }
                     Text(sourceLabel)
                         .font(.system(.caption2, design: .monospaced))
@@ -144,6 +152,10 @@ private struct BenchmarkRow: View {
                     .font(.system(.subheadline, design: .rounded).weight(.medium))
                     .monospacedDigit()
                     .foregroundStyle(performance.level == nil ? .secondary : .primary)
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
             }
 
             if performance.error != nil {
@@ -168,11 +180,7 @@ private struct BenchmarkRow: View {
             }
         }
         .padding(12)
-        .alert(performance.benchmark.displayName, isPresented: $isShowingSourceNote) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(sourceExplanation)
-        }
+        .contentShape(.rect)
     }
 
     /// Names what is actually being displayed: the index series, or the ETF
@@ -180,13 +188,6 @@ private struct BenchmarkRow: View {
     private var sourceLabel: String {
         if let series = performance.benchmark.fredSeriesID { return "FRED \(series)" }
         return performance.benchmark.etfSymbol ?? "—"
-    }
-
-    private var sourceExplanation: String {
-        if let note = performance.benchmark.proxyNote { return note }
-        let asOf = performance.asOf.map(Format.shortDate) ?? "an unknown date"
-        return "The actual index, from FRED. Published end-of-day, so this reflects the "
-             + "close on \(asOf) rather than the current level."
     }
 
     @ViewBuilder
@@ -225,6 +226,7 @@ private struct SectorTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
         .background(Color(.secondarySystemGroupedBackground), in: .rect(cornerRadius: 8))
+        .contentShape(.rect)
     }
 }
 
