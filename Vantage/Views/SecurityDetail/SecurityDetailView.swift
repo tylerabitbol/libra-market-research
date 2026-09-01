@@ -348,6 +348,11 @@ struct SecurityDetailView: View {
                 .frame(height: 180)
             case .ready:
                 priceChart
+                if let note = model.chartNote {
+                    Label(note, systemImage: "exclamationmark.triangle")
+                        .font(.caption2).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if model.selectedRange.usesIntraday {
                     // The consolidated tape is not what drew this. Saying so is
                     // the condition on which intraday was adopted at all.
@@ -385,7 +390,58 @@ struct SecurityDetailView: View {
         }
     }
 
+    @ViewBuilder
     private var priceChart: some View {
+        if model.selectedRange.usesIntraday {
+            intradayChart
+        } else {
+            dailyChart
+        }
+    }
+
+    /// One line per session, drawn straight between prints.
+    ///
+    /// Two deliberate differences from the daily chart. Sessions are separate
+    /// series, so nothing is drawn across the hours the market was shut — the
+    /// gap is left visibly empty instead of bridged by a move that did not
+    /// happen. And the interpolation is linear rather than monotone: a smooth
+    /// curve between two five-minute prints invents a path the price never
+    /// took, which matters more at this resolution than at daily.
+    ///
+    /// No area fill either. The y-axis here spans a few dollars and does not
+    /// start at zero, so shading the space beneath the line gives weight to a
+    /// quantity that is not being measured.
+    private var intradayChart: some View {
+        Chart {
+            ForEach(model.chartSessions) { session in
+                ForEach(session.bars, id: \.date) { bar in
+                    LineMark(x: .value("Time", bar.date),
+                             y: .value("Close", bar.analysisClose),
+                             series: .value("Session", session.id))
+                        .foregroundStyle(Color.accentColor)
+                        .interpolationMethod(.linear)
+                }
+            }
+        }
+        .chartYScale(domain: chartFloor...chartCeiling)
+        .chartYAxis { AxisMarks(position: .trailing) }
+        .chartXAxis {
+            if model.selectedRange == .oneDay {
+                AxisMarks(values: .stride(by: .hour)) { value in
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.hour().minute())
+                }
+            } else {
+                AxisMarks(values: .stride(by: .day)) { value in
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                }
+            }
+        }
+        .frame(height: 190)
+    }
+
+    private var dailyChart: some View {
         Chart(model.chartBars, id: \.date) { bar in
             AreaMark(x: .value("Date", bar.date),
                      yStart: .value("Low", chartFloor),

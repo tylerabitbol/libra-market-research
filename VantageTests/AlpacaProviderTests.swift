@@ -290,3 +290,192 @@ struct IntradayBoundaryTests {
                 "Switching to 1D must not disturb what the detectors read")
     }
 }
+
+/// Fails every bars request, so a chart that already holds data can be asked
+/// what it does when a refresh goes wrong.
+private struct FailingAfterFirstProvider: MarketDataProvider {
+    let id: DataProviderID = .finnhub
+    let shouldFail: @Sendable () -> Bool
+
+    func isConfigured() async -> Bool { true }
+    func quote(symbol: String) async throws -> QuoteDTO {
+        throw APIError.transport(.finnhub, underlying: "not part of this test")
+    }
+    func bars(symbol: String, resolution: BarResolution,
+              from: Date, to: Date) async throws -> [PriceBarDTO] {
+        if shouldFail() { throw APIError.transport(.alpaca, underlying: "offline") }
+        let end = Self.lastRegularClose()
+        return (0..<60).map { index in
+            let close = 100 + Double(index % 5)
+            return PriceBarDTO(
+                date: end.addingTimeInterval(-Double(59 - index) * 300),
+                open: close, high: close + 1, low: close - 1, close: close,
+                volume: 7, adjustedClose: nil)
+        }
+    }
+    func profile(symbol: String) async throws -> CompanyProfileDTO {
+        throw APIError.notFound(.finnhub, endpoint: "profile")
+    }
+    func search(query: String) async throws -> [CompanyProfileDTO] { [] }
+
+    /// The most recent 15:55 in New York at or before now.
+    ///
+    /// The chart draws regular-session bars only, so a series anchored to
+    /// `Date.now` would be filtered away entirely whenever the suite runs
+    /// outside market hours — which is most of the time.
+    static func lastRegularClose() -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .gmt
+        var day = Date.now
+        for _ in 0..<8 {
+            if let close = calendar.date(bySettingHour: 15, minute: 55, second: 0, of: day),
+               close <= .now {
+                return close
+            }
+            day = calendar.date(byAdding: .day, value: -1, to: day) ?? day
+        }
+        return .now
+    }
+}
+
+@Suite("The chart does not disappear", .serialized)
+@MainActor
+struct ChartPersistenceTests {
+
+    @Test("A failed refresh leaves the chart drawn, with the failure noted")
+    func failedRefreshKeepsTheChart() async throws {
+        let container = AppModelContainer.preview
+        let context = ModelContext(container)
+        context.insert(Security(symbol: "TEST", name: "Test Corp"))
+        try context.save()
+
+        let failing = LockedFlag()
+        let registry = ProviderRegistry(
+            marketData: FailingAfterFirstProvider(shouldFail: { failing.value }),
+            fundamentals: nil, analyst: nil, metrics: nil, sec: nil,
+            macro: nil, news: nil, isUsingSampleData: false)
+
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.load(using: registry, snapshots: SnapshotStore(modelContainer: container))
+        try await Task.sleep(for: .milliseconds(700))
+        model.select(.oneDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(model.chartAvailability == .ready, "Precondition: a chart is drawn")
+
+        // Now break the network and force a refresh.
+        failing.value = true
+        model.load(using: registry, snapshots: nil, force: true)
+        try await Task.sleep(for: .milliseconds(500))
+        model.select(.fiveDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(500))
+        model.select(.oneDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(500))
+
+        // The bars we already hold are still perfectly drawable. Replacing
+        // them with an error card is the chart "disappearing".
+        #expect(model.chartAvailability == .ready)
+        #expect(model.chartBars.count >= 2)
+    }
+
+    @Test("Switching between 1D and 5D keeps each series rather than wiping it")
+    func switchingRangesKeepsBothSeries() async throws {
+        let container = AppModelContainer.preview
+        let context = ModelContext(container)
+        context.insert(Security(symbol: "TEST", name: "Test Corp"))
+        try context.save()
+
+        let failing = LockedFlag()
+        let registry = ProviderRegistry(
+            marketData: FailingAfterFirstProvider(shouldFail: { failing.value }),
+            fundamentals: nil, analyst: nil, metrics: nil, sec: nil,
+            macro: nil, news: nil, isUsingSampleData: false)
+
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.load(using: registry, snapshots: SnapshotStore(modelContainer: container))
+        try await Task.sleep(for: .milliseconds(700))
+        model.select(.oneDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(500))
+        model.select(.fiveDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(500))
+
+        // Going back must not re-fetch into an emptied array — which, with the
+        // network down, would leave 1D blank despite having been drawn a
+        // moment ago.
+        failing.value = true
+        model.select(.oneDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(400))
+        #expect(model.chartAvailability == .ready)
+    }
+
+    @Test("Pre- and post-market bars are left off the chart")
+    func extendedHoursBarsAreExcluded() async throws {
+        let container = AppModelContainer.preview
+        let context = ModelContext(container)
+        context.insert(Security(symbol: "TEST", name: "Test Corp"))
+        try context.save()
+
+        let registry = ProviderRegistry(
+            marketData: ExtendedHoursProvider(),
+            fundamentals: nil, analyst: nil, metrics: nil, sec: nil,
+            macro: nil, news: nil, isUsingSampleData: false)
+
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        model.load(using: registry, snapshots: SnapshotStore(modelContainer: container))
+        try await Task.sleep(for: .milliseconds(700))
+        model.select(.oneDay, registry: registry)
+        try await Task.sleep(for: .milliseconds(600))
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .gmt
+        let minutes = model.chartBars.map { bar -> Int in
+            let parts = calendar.dateComponents([.hour, .minute], from: bar.date)
+            return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        }
+
+        #expect(!minutes.isEmpty, "Precondition: the session bars survived")
+        // The thin 7 a.m. print was the widest segment on the chart and an
+        // artefact of two sparse bars, not a move anyone could have traded.
+        #expect(minutes.allSatisfy { $0 >= 9 * 60 + 30 && $0 < 16 * 60 })
+    }
+}
+
+/// Serves one session that begins before the open and runs past the close.
+private struct ExtendedHoursProvider: MarketDataProvider {
+    let id: DataProviderID = .finnhub
+
+    func isConfigured() async -> Bool { true }
+    func quote(symbol: String) async throws -> QuoteDTO {
+        throw APIError.transport(.finnhub, underlying: "not part of this test")
+    }
+    func bars(symbol: String, resolution: BarResolution,
+              from: Date, to: Date) async throws -> [PriceBarDTO] {
+        let close = FailingAfterFirstProvider.lastRegularClose()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "America/New_York") ?? .gmt
+        // 07:00 through 19:55 in five-minute steps, spanning both edges.
+        guard let open = calendar.date(bySettingHour: 7, minute: 0, second: 0, of: close) else {
+            return []
+        }
+        return (0..<156).map { index in
+            let price = 100 + Double(index % 5)
+            return PriceBarDTO(
+                date: open.addingTimeInterval(Double(index) * 300),
+                open: price, high: price + 1, low: price - 1, close: price,
+                volume: 7, adjustedClose: nil)
+        }
+    }
+    func profile(symbol: String) async throws -> CompanyProfileDTO {
+        throw APIError.notFound(.finnhub, endpoint: "profile")
+    }
+    func search(query: String) async throws -> [CompanyProfileDTO] { [] }
+}
+
+/// Minimal mutable flag usable from a `@Sendable` closure.
+private final class LockedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored = false
+    var value: Bool {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
+}

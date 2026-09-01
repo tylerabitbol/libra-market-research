@@ -178,3 +178,13 @@ enum ChartAvailability: Equatable, Sendable {
     case loading
     case unavailable(String)
 }
+
+
+/// One trading session's worth of intraday bars.
+///
+/// The chart plots each session as its own series so no line is drawn across
+/// the hours the market was closed.
+struct ChartSession: Identifiable {
+    let id: Date
+    let bars: [PriceBar]
+}
