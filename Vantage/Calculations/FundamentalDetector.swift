@@ -366,20 +366,34 @@ enum FundamentalDetector {
 
     // MARK: - Series construction
 
-    /// One value per quarter for a flow concept, oldest first.
+    /// One value per period of a given duration for a flow concept, oldest first.
     ///
-    /// Cumulative periods are excluded here as well as at extraction. Reading a
-    /// nine-month total as a quarter makes Q3 look roughly three times Q2 and
-    /// corrupts every growth rate computed from it, and a fact arriving from
-    /// somewhere other than the SEC provider would not have been filtered yet.
+    /// Cumulative periods are excluded by construction — asking for `.quarter`
+    /// cannot return a nine-month total. Reading one as a quarter makes Q3 look
+    /// roughly three times Q2 and corrupts every growth rate computed from it,
+    /// and a fact arriving from somewhere other than the SEC provider would not
+    /// have been filtered yet.
+    ///
+    /// The duration is a parameter because a 10-K reports annual figures and a
+    /// 10-Q reports quarterly ones, and filing analysis has to read whichever
+    /// the document actually filed.
+    static func flow(
+        _ facts: [FinancialFactDTO],
+        _ concept: FinancialConcept,
+        kind: FiscalPeriodKind = .quarter
+    ) -> [(period: Date, value: Double)] {
+        facts
+            .filter { $0.concept == concept && $0.periodKind == kind }
+            .sorted { $0.periodEnd < $1.periodEnd }
+            .map { (period: $0.periodEnd, value: $0.value) }
+    }
+
+    /// Quarterly flows — the common case, and what every detector above uses.
     static func quarterly(
         _ facts: [FinancialFactDTO],
         _ concept: FinancialConcept
     ) -> [(period: Date, value: Double)] {
-        facts
-            .filter { $0.concept == concept && $0.periodKind == .quarter }
-            .sorted { $0.periodEnd < $1.periodEnd }
-            .map { (period: $0.periodEnd, value: $0.value) }
+        flow(facts, concept, kind: .quarter)
     }
 
     /// One value per balance-sheet date, oldest first.
@@ -396,11 +410,12 @@ enum FundamentalDetector {
     /// A margin series in percent, one point per quarter that reports both legs.
     static func marginSeries(
         facts: [FinancialFactDTO],
-        numerator concept: FinancialConcept
+        numerator concept: FinancialConcept,
+        kind: FiscalPeriodKind = .quarter
     ) -> [(period: Date, value: Double)] {
-        let revenue = Dictionary(quarterly(facts, .revenue).map { ($0.period, $0.value) },
+        let revenue = Dictionary(flow(facts, .revenue, kind: kind).map { ($0.period, $0.value) },
                                  uniquingKeysWith: { _, last in last })
-        return quarterly(facts, concept).compactMap { point in
+        return flow(facts, concept, kind: kind).compactMap { point in
             guard let sales = revenue[point.period], sales > 0 else { return nil }
             return (point.period, point.value / sales * 100)
         }
@@ -412,22 +427,25 @@ enum FundamentalDetector {
     /// tag, so it is subtracted by absolute value: a company that reported it
     /// with a negative sign would otherwise have it added to cash flow.
     static func freeCashFlowSeries(
-        facts: [FinancialFactDTO]
+        facts: [FinancialFactDTO],
+        kind: FiscalPeriodKind = .quarter
     ) -> [(period: Date, value: Double)] {
-        let capex = Dictionary(quarterly(facts, .capitalExpenditures).map { ($0.period, $0.value) },
+        let capex = Dictionary(flow(facts, .capitalExpenditures, kind: kind)
+                                .map { ($0.period, $0.value) },
                                uniquingKeysWith: { _, last in last })
-        return quarterly(facts, .operatingCashFlow).compactMap { point in
+        return flow(facts, .operatingCashFlow, kind: kind).compactMap { point in
             guard let spend = capex[point.period] else { return nil }
             return (point.period, point.value - abs(spend))
         }
     }
 
     static func freeCashFlowMarginSeries(
-        facts: [FinancialFactDTO]
+        facts: [FinancialFactDTO],
+        kind: FiscalPeriodKind = .quarter
     ) -> [(period: Date, value: Double)] {
-        let revenue = Dictionary(quarterly(facts, .revenue).map { ($0.period, $0.value) },
+        let revenue = Dictionary(flow(facts, .revenue, kind: kind).map { ($0.period, $0.value) },
                                  uniquingKeysWith: { _, last in last })
-        return freeCashFlowSeries(facts: facts).compactMap { point in
+        return freeCashFlowSeries(facts: facts, kind: kind).compactMap { point in
             guard let sales = revenue[point.period], sales > 0 else { return nil }
             return (point.period, point.value / sales * 100)
         }

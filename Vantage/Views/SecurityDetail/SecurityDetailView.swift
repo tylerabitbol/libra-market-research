@@ -164,6 +164,9 @@ struct SecurityDetailView: View {
                     if event.kind == .unusualPriceMove, let attribution = model.latestAttribution {
                         AttributionCard(attribution: attribution)
                     }
+                    if let analysis = model.analysis(for: event) {
+                        FilingAnalysisCard(analysis: analysis)
+                    }
                 }
             }
         }
