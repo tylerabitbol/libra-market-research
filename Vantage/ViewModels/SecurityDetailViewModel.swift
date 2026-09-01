@@ -65,6 +65,9 @@ final class SecurityDetailViewModel {
     /// Whether any section on this page was filled from the store.
     private(set) var hydratedFromStore = false
 
+    /// What each periodic filing reported, keyed by accession number.
+    private(set) var filingAnalyses: [String: FilingAnalysis.Result] = [:]
+
     /// The concepts this page works with, named once.
     ///
     /// The store read and the network fetch must ask for the same set, or a
@@ -228,6 +231,7 @@ final class SecurityDetailViewModel {
         if let snapshots {
             lastVisit = try? await snapshots.lastViewed(symbol: symbol)
         }
+        analyseFilings()
         // The quote carries today; the bars stop at the previous close.
         // The backfill covers the sessions in between — a large move on a day
         // the app was not opened is still a change the user has not seen.
@@ -264,6 +268,38 @@ final class SecurityDetailViewModel {
         } else {
             newSinceLastVisit = []
         }
+    }
+
+    /// Joins each periodic filing to the figures it reported.
+    ///
+    /// Costs nothing: every XBRL fact already carries the accession number of
+    /// the filing that reported it, and the submissions feed supplies the same
+    /// accession in the same format, so this is a filter over data in hand.
+    ///
+    /// `analyzedAt` on `FilingRecord` is deliberately left unset. It exists so
+    /// expensive extraction is not repeated, and this is a pass over an array
+    /// already in memory — writing the stamp would create state nothing reads.
+    private func analyseFilings() {
+        var analyses: [String: FilingAnalysis.Result] = [:]
+        for filing in filings {
+            guard let result = FilingAnalysis.analyse(filing: filing, facts: fundamentals)
+            else { continue }
+            analyses[filing.accessionNumber] = result
+        }
+        filingAnalyses = analyses
+    }
+
+    /// The analysis belonging to a filing event.
+    ///
+    /// Matched on `occurredAt`, which for a filing event is the filing's own
+    /// `filedAt`. EDGAR dates filings to the day, so an 8-K filed alongside a
+    /// 10-Q shares the timestamp — requiring an analysis to exist picks the
+    /// periodic report out of the pair.
+    func analysis(for event: DetectedEventDTO) -> FilingAnalysis.Result? {
+        guard event.kind == .newFiling else { return nil }
+        return filings
+            .first { $0.filedAt == event.occurredAt && filingAnalyses[$0.accessionNumber] != nil }
+            .flatMap { filingAnalyses[$0.accessionNumber] }
     }
 
     /// Restatements across the tracked concepts.
