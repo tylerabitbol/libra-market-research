@@ -238,7 +238,8 @@ actor SnapshotStore {
                 context: event.context,
                 unusualness: event.unusualness,
                 sourceDetails: event.sourceDetails,
-                sourceURLs: event.sourceURLs
+                sourceURLs: event.sourceURLs,
+                derivation: event.derivation
             ))
             inserted += 1
         }

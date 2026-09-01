@@ -103,6 +103,11 @@ struct AttributionCard: View {
             }
             .frame(height: 4)
         }
+        // The bar itself is a drawn shape and carries nothing for VoiceOver.
+        // Collapsing the row to one element with the figure in it is the only
+        // way the split is readable without sight.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(label): \(Format.percentagePoints(value))")
     }
 }
 

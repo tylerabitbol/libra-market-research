@@ -356,6 +356,48 @@ struct PersistenceTests {
         #expect(facts == nil)
     }
 
+    @Test("A stored calculation keeps its arithmetic, and stays a calculation")
+    func derivationsSurviveTheStore() async throws {
+        let (store, _) = try makeStore()
+        let event = DetectedEventDTO(
+            kind: .unusualVolume,
+            occurredAt: Date(timeIntervalSince1970: 1_700_000_000),
+            headline: "Volume 2.4x the 60-session median",
+            unusualness: 0.98,
+            sourceDetails: ["Daily bars"],
+            derivation: Derivation(
+                formula: "volume ÷ median(prior 60)",
+                inputs: [.init(name: "volume", value: "214.9M", source: nil),
+                         .init(name: "median", value: "89.5M", source: nil)],
+                result: "2.4x"))
+        try await store.record(events: [event], symbol: "TEST")
+
+        let stored = try #require(try await store.events(symbol: "TEST").first)
+        // Without this, an event read back had no derivation and headlineClaim
+        // therefore badged a measured calculation as a FACT — the app
+        // misdescribing its own epistemic status, which is the one thing
+        // Section 24 exists to prevent. Every card in the Research feed is read
+        // from the store, so every one of them was affected.
+        #expect(stored.derivation?.formula == "volume ÷ median(prior 60)")
+        #expect(stored.derivation?.inputs.count == 2)
+        #expect(stored.headlineClaim.kind == .calculation)
+    }
+
+    @Test("An event that never had a derivation stays a fact")
+    func factsDoNotAcquireArithmetic() async throws {
+        let (store, _) = try makeStore()
+        // A filing is reported by the SEC, not computed by this app. Giving it
+        // an empty derivation would overstate the app's involvement.
+        try await store.record(events: [DetectedEventDTO(
+            kind: .newFiling,
+            occurredAt: Date(timeIntervalSince1970: 1_700_000_000),
+            headline: "Form 10-Q filed")], symbol: "TEST")
+
+        let stored = try #require(try await store.events(symbol: "TEST").first)
+        #expect(stored.derivation == nil)
+        #expect(stored.headlineClaim.kind == .fact)
+    }
+
     @Test("Reads accept any casing, as every other lookup in the store does")
     func readsAreCaseInsensitive() async throws {
         let (store, _) = try makeStore()
