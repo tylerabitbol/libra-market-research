@@ -56,7 +56,10 @@ struct ProviderFailureTests {
     @Test("An unknown symbol is not found rather than fabricated")
     func unknownSymbolIsNotFabricated() async {
         let provider = MockMarketDataProvider()
-        await #expect(throws: APIError.notFound(.finnhub, endpoint: "profile")) {
+        // `.sample`, not `.finnhub`. The mock used to borrow a real vendor's
+        // identity, which is how its output reached the store looking like
+        // measured data. It now names itself, and the store refuses it.
+        await #expect(throws: APIError.notFound(.sample, endpoint: "profile")) {
             try await provider.profile(symbol: "ZZZZ")
         }
     }

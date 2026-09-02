@@ -80,7 +80,10 @@ enum ConnectionTest {
                     detail: "CIK \(cik) resolved, \(filings.count) recent filings."
                 )
 
-            case .computed:
+            case .computed, .sample:
+                // Neither is a connection. `.sample` reaches nothing, and a
+                // test that "succeeded" against invented data would report the
+                // opposite of what it measured.
                 return .failure(.noData(provider, endpoint: "connection test"))
             }
         } catch let error as APIError {

@@ -136,6 +136,19 @@ enum EventKind: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// Kinds the detectors rebuild from the underlying series on every visit,
+    /// as opposed to those that only ever accrue once.
+    ///
+    /// Deleting one of these costs nothing permanent: the bars, filings and
+    /// Form 4 lines it was derived from produce it again. Fundamental kinds are
+    /// deliberately absent — `FundamentalDetector` has no backfill, so a
+    /// margin change from four quarters ago exists only as the stored row.
+    static let rederivedFromSeries: [EventKind] = [
+        .unusualPriceMove, .unusualVolume, .volatilityShift,
+        .sectorRelativeMove, .marketRelativeMove,
+        .newFiling, .insiderTransaction
+    ]
+
     /// Which of the Section 12 evidence buckets this belongs to.
     var evidenceCategory: EvidenceCategory {
         switch self {

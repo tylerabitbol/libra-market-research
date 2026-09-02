@@ -83,6 +83,17 @@ final class PriceBar {
     /// computed over long windows must use this, not raw close.
     var adjustedClose: Double?
 
+    /// Which provider supplied this bar.
+    ///
+    /// Optional for two reasons. Rows written before this column existed carry
+    /// nothing, and a bar whose origin is unknown cannot be trusted — a keyless
+    /// run once wrote five years of `SampleData` closes here, and afterwards
+    /// nothing on disk distinguished them from real sessions. `AppModelContainer`
+    /// evicts unattributed rows on open for exactly that reason. And a `PriceBar`
+    /// is also built as a plain in-memory carrier by the view models, where there
+    /// is no provider to name and nothing is ever inserted.
+    var providerRaw: String?
+
     init(
         security: Security? = nil,
         date: Date,
@@ -93,7 +104,8 @@ final class PriceBar {
         low: Double,
         close: Double,
         volume: Double? = nil,
-        adjustedClose: Double? = nil
+        adjustedClose: Double? = nil,
+        provider: DataProviderID? = nil
     ) {
         self.security = security
         self.date = date
@@ -105,7 +117,12 @@ final class PriceBar {
         self.close = close
         self.volume = volume
         self.adjustedClose = adjustedClose
+        self.providerRaw = provider?.rawValue
     }
+
+    /// Nil when the row predates provenance, or names a provider this build no
+    /// longer knows. Both mean the same thing: unattributed.
+    var provider: DataProviderID? { providerRaw.flatMap(DataProviderID.init(rawValue:)) }
 
     var resolution: BarResolution { BarResolution(rawValue: resolutionRaw) ?? .daily }
 

@@ -258,7 +258,8 @@ final class BenchmarkDetailViewModel {
         )
         if let snapshots {
             _ = try? await snapshots.record(bars: fetched, symbol: symbol,
-                                            resolution: resolution)
+                                            resolution: resolution,
+                                            provider: registry.marketData.id)
         }
         return fetched.map { bar($0, resolution) }
     }

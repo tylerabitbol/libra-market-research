@@ -33,8 +33,8 @@ struct PersistenceTests {
     @Test("Two quotes of the same price are two observations, not one")
     func quotesAlwaysAppend() async throws {
         let (store, _) = try makeStore()
-        try await store.record(quote: quote(105), symbol: "TEST")
-        try await store.record(quote: quote(105), symbol: "TEST")
+        try await store.record(quote: quote(105), symbol: "TEST", provider: .finnhub)
+        try await store.record(quote: quote(105), symbol: "TEST", provider: .finnhub)
 
         // A quote is a reading at a moment. Two readings are two facts, even at
         // an identical price — that is what makes "since you last looked" work.
@@ -46,8 +46,8 @@ struct PersistenceTests {
         let (store, container) = try makeStore()
         let bars = (0..<5).map { bar(day: $0, close: 100 + Double($0)) }
 
-        let first = try await store.record(bars: bars, symbol: "TEST", resolution: .daily)
-        let second = try await store.record(bars: bars, symbol: "TEST", resolution: .daily)
+        let first = try await store.record(bars: bars, symbol: "TEST", resolution: .daily, provider: .tiingo)
+        let second = try await store.record(bars: bars, symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         #expect(first == 5)
         #expect(second == 0, "A closed session does not change; refetching must not duplicate it")
@@ -60,9 +60,9 @@ struct PersistenceTests {
     func barsExtendIncrementally() async throws {
         let (store, container) = try makeStore()
         try await store.record(bars: (0..<5).map { bar(day: $0, close: 100) },
-                               symbol: "TEST", resolution: .daily)
+                               symbol: "TEST", resolution: .daily, provider: .tiingo)
         let added = try await store.record(bars: (0..<8).map { bar(day: $0, close: 100) },
-                                           symbol: "TEST", resolution: .daily)
+                                           symbol: "TEST", resolution: .daily, provider: .tiingo)
         #expect(added == 3)
 
         let context = ModelContext(container)
@@ -82,8 +82,8 @@ struct PersistenceTests {
                 filedAt: period, accessionNumber: accession)
         }
 
-        try await store.record(facts: [fact(value: 100, accession: "original")], symbol: "TEST")
-        try await store.record(facts: [fact(value: 110, accession: "restated")], symbol: "TEST")
+        try await store.record(facts: [fact(value: 100, accession: "original")], symbol: "TEST", provider: .sec)
+        try await store.record(facts: [fact(value: 110, accession: "restated")], symbol: "TEST", provider: .sec)
 
         let context = ModelContext(container)
         let stored = try context.fetch(FetchDescriptor<FinancialFactRecord>())
@@ -103,8 +103,8 @@ struct PersistenceTests {
             periodKind: .quarter, value: 100, unit: "USD",
             filedAt: nil, accessionNumber: "same")
 
-        try await store.record(facts: [fact], symbol: "TEST")
-        try await store.record(facts: [fact], symbol: "TEST")
+        try await store.record(facts: [fact], symbol: "TEST", provider: .sec)
+        try await store.record(facts: [fact], symbol: "TEST", provider: .sec)
 
         let context = ModelContext(container)
         #expect(try context.fetchCount(FetchDescriptor<FinancialFactRecord>()) == 1)
@@ -118,10 +118,10 @@ struct PersistenceTests {
             filedAt: Date(timeIntervalSince1970: 1_700_000_000),
             periodOfReport: nil, primaryDocumentURL: nil, filingIndexURL: nil)
 
-        #expect(try await store.record(filings: [filing], symbol: "TEST") == 1)
+        #expect(try await store.record(filings: [filing], symbol: "TEST", provider: .sec) == 1)
         // accessionNumber is @Attribute(.unique); a blind second insert would
         // fail the entire save, taking unrelated rows down with it.
-        #expect(try await store.record(filings: [filing], symbol: "TEST") == 0)
+        #expect(try await store.record(filings: [filing], symbol: "TEST", provider: .sec) == 0)
 
         let context = ModelContext(container)
         #expect(try context.fetchCount(FetchDescriptor<FilingRecord>()) == 1)
@@ -130,7 +130,7 @@ struct PersistenceTests {
     @Test("History is only recorded for securities the user actually follows")
     func unknownSymbolIsNotRecorded() async throws {
         let (store, container) = try makeStore()
-        try await store.record(quote: quote(105), symbol: "NOTFOLLOWED")
+        try await store.record(quote: quote(105), symbol: "NOTFOLLOWED", provider: .finnhub)
 
         let context = ModelContext(container)
         #expect(try context.fetchCount(FetchDescriptor<QuoteObservation>()) == 0,
@@ -140,11 +140,11 @@ struct PersistenceTests {
     @Test("The previous observation can be read back, which is what Phase 6 needs")
     func lastQuoteBeforeDate() async throws {
         let (store, _) = try makeStore()
-        try await store.record(quote: quote(100), symbol: "TEST")
+        try await store.record(quote: quote(100), symbol: "TEST", provider: .finnhub)
         try await Task.sleep(for: .milliseconds(20))
         let cutoff = Date.now
         try await Task.sleep(for: .milliseconds(20))
-        try await store.record(quote: quote(120), symbol: "TEST")
+        try await store.record(quote: quote(120), symbol: "TEST", provider: .finnhub)
 
         let earlier = try await store.lastQuote(symbol: "TEST", before: cutoff)
         #expect(earlier?.last == 100, "Must return the state as of then, not the latest")
@@ -156,7 +156,8 @@ struct PersistenceTests {
     @Test("Recorded quotes carry a change computed from their own previous close")
     func recordedQuoteComputesChange() async throws {
         let (store, container) = try makeStore()
-        try await store.record(quote: quote(110, previousClose: 100), symbol: "TEST")
+        try await store.record(quote: quote(110, previousClose: 100), symbol: "TEST",
+                               provider: .finnhub)
 
         let context = ModelContext(container)
         let observation = try #require(
@@ -191,7 +192,7 @@ struct PersistenceTests {
     func barsRoundTrip() async throws {
         let (store, _) = try makeStore()
         try await store.record(bars: (0..<5).map { bar(day: $0, close: 100 + Double($0)) },
-                               symbol: "TEST", resolution: .daily)
+                               symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         let read = try await store.bars(symbol: "TEST")
         #expect(read.count == 5)
@@ -205,7 +206,7 @@ struct PersistenceTests {
     func barsRespectRange() async throws {
         let (store, _) = try makeStore()
         try await store.record(bars: (0..<10).map { bar(day: $0, close: 100 + Double($0)) },
-                               symbol: "TEST", resolution: .daily)
+                               symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         let base = Date(timeIntervalSince1970: 1_700_000_000)
         let read = try await store.bars(symbol: "TEST",
@@ -218,7 +219,7 @@ struct PersistenceTests {
     func barsAreResolutionScoped() async throws {
         let (store, _) = try makeStore()
         try await store.record(bars: (0..<3).map { bar(day: $0, close: 100) },
-                               symbol: "TEST", resolution: .daily)
+                               symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         let weekly = try await store.bars(symbol: "TEST", resolution: .weekly)
         #expect(weekly.isEmpty, "Mixing resolutions would put weekly bars in a daily return series")
@@ -233,7 +234,7 @@ struct PersistenceTests {
                         accession: "original", filedAt: period),
             quarterFact(.revenue, value: 110, periodEnd: period,
                         accession: "restated", filedAt: period.addingTimeInterval(86_400))
-        ], symbol: "TEST")
+        ], symbol: "TEST", provider: .sec)
 
         let read = try await store.facts(symbol: "TEST", concepts: [.revenue])
         #expect(read.count == 1, "Two conflicting figures for one quarter must not both reach a chart")
@@ -249,7 +250,7 @@ struct PersistenceTests {
                         accession: "original", filedAt: period),
             quarterFact(.revenue, value: 110, periodEnd: period,
                         accession: "restated", filedAt: period.addingTimeInterval(86_400))
-        ], symbol: "TEST")
+        ], symbol: "TEST", provider: .sec)
 
         let revisions = try await store.factRevisions(symbol: "TEST", concept: .revenue)
         #expect(revisions.map(\.value) == [100, 110], "Ordered by when each version was filed")
@@ -262,7 +263,7 @@ struct PersistenceTests {
         try await store.record(facts: [
             quarterFact(.revenue, value: 500, periodEnd: period, accession: "a", filedAt: period),
             quarterFact(.netIncome, value: 50, periodEnd: period, accession: "a", filedAt: period)
-        ], symbol: "TEST")
+        ], symbol: "TEST", provider: .sec)
 
         let read = try await store.facts(symbol: "TEST")
         // The dedup helper keys on the period alone, because the provider calls
@@ -280,7 +281,7 @@ struct PersistenceTests {
         try await store.record(facts: [
             quarterFact(.revenue, value: 100, periodEnd: old, accession: "old", filedAt: old),
             quarterFact(.revenue, value: 200, periodEnd: recent, accession: "new", filedAt: recent)
-        ], symbol: "TEST")
+        ], symbol: "TEST", provider: .sec)
 
         let read = try await store.facts(symbol: "TEST", concepts: [.revenue],
                                          since: Date(timeIntervalSince1970: 1_650_000_000))
@@ -293,7 +294,7 @@ struct PersistenceTests {
         let period = Date(timeIntervalSince1970: 1_700_000_000)
         try await store.record(facts: [
             quarterFact(.revenue, value: 100, periodEnd: period, accession: "a", filedAt: period)
-        ], symbol: "TEST")
+        ], symbol: "TEST", provider: .sec)
 
         // periodKind is not a stored column — it is re-derived from the period's
         // own duration. Getting this wrong would let a cumulative nine-month
@@ -310,7 +311,7 @@ struct PersistenceTests {
             concept: .cashAndEquivalents, rawTag: nil, periodStart: nil,
             periodEnd: period, fiscalYear: 2025, fiscalQuarter: 2, isAnnual: false,
             periodKind: .instant, value: 1000, unit: "USD",
-            filedAt: period, accessionNumber: "a")], symbol: "TEST")
+            filedAt: period, accessionNumber: "a")], symbol: "TEST", provider: .sec)
 
         let read = try await store.facts(symbol: "TEST", concepts: [.cashAndEquivalents])
         #expect(read.first?.periodKind == .instant)
@@ -326,7 +327,7 @@ struct PersistenceTests {
             FilingDTO(accessionNumber: "newer", formType: "10-Q",
                       filedAt: base.addingTimeInterval(86_400),
                       periodOfReport: nil, primaryDocumentURL: nil, filingIndexURL: nil)
-        ], symbol: "TEST")
+        ], symbol: "TEST", provider: .sec)
 
         let read = try await store.filings(symbol: "TEST")
         #expect(read.map(\.accessionNumber) == ["newer", "older"])
@@ -346,7 +347,7 @@ struct PersistenceTests {
     func latestObservedAtIsPerSeries() async throws {
         let (store, _) = try makeStore()
         try await store.record(bars: [bar(day: 0, close: 100)],
-                               symbol: "TEST", resolution: .daily)
+                               symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         let bars = try await store.latestObservedAt(symbol: "TEST", kind: .bars)
         let facts = try await store.latestObservedAt(symbol: "TEST", kind: .facts)
@@ -370,7 +371,7 @@ struct PersistenceTests {
                 inputs: [.init(name: "volume", value: "214.9M", source: nil),
                          .init(name: "median", value: "89.5M", source: nil)],
                 result: "2.4x"))
-        try await store.record(events: [event], symbol: "TEST")
+        try await store.record(events: [event], symbol: "TEST", provider: .computed)
 
         let stored = try #require(try await store.events(symbol: "TEST").first)
         // Without this, an event read back had no derivation and headlineClaim
@@ -391,7 +392,7 @@ struct PersistenceTests {
         try await store.record(events: [DetectedEventDTO(
             kind: .newFiling,
             occurredAt: Date(timeIntervalSince1970: 1_700_000_000),
-            headline: "Form 10-Q filed")], symbol: "TEST")
+            headline: "Form 10-Q filed")], symbol: "TEST", provider: .computed)
 
         let stored = try #require(try await store.events(symbol: "TEST").first)
         #expect(stored.derivation == nil)
@@ -402,8 +403,8 @@ struct PersistenceTests {
     func readsAreCaseInsensitive() async throws {
         let (store, _) = try makeStore()
         try await store.record(bars: [bar(day: 0, close: 100)],
-                               symbol: "test", resolution: .daily)
-        try await store.record(quote: quote(105), symbol: "test")
+                               symbol: "test", resolution: .daily, provider: .tiingo)
+        try await store.record(quote: quote(105), symbol: "test", provider: .finnhub)
 
         let bars = try await store.bars(symbol: "test")
         let count = try await store.observationCount(symbol: "test")

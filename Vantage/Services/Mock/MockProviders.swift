@@ -94,7 +94,10 @@ enum SampleData {
 }
 
 struct MockMarketDataProvider: MarketDataProvider {
-    let id: DataProviderID = .finnhub
+    /// Not `.finnhub`. A mock that answers to a vendor's identity is a mock
+    /// whose output cannot be told from that vendor's afterwards — which is
+    /// exactly how synthetic bars ended up on disk looking like Tiingo's.
+    let id: DataProviderID = .sample
     /// Set to simulate failures and verify the UI degrades rather than crashes.
     var failure: APIError?
 
@@ -107,7 +110,7 @@ struct MockMarketDataProvider: MarketDataProvider {
             from: Date.now.addingTimeInterval(-5 * 86_400), to: .now
         )
         guard let today = recent.last else {
-            throw APIError.noData(.finnhub, endpoint: "quote")
+            throw APIError.noData(.sample, endpoint: "quote")
         }
         return QuoteDTO(
             symbol: symbol.uppercased(),
@@ -129,7 +132,7 @@ struct MockMarketDataProvider: MarketDataProvider {
     func profile(symbol: String) async throws -> CompanyProfileDTO {
         if let failure { throw failure }
         guard let profile = SampleData.profiles[symbol.uppercased()] else {
-            throw APIError.notFound(.finnhub, endpoint: "profile")
+            throw APIError.notFound(.sample, endpoint: "profile")
         }
         return profile
     }
@@ -144,7 +147,7 @@ struct MockMarketDataProvider: MarketDataProvider {
 }
 
 struct MockSECDataProvider: SECDataProvider {
-    let id: DataProviderID = .sec
+    let id: DataProviderID = .sample
     var failure: APIError?
 
     func isConfigured() async -> Bool { true }
@@ -152,7 +155,7 @@ struct MockSECDataProvider: SECDataProvider {
     func resolveCIK(symbol: String) async throws -> String {
         if let failure { throw failure }
         guard let cik = SampleData.profiles[symbol.uppercased()]?.cik else {
-            throw APIError.notFound(.sec, endpoint: "company_tickers")
+            throw APIError.notFound(.sample, endpoint: "company_tickers")
         }
         return cik
     }
@@ -198,7 +201,7 @@ struct MockSECDataProvider: SECDataProvider {
 }
 
 struct MockMacroDataProvider: MacroDataProvider {
-    let id: DataProviderID = .fred
+    let id: DataProviderID = .sample
     var failure: APIError?
 
     func isConfigured() async -> Bool { true }
@@ -221,7 +224,7 @@ struct MockMacroDataProvider: MacroDataProvider {
 }
 
 struct MockNewsProvider: NewsProvider {
-    let id: DataProviderID = .finnhub
+    let id: DataProviderID = .sample
     var failure: APIError?
 
     func isConfigured() async -> Bool { true }
