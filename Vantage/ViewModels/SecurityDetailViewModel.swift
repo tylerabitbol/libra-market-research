@@ -154,6 +154,14 @@ final class SecurityDetailViewModel {
     private var intradayErrors: [BarResolution: APIError] = [:]
     private(set) var isLoadingIntraday = false
 
+    /// Which resolutions have had a fetch attempt run to completion, and
+    /// whether the daily load has. Only after an attempt has finished can the
+    /// chart honestly say a range has nothing to draw: before that it has not
+    /// looked, and reporting "unavailable" from a state nobody has tested is
+    /// how the chart came to flash an error card on every open.
+    private var attemptedIntraday: Set<BarResolution> = []
+    private(set) var hasCompletedLoad = false
+
     var intradayBars: [PriceBar] { intradayByResolution[selectedRange.resolution] ?? [] }
     var intradayError: APIError? { intradayErrors[selectedRange.resolution] }
 
@@ -297,6 +305,7 @@ final class SecurityDetailViewModel {
                 return .unavailable(intradayError.recoverySuggestion
                                     ?? intradayError.shortDescription)
             }
+            guard attemptedIntraday.contains(selectedRange.resolution) else { return .loading }
             return .unavailable("No regular-session bars in this window. The "
                                 + "market may not have opened yet, or IEX carried "
                                 + "no trades in this symbol.")
@@ -305,6 +314,7 @@ final class SecurityDetailViewModel {
         if let historyError {
             return .unavailable(historyError.recoverySuggestion ?? historyError.shortDescription)
         }
+        guard hasCompletedLoad else { return .loading }
         return .unavailable("Only \(chartBars.count) bar\(chartBars.count == 1 ? "" : "s") "
                             + "of price history is available for this range.")
     }
@@ -356,6 +366,8 @@ final class SecurityDetailViewModel {
         let resolution = selectedRange.resolution
         let from = selectedRange.intradayFetchStart()
         let to = Date.now
+
+        defer { attemptedIntraday.insert(resolution) }
 
         if let fetchedAt = intradayFetchedAt[resolution], !isForcingRefresh,
            !(intradayByResolution[resolution] ?? []).isEmpty,
@@ -413,16 +425,36 @@ final class SecurityDetailViewModel {
         snapshots: SnapshotStore? = nil,
         force: Bool = false
     ) {
-        if !force, case .fresh = freshness { return }
+        if !force, case .fresh = freshness {
+            hasCompletedLoad = true
+            return
+        }
         loadTask?.cancel()
         loadTask = Task { [weak self] in
-            self?.isForcingRefresh = force
-            await self?.hydrate(from: snapshots)
-            await self?.performLoad(using: registry, snapshots: snapshots)
-            await self?.detectChanges(using: snapshots)
-            await self?.persist(using: snapshots, registry: registry)
-            self?.isForcingRefresh = false
+            await self?.perform(using: registry, snapshots: snapshots, force: force)
         }
+    }
+
+    /// Pull-to-refresh, which must not return until the work is done.
+    ///
+    /// `load` spawns and returns, which is right for `.task` and wrong for
+    /// `.refreshable`: the control ended its spinner the moment the gesture
+    /// did, while the request was still in flight, so the gesture reported a
+    /// refresh that had not happened.
+    func refresh(using registry: ProviderRegistry, snapshots: SnapshotStore? = nil) async {
+        loadTask?.cancel()
+        await perform(using: registry, snapshots: snapshots, force: true)
+    }
+
+    private func perform(using registry: ProviderRegistry, snapshots: SnapshotStore?,
+                         force: Bool) async {
+        isForcingRefresh = force
+        await hydrate(from: snapshots)
+        await performLoad(using: registry, snapshots: snapshots)
+        await detectChanges(using: snapshots)
+        await persist(using: snapshots, registry: registry)
+        isForcingRefresh = false
+        hasCompletedLoad = true
     }
 
     /// True when a fetch failed and the page fell back to what was on disk.

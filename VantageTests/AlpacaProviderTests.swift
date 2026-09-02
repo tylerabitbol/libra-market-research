@@ -245,6 +245,19 @@ struct IntradayBoundaryTests {
         return model
     }
 
+    @Test("A chart that has not looked yet says loading, not unavailable")
+    func availabilityBeforeAnyAttempt() {
+        let model = SecurityDetailViewModel(symbol: "TEST")
+        // Nothing held, no error, nothing in flight — the state on the frame
+        // between the view appearing and its `.task` starting. Reporting
+        // "unavailable" from here is a verdict on a fetch nobody has run, and
+        // it rendered as an error card flashing on every open.
+        #expect(model.chartAvailability == .loading)
+
+        model.select(.oneDay, registry: .sample)
+        #expect(model.chartAvailability == .loading)
+    }
+
     @Test("Selecting 1D fetches an intraday series and draws it")
     func intradayIsFetchedAndDrawn() async throws {
         let model = try await loadedModel()

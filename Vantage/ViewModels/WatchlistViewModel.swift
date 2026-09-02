@@ -153,11 +153,24 @@ final class WatchlistViewModel {
         if !force, case .fresh = freshness { return }
         loadTask?.cancel()
         loadTask = Task { [weak self] in
-            await self?.hydrate(from: snapshots)
-            await self?.refreshQuotes(registry: registry)
-            await self?.loadBenchmarkMoves(registry: registry)
-            await self?.persist(using: snapshots, provider: registry.marketData.id)
+            await self?.perform(registry: registry, snapshots: snapshots)
         }
+    }
+
+    /// Pull-to-refresh, which must not return until the work is done. `load`
+    /// spawns and returns, so the control's spinner ended with the gesture
+    /// while the quotes were still in flight.
+    func refresh(entries: [WatchlistEntry], registry: ProviderRegistry,
+                 snapshots: SnapshotStore? = nil) async {
+        load(entries: entries, registry: registry, snapshots: snapshots, force: true)
+        await loadTask?.value
+    }
+
+    private func perform(registry: ProviderRegistry, snapshots: SnapshotStore?) async {
+        await hydrate(from: snapshots)
+        await refreshQuotes(registry: registry)
+        await loadBenchmarkMoves(registry: registry)
+        await persist(using: snapshots, provider: registry.marketData.id)
     }
 
     /// Fills each row with the last price recorded on disk, before any request.

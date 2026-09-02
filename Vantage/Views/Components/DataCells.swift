@@ -30,29 +30,6 @@ struct MetricCell: View {
     }
 }
 
-/// A signed change, coloured by direction.
-///
-/// Colour alone never carries the meaning — the sign is always printed — so
-/// this stays readable for colour-blind users and in monochrome.
-struct ChangeText: View {
-    let percent: Double?
-    var precision: Int = 2
-    var font: Font = .body
-
-    var body: some View {
-        Text(Format.signedPercent(percent, precision: precision))
-            .font(font)
-            .monospacedDigit()
-            .foregroundStyle(tint)
-    }
-
-    private var tint: HierarchicalShapeStyle {
-        // `.primary` for flat/unknown avoids implying a direction we don't have.
-        guard let percent, percent != 0 else { return .secondary }
-        return .primary
-    }
-}
-
 /// Direction-coloured variant for places where the dashboard genuinely benefits
 /// from scanning colour, e.g. a dense benchmark grid.
 struct DirectionalChangeText: View {

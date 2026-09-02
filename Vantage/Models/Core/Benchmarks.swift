@@ -43,9 +43,6 @@ struct Benchmark: Sendable, Hashable, Identifiable {
     /// True when the displayed value is a stand-in rather than the named index.
     var isProxy: Bool { fredSeriesID == nil && proxyNote != nil }
 
-    /// The symbol to quote for a live intraday price, if any.
-    var intradaySymbol: String? { etfSymbol }
-
     /// Whether this benchmark's headline value comes from a real index series.
     var hasRealIndex: Bool { fredSeriesID != nil }
 

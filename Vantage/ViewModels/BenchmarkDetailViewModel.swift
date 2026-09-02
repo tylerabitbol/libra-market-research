@@ -39,6 +39,11 @@ final class BenchmarkDetailViewModel {
     private var windowStart: [BarResolution: Date] = [:]
     private var errorsByResolution: [BarResolution: APIError] = [:]
     private(set) var isLoading = false
+    /// Which resolutions have had a fetch attempt run to completion. Before
+    /// one has, the chart has not looked, and "unavailable" would be a verdict
+    /// on a state nobody tested — which rendered as an error card on the frame
+    /// between the view appearing and its `.task` starting.
+    private var attempted: Set<BarResolution> = []
 
     private var loadTask: Task<Void, Never>?
 
@@ -118,6 +123,7 @@ final class BenchmarkDetailViewModel {
             return .unavailable(currentError.recoverySuggestion
                                 ?? currentError.shortDescription)
         }
+        guard attempted.contains(resolution) else { return .loading }
         return .unavailable("No history available for this range.")
     }
 
@@ -183,10 +189,19 @@ final class BenchmarkDetailViewModel {
         }
     }
 
+    /// Pull-to-refresh, which must not return until the work is done. `load`
+    /// spawns and returns, so awaiting it would end the spinner while the
+    /// request was still in flight.
+    func refresh(registry: ProviderRegistry, snapshots: SnapshotStore? = nil) async {
+        loadTask?.cancel()
+        await performLoad(registry: registry, snapshots: snapshots, force: true)
+    }
+
     private func performLoad(registry: ProviderRegistry, snapshots: SnapshotStore?,
                              force: Bool) async {
         let resolution = self.resolution
         let from = fetchStart()
+        defer { attempted.insert(resolution) }
 
         // Already held, and reaching at least as far back as this range needs.
         if !force, let held = windowStart[resolution], held <= from,

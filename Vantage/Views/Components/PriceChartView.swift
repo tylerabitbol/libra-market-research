@@ -149,6 +149,17 @@ struct PriceChartView: View {
         .accessibilityValue(dailyChartValue)
         .chartYScale(domain: chartFloor...chartCeiling)
         .chartYAxis { AxisMarks(position: .trailing) }
+        // Labels grow leftwards from their mark rather than centring on it.
+        // The y-axis sits in a trailing gutter, so a centred label on the last
+        // mark overflowed into that gutter and was truncated — the final date
+        // on a 1M chart rendered as "A…". Anchoring it trailing keeps the
+        // whole date inside the plot.
+        .chartXAxis {
+            AxisMarks(values: .automatic(desiredCount: 4)) { value in
+                AxisGridLine()
+                AxisValueLabel(centered: false, anchor: .topTrailing)
+            }
+        }
         .frame(height: 190)
     }
 

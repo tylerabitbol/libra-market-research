@@ -248,10 +248,16 @@ struct ValuationMetric: Sendable, Hashable, Identifiable {
         // Finnhub reports both; an earlier revision read the wrong one and
         // displayed it under this label.
         multiple("evEbitdaTTM", "evEbitdaTTM", "EV/EBITDA"),
-        margin("grossMargin", "grossMarginTTM", "Gross margin"),
-        margin("operatingMargin", "operatingMarginTTM", "Operating margin"),
-        margin("netMargin", "netProfitMarginTTM", "Net margin"),
-        margin("roe", "roeTTM", "Return on equity")
+        // The window is part of the name. `FundamentalDetector` reports a
+        // single quarter against the year-ago quarter under the same words,
+        // and both appear on the Security Detail page: GOOGL showed "Net
+        // margin 54.8%" here beside "Net margin: 29.2% → 93.7%" under What
+        // changed. Both were right — 244.3/445.9 over twelve months against
+        // 112.19/119.80 for Q2 — and nothing on screen said so.
+        margin("grossMargin", "grossMarginTTM", "Gross margin (TTM)"),
+        margin("operatingMargin", "operatingMarginTTM", "Operating margin (TTM)"),
+        margin("netMargin", "netProfitMarginTTM", "Net margin (TTM)"),
+        margin("roe", "roeTTM", "Return on equity (TTM)")
     ]
 
     /// Formats a canonical-scale value for display.

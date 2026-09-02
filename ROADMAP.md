@@ -18,27 +18,28 @@ From the original specification. Status as of the latest commit.
 | # | Phase | Status |
 |---|-------|--------|
 | 1 | **Foundation** — project architecture, SwiftData models, API abstraction, networking, secrets, navigation, basic dashboard | ✅ Complete |
-| 2 | **Market data** — quotes, historical prices, volume, watchlist, charts | ✅ Complete — providers, watchlist with search/add/persistence, and range charts |
+| 2 | **Market data** — quotes, historical prices, volume, watchlist, charts | ✅ Complete — providers, watchlist with search/add/persistence, range charts, intraday 1D/5D on a positional axis, and openable benchmark pages behind every dashboard row |
 | 3 | **Fundamentals** — financial statements, valuation, profitability, balance sheet, historical snapshots | ✅ Complete — XBRL extraction, valuation percentiles, Security Detail UI, and append-only persistence |
 | 4 | **SEC** — filings, Form 4, filing history, meaningful filing detection | ✅ Complete — filings, Form 4 parsing, insider summaries, and per-filing figure analysis |
 | 5 | **Analyst / news** — revisions, news, event detection | 🟡 Ratings wired into the research profile; estimate revisions blocked by tier; news fetched but not surfaced |
 | 6 | **Intelligence** — What Changed?, Why?, relative analysis, Research Profile, contradictory evidence | ✅ Complete — price, volume, volatility and fundamental detectors; read-through store; two-factor attribution with an orthogonalised sector leg; Research Profile as components with no score; disconfirming evidence |
-| 7 | **Personal research** — journal, thesis tracking, saved screens, historical comparisons | ✅ Complete — journal with "since your note", screener over held data with saved screens |
+| 7 | **Personal research** — journal, thesis tracking, saved screens, historical comparisons | 🟡 Screener over held data with saved screens. **The journal was removed**, schema included: it asked the user to write the analysis the app is supposed to produce, and "since your note" is better served by "What changed", which needs nothing typed |
 | 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | 🟡 Read-through caching and offline fallback done; accessibility pass on drawn elements done; iPad layout and Dynamic Type sweep outstanding |
 
 Five product areas: Dashboard, Watchlist, Security Detail, Research/Investigation,
 Settings. Dashboard, Watchlist, Security Detail and Research are built; Screener
 is still a placeholder.
 
-**370 tests**, all passing. Every wrong number caught in the last four commits
+**409 tests**, all passing. Every wrong number caught in the last four commits
 was found by looking at rendered output on a real symbol — the suite stayed
 green throughout. Treat a screen check as part of "done", not optional polish;
 see *Build and verify* below.
 
-**Next, in priority order**: verify everything against live data with real API
-keys — nothing built after the store-reads commit has been checked against a
-real symbol, only against fixtures and sample data. Then surface company news,
-which is fetched and displayed nowhere. Then the Dynamic Type and iPad sweep.
+**Next, in priority order**: surface company news, which is fetched and
+displayed nowhere. Then the Dynamic Type and iPad sweep. Live-data
+verification is no longer the top item: the intraday charts and the benchmark
+pages were screen-checked against real FRED, Tiingo and Alpaca responses with
+keys in the simulator's Keychain.
 The AI layer is optional, last, and the only component with a cost. Working
 plan in `~/.claude/plans/this-is-the-current-pure-storm.md`.
 
@@ -65,6 +66,14 @@ so they never enter a command line.
   cannot be constructed without declaring its epistemic status.
 - **Absent data renders "Not available", never 0.** Fabricating a value is worse
   than showing nothing.
+- **Synthetic data is refused at the door, not flagged.** Mocks answer to
+  `DataProviderID.sample`, every `SnapshotStore.record(...)` names its provider,
+  and a synthetic write is dropped. A flag would have to be honoured by every
+  read path forever, and the read that matters — `bars(symbol:from:to:)` — is
+  the one a page uses precisely when it is trying *not* to spend a request.
+  `AppModelContainer` also evicts what a keyless run already wrote: bars with
+  no provider, and rows whose accession begins `0000000000-`, which no real
+  EDGAR filer can produce.
 - **Real indexes from FRED, not ETF proxies**, for S&P 500 / Dow / Nasdaq / VIX.
   Sectors remain ETF proxies and are labelled as such. The VIX-futures ETF was
   removed: those futures decay and track the index only loosely.
@@ -216,10 +225,29 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 
 ## Known gaps
 
-- **Nothing built after the store-reads commit has been verified against live
-  data.** Every screen check ran on sample data, because the simulator holds no
-  keys. The arithmetic is unit-tested against fixtures; the figures have not
-  been compared with a real filing.
+- **Fundamentals have not been checked against a real filing.** Prices,
+  intraday and the benchmark pages now have been, against live provider
+  responses. The XBRL figures are still only unit-tested against fixtures — no
+  number on the Security Detail page has been read back against the 10-Q it
+  came from.
+- **A stored bar names the composite, not the vendor that supplied it.**
+  `CompositeMarketDataProvider.id` reports `.finnhub` for every call, so a
+  Tiingo daily bar and an Alpaca intraday bar are both written to disk as
+  Finnhub's. Good enough for the synthetic guard, which only asks real-or-not,
+  and wrong as provenance. Fixing it means a per-call source on
+  `MarketDataProvider`.
+- **`MacroObservation` is in the container schema and nothing reads or writes
+  it.** A dormant table: either `SnapshotStore` gains macro methods or the
+  model goes in a migration. FRED-backed benchmark charts re-fetch instead.
+- **Capability probing was designed and never built.** `ProviderCapability`
+  was deleted in the cleanup — it had no constructor and no reader, and
+  `ConnectionTest` (run per provider from Settings) is the version that
+  actually shipped. The idea it encoded is still worth having: probe once and
+  say "estimate revisions aren't in your Finnhub plan" rather than showing a
+  broken section.
+- **The four macro cards are dead ends.** CPI, Fed funds, 10Y and unemployment
+  show a value and a date and go nowhere, the same problem the benchmark rows
+  had. The FRED chart they would need now exists.
 - **Company news is fetched and shown nowhere.** `FinnhubNewsProvider` works
   and no view consumes it.
 - **The Form 4 fixture is hand-authored**, like the two `sec_submissions_*`
@@ -228,8 +256,11 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 - **Estimate revisions** (spec §8) need a paid Finnhub tier. Rating changes and
   earnings surprises work. The gap surfaces as "not in your plan", never an
   empty chart.
-- **Intraday index levels** — FRED is end-of-day. An intraday ETF overlay is
-  deliberately deferred.
+- **Intraday index levels** — FRED is end-of-day, and the benchmark page
+  settles this rather than deferring it: index-backed rows offer 1M through 5Y
+  and no 1D/5D at all. Serving SPY's intraday under the heading "S&P 500" is
+  the substitution the proxy labelling exists to prevent, so the range is not
+  offered rather than filled with something else.
 - **Volatility shifts are not backfilled.** Price moves and volume are; a
   regime change that began on a day the app was not opened is still reported
   only from the current window. `EventDetector.priceMoves(bars:after:)` is the

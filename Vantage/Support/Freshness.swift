@@ -43,10 +43,8 @@ struct StalenessPolicy: Sendable, Hashable {
     static let quote = StalenessPolicy(maxAge: 60)                    // 1 minute
     static let intradayCandles = StalenessPolicy(maxAge: 5 * 60)      // 5 minutes
     static let dailyCandles = StalenessPolicy(maxAge: 6 * 60 * 60)    // 6 hours
-    static let companyProfile = StalenessPolicy(maxAge: 30 * 86_400)  // 30 days
     static let fundamentals = StalenessPolicy(maxAge: 24 * 60 * 60)   // 1 day
     static let filings = StalenessPolicy(maxAge: 60 * 60)             // 1 hour
-    static let analystEstimates = StalenessPolicy(maxAge: 12 * 60 * 60)
     static let news = StalenessPolicy(maxAge: 30 * 60)                // 30 minutes
     static let macro = StalenessPolicy(maxAge: 12 * 60 * 60)          // 12 hours
 

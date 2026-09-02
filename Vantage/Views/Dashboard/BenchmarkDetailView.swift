@@ -28,7 +28,7 @@ struct BenchmarkDetailView: View {
         .navigationTitle(model.benchmark.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
-            model.load(registry: app.registry, snapshots: app.snapshots, force: true)
+            await model.refresh(registry: app.registry, snapshots: app.snapshots)
         }
         .task { model.load(registry: app.registry, snapshots: app.snapshots) }
     }

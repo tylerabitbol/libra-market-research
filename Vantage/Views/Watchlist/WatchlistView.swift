@@ -62,7 +62,7 @@ struct WatchlistView: View {
         } message: {
             Text(saveError ?? "")
         }
-        .refreshable { model.load(entries: entries, registry: app.registry, snapshots: app.snapshots, force: true) }
+        .refreshable { await model.refresh(entries: entries, registry: app.registry, snapshots: app.snapshots) }
         .task(id: entries.count) {
             model.load(entries: entries, registry: app.registry, snapshots: app.snapshots)
         }
