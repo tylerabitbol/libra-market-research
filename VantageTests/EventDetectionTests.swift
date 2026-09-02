@@ -464,7 +464,7 @@ struct EventPersistenceTests {
         )
 
         // Storing it would freeze a midday figure as what happened that day.
-        #expect(try await store.record(events: [provisional], symbol: "TEST") == 0)
+        #expect(try await store.record(events: [provisional], symbol: "TEST", provider: .computed) == 0)
         #expect(try await store.events(symbol: "TEST").isEmpty)
     }
 
@@ -473,8 +473,8 @@ struct EventPersistenceTests {
         let (store, _) = try makeStore()
         let events = [event(.unusualVolume, dayOffset: 0)]
 
-        let first = try await store.record(events: events, symbol: "TEST")
-        let second = try await store.record(events: events, symbol: "TEST")
+        let first = try await store.record(events: events, symbol: "TEST", provider: .computed)
+        let second = try await store.record(events: events, symbol: "TEST", provider: .computed)
 
         #expect(first == 1)
         #expect(second == 0, "Detection re-runs on every visit over the same bars")
@@ -483,8 +483,10 @@ struct EventPersistenceTests {
     @Test("The same kind on a different day is a different event")
     func differentDaysAreDistinct() async throws {
         let (store, _) = try makeStore()
-        try await store.record(events: [event(.unusualVolume, dayOffset: 0)], symbol: "TEST")
-        try await store.record(events: [event(.unusualVolume, dayOffset: 1)], symbol: "TEST")
+        try await store.record(events: [event(.unusualVolume, dayOffset: 0)], symbol: "TEST",
+                               provider: .computed)
+        try await store.record(events: [event(.unusualVolume, dayOffset: 1)], symbol: "TEST",
+                               provider: .computed)
 
         #expect(try await store.events(symbol: "TEST").count == 2)
     }
@@ -495,7 +497,7 @@ struct EventPersistenceTests {
         try await store.record(events: [
             event(.unusualVolume, dayOffset: 0),
             event(.unusualPriceMove, dayOffset: 5)
-        ], symbol: "TEST")
+        ], symbol: "TEST", provider: .computed)
 
         let stored = try await store.events(symbol: "TEST")
         #expect(stored.first?.kind == .unusualPriceMove)
@@ -524,7 +526,7 @@ struct EventPersistenceTests {
         // History is kept only for companies the user actually follows, so a
         // stray symbol cannot quietly populate the store.
         #expect(try await store.record(events: [event(.unusualVolume, dayOffset: 0)],
-                                       symbol: "NOPE") == 0)
+                                       symbol: "NOPE", provider: .computed) == 0)
     }
 
     @Test("Acknowledging an event marks only that event")
@@ -532,7 +534,7 @@ struct EventPersistenceTests {
         let (store, container) = try makeStore()
         let target = event(.unusualVolume, dayOffset: 0)
         try await store.record(events: [target, event(.unusualPriceMove, dayOffset: 0)],
-                               symbol: "TEST")
+                               symbol: "TEST", provider: .computed)
 
         try await store.acknowledge(symbol: "TEST", naturalKey: target.naturalKey)
 
@@ -550,8 +552,10 @@ struct EventPersistenceTests {
         context.insert(Security(symbol: "OTHER", name: "Other Corp"))
         try context.save()
 
-        try await store.record(events: [event(.unusualVolume, dayOffset: 0)], symbol: "TEST")
-        try await store.record(events: [event(.unusualPriceMove, dayOffset: 1)], symbol: "OTHER")
+        try await store.record(events: [event(.unusualVolume, dayOffset: 0)], symbol: "TEST",
+                               provider: .computed)
+        try await store.record(events: [event(.unusualPriceMove, dayOffset: 1)], symbol: "OTHER",
+                               provider: .computed)
 
         let feed = try await store.recentEvents()
         #expect(feed.count == 2)

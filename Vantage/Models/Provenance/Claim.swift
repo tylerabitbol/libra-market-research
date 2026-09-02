@@ -78,6 +78,11 @@ enum DataProviderID: String, Codable, Sendable, CaseIterable {
     case alpaca
     case fred
     case computed
+    /// Synthetic figures the app generates for itself: previews, tests, and a
+    /// run with no API keys. Not a vendor, and never a source of truth — the
+    /// store refuses to persist anything carrying this identity, because a
+    /// sample bar on disk is indistinguishable from a real one afterwards.
+    case sample
 
     var displayName: String {
         switch self {
@@ -87,12 +92,17 @@ enum DataProviderID: String, Codable, Sendable, CaseIterable {
         case .alpaca: "Alpaca (IEX)"
         case .fred: "FRED"
         case .computed: "Calculated locally"
+        case .sample: "Sample data"
         }
     }
 
     /// Primary sources are filings from the issuer itself. The spec treats SEC
     /// as authoritative where it and a vendor disagree.
     var isPrimarySource: Bool { self == .sec }
+
+    /// True for identities that produce invented numbers. Everything that
+    /// writes to the store checks this.
+    var isSynthetic: Bool { self == .sample }
 }
 
 /// A single statement the app is prepared to show the user, carrying its own

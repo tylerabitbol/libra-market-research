@@ -145,7 +145,7 @@ struct ScreenerTests {
         try await store.record(
             quote: QuoteDTO(symbol: "TEST", last: 110, open: nil, high: nil, low: nil,
                             previousClose: 100, volume: nil, quoteTime: nil),
-            symbol: "TEST")
+            symbol: "TEST", provider: .finnhub)
 
         let calendar = Calendar(identifier: .iso8601)
         func fact(_ concept: FinancialConcept, index: Int, value: Double,
@@ -165,7 +165,7 @@ struct ScreenerTests {
         }
         facts.append(fact(.totalDebt, index: 7, value: 500, kind: .instant))
         facts.append(fact(.cashAndEquivalents, index: 7, value: 900, kind: .instant))
-        try await store.record(facts: facts, symbol: "TEST")
+        try await store.record(facts: facts, symbol: "TEST", provider: .sec)
 
         let subject = try #require(try await store.screenSubjects().first)
         #expect(subject.dailyChangePercent == 10)

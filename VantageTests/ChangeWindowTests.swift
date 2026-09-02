@@ -102,7 +102,7 @@ struct ChangeWindowFilteringTests {
         try context.save()
 
         let store = SnapshotStore(modelContainer: container)
-        try await store.record(bars: spikeBars(), symbol: "TEST", resolution: .daily)
+        try await store.record(bars: spikeBars(), symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         let model = SecurityDetailViewModel(symbol: "TEST")
         model.load(using: ProviderRegistry(

@@ -14,6 +14,10 @@ import OSLog
 /// - **Append, never update.** A restatement or a re-quote inserts a new row
 ///   carrying its own `observedAt`. Overwriting would destroy exactly the
 ///   record that makes historical comparison possible (Section 17).
+/// - **Never synthetic.** Every write names the provider it came from, and a
+///   provider that invents its numbers is refused. A sample bar that reaches
+///   disk is indistinguishable from a real one afterwards, and the hydration
+///   path will then serve it in preference to fetching the real thing.
 /// - **Idempotent on natural keys.** Refreshing a screen must not multiply
 ///   rows. Observations that are genuinely new-in-time (quotes) always insert;
 ///   observations describing a fixed past fact (a bar for a given session, a
@@ -32,14 +36,16 @@ actor SnapshotStore {
     /// Records a quote observation. Always inserts: a quote is a reading at a
     /// moment, and two readings of the same price at different times are two
     /// facts, not one.
-    func record(quote: QuoteDTO, symbol: String) throws {
+    func record(quote: QuoteDTO, symbol: String, provider: DataProviderID) throws {
+        guard accepts(provider, what: "quote", symbol: symbol) else { return }
         guard let security = try security(for: symbol) else { return }
         let observation = QuoteObservation(
             security: security,
             quoteTime: quote.quoteTime,
             last: quote.last,
             open: quote.open, high: quote.high, low: quote.low,
-            previousClose: quote.previousClose, volume: quote.volume
+            previousClose: quote.previousClose, volume: quote.volume,
+            provider: provider
         )
         modelContext.insert(observation)
         try modelContext.save()
@@ -53,7 +59,13 @@ actor SnapshotStore {
     /// range must not duplicate it. Existing dates are read once and compared
     /// in memory rather than issuing a query per bar.
     @discardableResult
-    func record(bars: [PriceBarDTO], symbol: String, resolution: BarResolution) throws -> Int {
+    func record(
+        bars: [PriceBarDTO],
+        symbol: String,
+        resolution: BarResolution,
+        provider: DataProviderID
+    ) throws -> Int {
+        guard accepts(provider, what: "bars", symbol: symbol) else { return 0 }
         guard !bars.isEmpty, let security = try security(for: symbol) else { return 0 }
 
         let symbolKey = security.symbol
@@ -70,7 +82,8 @@ actor SnapshotStore {
             modelContext.insert(PriceBar(
                 security: security, date: bar.date, resolution: resolution,
                 open: bar.open, high: bar.high, low: bar.low, close: bar.close,
-                volume: bar.volume, adjustedClose: bar.adjustedClose
+                volume: bar.volume, adjustedClose: bar.adjustedClose,
+                provider: provider
             ))
             inserted += 1
         }
@@ -87,7 +100,9 @@ actor SnapshotStore {
     /// already holds is a restatement and is inserted, which is what allows
     /// "what did this look like before it was corrected".
     @discardableResult
-    func record(facts: [FinancialFactDTO], symbol: String) throws -> Int {
+    func record(facts: [FinancialFactDTO], symbol: String,
+                provider: DataProviderID) throws -> Int {
+        guard accepts(provider, what: "financial facts", symbol: symbol) else { return 0 }
         guard !facts.isEmpty, let security = try security(for: symbol) else { return 0 }
 
         let symbolKey = security.symbol
@@ -128,7 +143,8 @@ actor SnapshotStore {
     /// duplicate insert would fail the whole save — existing rows are filtered
     /// out first rather than relying on the constraint to catch them.
     @discardableResult
-    func record(filings: [FilingDTO], symbol: String) throws -> Int {
+    func record(filings: [FilingDTO], symbol: String, provider: DataProviderID) throws -> Int {
+        guard accepts(provider, what: "filings", symbol: symbol) else { return 0 }
         guard !filings.isEmpty, let security = try security(for: symbol) else { return 0 }
 
         let numbers = Set(filings.map(\.accessionNumber))
@@ -162,7 +178,12 @@ actor SnapshotStore {
     /// filing reports several transactions, so deduplicating on the accession
     /// alone would keep one line and discard the rest.
     @discardableResult
-    func record(insiders: [InsiderTransactionDTO], symbol: String) throws -> Int {
+    func record(
+        insiders: [InsiderTransactionDTO],
+        symbol: String,
+        provider: DataProviderID
+    ) throws -> Int {
+        guard accepts(provider, what: "insider transactions", symbol: symbol) else { return 0 }
         guard !insiders.isEmpty, let security = try security(for: symbol) else { return 0 }
 
         let symbolKey = security.symbol
@@ -210,7 +231,13 @@ actor SnapshotStore {
     /// headline can change with a code edit, and that must not resurrect an
     /// event the user has already acknowledged.
     @discardableResult
-    func record(events: [DetectedEventDTO], symbol: String) throws -> Int {
+    func record(events: [DetectedEventDTO], symbol: String, provider: DataProviderID) throws -> Int {
+        // An event is only as real as the series it was detected over. The
+        // caller passes the origin of those inputs, not the event's own
+        // `provider` — a price move computed from sample bars is a calculation
+        // over invented numbers, and storing it would put an invented headline
+        // in the Research feed with nothing to mark it as such.
+        guard accepts(provider, what: "events", symbol: symbol) else { return 0 }
         // An unfinished session is not yet a fact. A +8% reading at midday can
         // close at +2%, and the permanent record must not keep the midday
         // figure as what happened — the closed session is picked up from the
@@ -590,6 +617,20 @@ actor SnapshotStore {
     }
 
     // MARK: - Helpers
+
+    /// Whether a write from this provider may be stored at all.
+    ///
+    /// Synthetic data is refused rather than flagged. A flag would have to be
+    /// honoured by every read path forever, and the one that mattered —
+    /// `bars(symbol:from:to:)` — is the path a page uses precisely when it is
+    /// trying not to spend a request. Refusing at the door is the only version
+    /// of this that cannot be forgotten later.
+    private func accepts(_ provider: DataProviderID, what: String, symbol: String) -> Bool {
+        guard provider.isSynthetic else { return true }
+        Self.logger.debug(
+            "Refused synthetic \(what, privacy: .public) for \(symbol, privacy: .public)")
+        return false
+    }
 
     /// Looks up the security, creating nothing: history is only recorded for
     /// companies the user has actually added, so a stray symbol cannot quietly

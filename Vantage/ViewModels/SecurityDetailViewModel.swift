@@ -396,8 +396,9 @@ final class SecurityDetailViewModel {
             intradayFetchedAt[resolution] = .now
             intradayErrors[resolution] = nil
             if let snapshots {
-                try? await snapshots.record(bars: fetched, symbol: symbol,
-                                            resolution: resolution)
+                _ = try? await snapshots.record(bars: fetched, symbol: symbol,
+                                                resolution: resolution,
+                                                provider: registry.marketData.id)
             }
         } catch let error as APIError {
             intradayErrors[resolution] = error
@@ -419,7 +420,7 @@ final class SecurityDetailViewModel {
             await self?.hydrate(from: snapshots)
             await self?.performLoad(using: registry, snapshots: snapshots)
             await self?.detectChanges(using: snapshots)
-            await self?.persist(using: snapshots)
+            await self?.persist(using: snapshots, registry: registry)
             self?.isForcingRefresh = false
         }
     }
@@ -670,30 +671,54 @@ final class SecurityDetailViewModel {
     ///
     /// Deliberately after the UI has its data: persistence must never delay
     /// what is on screen, and a write failure must not blank a loaded page.
-    private func persist(using snapshots: SnapshotStore?) async {
+    ///
+    /// Each write names where its data came from, per source rather than for
+    /// the page as a whole. A run with a Finnhub and Tiingo key but no SEC
+    /// contact email holds real prices beside mocked filings, and it is the
+    /// filings alone that must not be stored — refusing the whole page would
+    /// throw away real history over an unrelated missing key.
+    private func persist(using snapshots: SnapshotStore?, registry: ProviderRegistry) async {
         guard let snapshots else { return }
         let symbol = self.symbol
+        let market = registry.marketData.id
+        let documents = registry.sec?.id ?? .sec
         do {
-            if let quote { try await snapshots.record(quote: quote, symbol: symbol) }
+            if let quote {
+                try await snapshots.record(quote: quote, symbol: symbol, provider: market)
+            }
             if !bars.isEmpty {
                 let dtos = bars.map {
                     PriceBarDTO(date: $0.date, open: $0.open, high: $0.high, low: $0.low,
                                 close: $0.close, volume: $0.volume,
                                 adjustedClose: $0.adjustedClose)
                 }
-                try await snapshots.record(bars: dtos, symbol: symbol, resolution: .daily)
+                try await snapshots.record(bars: dtos, symbol: symbol,
+                                           resolution: .daily, provider: market)
             }
             if !fundamentals.isEmpty {
-                try await snapshots.record(facts: fundamentals, symbol: symbol)
+                // `registry.fundamentals` is the real SEC extractor or nothing
+                // at all, so a synthetic fact cannot reach here today. The
+                // argument is passed anyway, and defaults to `.sample` rather
+                // than `.sec`: an absent provider means facts of unknown
+                // origin, and this is the same reasoning `accepts` was built
+                // on — refusing at the door is the version that survives
+                // someone adding a mock fundamentals provider later.
+                try await snapshots.record(facts: fundamentals, symbol: symbol,
+                                           provider: registry.fundamentals?.id ?? .sample)
             }
             if !filings.isEmpty {
-                try await snapshots.record(filings: filings, symbol: symbol)
+                try await snapshots.record(filings: filings, symbol: symbol, provider: documents)
             }
             if !insiderTransactions.isEmpty {
-                try await snapshots.record(insiders: insiderTransactions, symbol: symbol)
+                try await snapshots.record(insiders: insiderTransactions,
+                                           symbol: symbol, provider: documents)
             }
             if !events.isEmpty {
-                try await snapshots.record(events: events, symbol: symbol)
+                // Detection runs over bars and filings together, so an event is
+                // only storable when both were real.
+                let inputs: DataProviderID = (market.isSynthetic || documents.isSynthetic)
+                    ? .sample : .computed
+                try await snapshots.record(events: events, symbol: symbol, provider: inputs)
             }
             // Stamped last, and only when the load actually completed.
             // Cancelling mid-load leaves `lastRefreshedAt` nil; stamping there
@@ -868,7 +893,9 @@ final class SecurityDetailViewModel {
                 from: ChartRange.fiveYear.startDate(), to: .now)
             sectorBars = fetched.map(Self.priceBar)
             if let snapshots {
-                try? await snapshots.record(bars: fetched, symbol: symbol, resolution: .daily)
+                _ = try? await snapshots.record(bars: fetched, symbol: symbol,
+                                                resolution: .daily,
+                                                provider: registry.marketData.id)
             }
         } catch {
             // Sector context is additional, exactly like market attribution.

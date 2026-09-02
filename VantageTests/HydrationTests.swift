@@ -84,7 +84,7 @@ struct HydrationTests {
         let container = try makeContainer()
         let store = SnapshotStore(modelContainer: container)
         try await store.record(bars: (0..<5).map { bar(day: $0, close: 100 + Double($0)) },
-                               symbol: "TEST", resolution: .daily)
+                               symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         let log = CallLog()
         let model = SecurityDetailViewModel(symbol: "TEST")
@@ -108,7 +108,8 @@ struct HydrationTests {
         let old = Date.now.addingTimeInterval(-48 * 3600)
         context.insert(PriceBar(security: security, date: old, resolution: .daily,
                                 observedAt: old, open: 100, high: 100, low: 100,
-                                close: 100, volume: 1_000, adjustedClose: 100))
+                                close: 100, volume: 1_000, adjustedClose: 100,
+                                provider: .tiingo))
         try context.save()
 
         let log = CallLog()
@@ -124,7 +125,7 @@ struct HydrationTests {
         let container = try makeContainer()
         let store = SnapshotStore(modelContainer: container)
         try await store.record(bars: (0..<5).map { bar(day: $0, close: 100) },
-                               symbol: "TEST", resolution: .daily)
+                               symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         let log = CallLog()
         let model = SecurityDetailViewModel(symbol: "TEST")
@@ -141,7 +142,7 @@ struct HydrationTests {
         let container = try makeContainer()
         let store = SnapshotStore(modelContainer: container)
         try await store.record(bars: (0..<5).map { bar(day: $0, close: 100 + Double($0)) },
-                               symbol: "TEST", resolution: .daily)
+                               symbol: "TEST", resolution: .daily, provider: .tiingo)
 
         let log = CallLog()
         let model = SecurityDetailViewModel(symbol: "TEST")
@@ -192,7 +193,7 @@ struct HydrationTests {
         try await store.record(
             quote: QuoteDTO(symbol: "TEST", last: 150, open: nil, high: nil, low: nil,
                             previousClose: 100, volume: nil, quoteTime: nil),
-            symbol: "TEST")
+            symbol: "TEST", provider: .finnhub)
 
         let context = ModelContext(container)
         let entries = try context.fetch(FetchDescriptor<WatchlistEntry>())
@@ -218,7 +219,7 @@ struct HydrationTests {
         try await store.record(
             quote: QuoteDTO(symbol: "TEST", last: 150, open: nil, high: nil, low: nil,
                             previousClose: 100, volume: nil, quoteTime: nil),
-            symbol: "TEST")
+            symbol: "TEST", provider: .finnhub)
 
         let context = ModelContext(container)
         let entries = try context.fetch(FetchDescriptor<WatchlistEntry>())

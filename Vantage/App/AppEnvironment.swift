@@ -130,6 +130,11 @@ final class AppEnvironment {
                 : .needsSetup("The SEC requires a contact email before EDGAR requests are allowed.")
         case .computed:
             .ready
+        case .sample:
+            // Not a source anyone can configure. It appears in no settings row;
+            // the case exists so the switch stays exhaustive rather than
+            // defaulting a real provider into "ready" by accident.
+            .needsSetup("Sample data is synthetic. Add real keys above.")
         }
     }
 }

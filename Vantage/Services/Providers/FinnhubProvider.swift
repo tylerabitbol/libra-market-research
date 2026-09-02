@@ -334,7 +334,7 @@ private enum JSONValue: Decodable, Sendable {
     case null
     case other
 
-    init(from decoder: Decoder) throws {
+    init(from decoder: any Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() {
             self = .null

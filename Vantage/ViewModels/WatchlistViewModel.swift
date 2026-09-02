@@ -156,7 +156,7 @@ final class WatchlistViewModel {
             await self?.hydrate(from: snapshots)
             await self?.refreshQuotes(registry: registry)
             await self?.loadBenchmarkMoves(registry: registry)
-            await self?.persist(using: snapshots)
+            await self?.persist(using: snapshots, provider: registry.marketData.id)
         }
     }
 
@@ -268,12 +268,12 @@ final class WatchlistViewModel {
 
     /// Records each quote so the watchlist accrues history simply by being
     /// opened — which is what gives Phase 6 something to compare against.
-    private func persist(using snapshots: SnapshotStore?) async {
+    private func persist(using snapshots: SnapshotStore?, provider: DataProviderID) async {
         guard let snapshots else { return }
         for row in rows {
             guard let quote = row.quote else { continue }
             do {
-                try await snapshots.record(quote: quote, symbol: row.symbol)
+                try await snapshots.record(quote: quote, symbol: row.symbol, provider: provider)
             } catch {
                 Self.logger.error("Persist failed for \(row.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
