@@ -36,39 +36,3 @@ struct ProviderRegistry: Sendable {
         )
     }
 }
-
-/// What a provider can actually do with the credentials currently stored.
-///
-/// Free API tiers exclude endpoints that paid tiers include, and the exclusion
-/// is only discoverable by asking. Rather than let the UI fail one card at a
-/// time, the app probes once and records the result, so it can say "estimate
-/// revisions aren't in your Finnhub plan" instead of showing a broken section.
-struct ProviderCapability: Sendable, Hashable, Identifiable {
-    var id: String { "\(provider.rawValue).\(endpointLabel)" }
-
-    let provider: DataProviderID
-    let endpointLabel: String
-    let displayName: String
-    let status: Status
-    let checkedAt: Date
-
-    enum Status: Sendable, Hashable {
-        case available
-        case notEntitled
-        case missingCredentials
-        case failed(String)
-        case unchecked
-
-        var isUsable: Bool { self == .available }
-
-        var displayName: String {
-            switch self {
-            case .available: "Available"
-            case .notEntitled: "Not in your plan"
-            case .missingCredentials: "Key not set"
-            case .failed(let reason): "Failed: \(reason)"
-            case .unchecked: "Not checked"
-            }
-        }
-    }
-}

@@ -36,7 +36,7 @@ struct DashboardView: View {
         .background(Color(.systemGroupedBackground))
         .navigationDestination(for: Benchmark.self) { BenchmarkDetailView(benchmark: $0) }
         .overlay(alignment: .bottom) { footer }
-        .refreshable { model.load(using: app.registry, force: true) }
+        .refreshable { await model.refresh(using: app.registry) }
         .task(id: app.registry.isUsingSampleData) {
             model.load(using: app.registry)
         }

@@ -114,6 +114,13 @@ struct BenchmarkDetailViewModelTests {
                 "A redundant refetch spends a token the free tier refills slowly")
     }
 
+    @Test("A chart that has not looked yet says loading, not unavailable")
+    func availabilityBeforeAnyAttempt() {
+        let model = BenchmarkDetailViewModel(benchmark: Benchmark.market)
+        #expect(model.chartAvailability == .loading,
+                "Nothing held and nothing attempted is not a verdict")
+    }
+
     @Test("A failed fetch says why rather than showing an empty chart")
     func failureIsExplained() async throws {
         let failing = CountingMacroProvider(

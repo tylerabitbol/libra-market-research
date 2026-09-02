@@ -45,7 +45,7 @@ struct SecurityDetailView: View {
                 .background(.regularMaterial, in: .capsule)
                 .padding(.bottom, 6)
         }
-        .refreshable { model.load(using: app.registry, snapshots: app.snapshots, force: true) }
+        .refreshable { await model.refresh(using: app.registry, snapshots: app.snapshots) }
         .task { model.load(using: app.registry, snapshots: app.snapshots) }
         .sheet(isPresented: $isChoosingDate) { customDateSheet }
     }

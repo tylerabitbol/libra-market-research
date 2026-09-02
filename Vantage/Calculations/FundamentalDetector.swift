@@ -105,8 +105,12 @@ enum FundamentalDetector {
                 filedAt: { filedAt(for: $0, concept: concept, in: facts) })
             else { continue }
 
+            // "(quarterly)" is not decoration. `ValuationCalculator` reports
+            // the same three margins over the trailing twelve months, on the
+            // same page, and two windows under one name read as a
+            // contradiction — GOOGL's 93.7% quarter beside its 54.8% TTM.
             lines.append(
-                "\(label): \(Format.percent(move.priorValue, precision: 1)) → "
+                "\(label) (quarterly): \(Format.percent(move.priorValue, precision: 1)) → "
                 + "\(Format.percent(move.currentValue, precision: 1)) "
                 + "(\(Format.percentagePoints(move.change)) YoY)")
             lines.append("  \(move.measure.comparisonLine)")
@@ -129,9 +133,12 @@ enum FundamentalDetector {
             headline: "\(strongest.label) \(direction) "
                 + "\(Format.percentagePoints(abs(strongest.change))) year-over-year",
             detailLines: lines,
-            context: "A margin move of this size against this company's own history is "
-                + "worth tracing back to the filing. A change in product mix, a one-off "
-                + "charge, and sustained pricing pressure all look identical at this level.",
+            context: "One quarter against the year-ago quarter, not a trailing "
+                + "twelve-month figure — a single quarter can carry a gain or a "
+                + "charge the annual number smooths away. A margin move of this "
+                + "size against this company's own history is worth tracing back "
+                + "to the filing. A change in product mix, a one-off charge, and "
+                + "sustained pricing pressure all look identical at this level.",
             unusualness: strongest.measure.unusualness,
             sourceDetails: ["\(sourceDetail), period ending \(Format.shortDate(period))"],
             derivation: strongest.measure.derivation(

@@ -12,7 +12,6 @@ import SwiftData
 @MainActor
 final class AppEnvironment {
     private(set) var registry: ProviderRegistry
-    private(set) var capabilities: [ProviderCapability] = []
 
     let secrets: any SecretsStoring
     let httpClient: HTTPClient

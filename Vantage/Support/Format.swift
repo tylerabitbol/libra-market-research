@@ -13,7 +13,6 @@ import Foundation
 enum Format {
     static let notAvailable = "Not available"
     /// Compact stand-in for table cells where the full phrase doesn't fit.
-    static let notAvailableShort = "—"
 
     // MARK: - Currency
 

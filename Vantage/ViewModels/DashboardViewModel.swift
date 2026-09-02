@@ -72,11 +72,6 @@ final class DashboardViewModel {
         let latest: MacroObservationDTO?
         let previous: MacroObservationDTO?
         let error: APIError?
-
-        var changeFromPrevious: Double? {
-            guard let latest, let previous else { return nil }
-            return latest.value - previous.value
-        }
     }
 
     var overallFreshness: Freshness {
@@ -92,6 +87,14 @@ final class DashboardViewModel {
         loadTask = Task { [weak self] in
             await self?.performLoad(using: registry)
         }
+    }
+
+    /// Pull-to-refresh, which must not return until the rows have actually
+    /// landed. `load` spawns and returns, so the spinner ended with the
+    /// gesture rather than with the data.
+    func refresh(using registry: ProviderRegistry) async {
+        loadTask?.cancel()
+        await performLoad(using: registry)
     }
 
     private func performLoad(using registry: ProviderRegistry) async {
