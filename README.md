@@ -3,7 +3,11 @@
 An iOS research tool that answers *what changed, why, and how unusual is it* —
 for a small number of companies you actually follow.
 
-<!-- SCREENSHOT: docs/dashboard.png — Dashboard on launch. Capture on iPhone 17 Pro. -->
+<p align="center">
+  <img src="docs/dashboard.png" width="245" alt="Dashboard: index levels from FRED with each source named">
+  <img src="docs/security-detail.png" width="245" alt="Security detail: NVDA header and one-year price chart">
+  <img src="docs/what-changed.png" width="245" alt="A detected price move, its arithmetic, and how much the market accounts for">
+</p>
 
 > **Educational and informational purposes only.** Libra is a research tool.
 > It is **not investment advice**, not a recommendation to buy or sell any
@@ -41,6 +45,18 @@ nothing at all, while looking more authoritative than either input. The
 components are what a reader can act on; the total would only look like it.
 The same reasoning refuses a recommendation anywhere in the app.
 
+<img src="docs/valuation-in-context.png" width="320" align="right" alt="Valuation in context: each multiple ranked against the company's own history, and a note explaining why no overall score is shown">
+
+The app says this on screen rather than only in a readme: *"No overall score is
+shown. Weighing these against one another is the judgement this tool leaves to
+you — a single number would only look like it had made it for you."* Underneath
+it, each multiple is ranked against the company's own past — NVDA at a P/E in
+the 42nd percentile of its own range while its P/B sits in the 87th, which is a
+more useful pair of facts than either multiple alone. Dimensions that cannot be
+measured are counted and named, never quietly folded in as neutral.
+
+<br clear="right">
+
 **There is no AI anywhere in the app.** Every number — returns, betas,
 percentiles, margins, anomaly ranks — is pure Swift over data already fetched,
 with no model in the path. Given the same inputs it produces the same output,
@@ -57,7 +73,11 @@ ever reads is a promise the app does not keep.
 requires daily returns to be normally distributed, and they are not — 3σ days
 arrive several times a year. Converting a z-score into a probability would put
 a wildly overstated rarity on screen, dressed in the language of statistics.
-Rank is both true and checkable against the data.
+Rank is both true and checkable against the data. A real detection reads
+*"Move: +8.74% — larger than every one of the prior 250 closed sessions — 2.9×
+the typical daily move (median absolute deviation)"*, and the attribution
+beneath it splits that move into what the market accounts for and what it does
+not, in percentage points, with the beta and the ETF substitution both named.
 
 **Anomalies use median and MAD, not mean and standard deviation.** A standard
 deviation computed over a window that contains the spike is inflated by that
@@ -133,8 +153,6 @@ range is not offered rather than filled with something else.
 
 ## What it shows
 
-<!-- SCREENSHOT: docs/security-detail.png — Security Detail with the What Changed panel visible. -->
-
 **Dashboard.** Four indexes and the VIX from FRED, four macro readings, and the
 eleven GICS sectors as a daily-change grid. Every row opens a price chart with
 its own range picker. Deliberately restrained — the things that explain a move
@@ -172,7 +190,11 @@ screening a real universe impossible, and a screen that quietly examined six
 stocks while looking like it examined six thousand would be worse than none. The
 coverage is stated on screen.
 
-<!-- SCREENSHOT: docs/research-profile.png — Research profile showing a challenging dimension. -->
+<p align="center">
+  <img src="docs/watchlist.png" width="245" alt="Watchlist with three companies and their daily change">
+  <img src="docs/fundamental-change.png" width="245" alt="A detected debt change ranked against nineteen reported quarters, with its interpretation">
+  <img src="docs/research-profile.png" width="245" alt="Research profile grouping dimensions by which way they point, with no total">
+</p>
 
 ## Setup
 
