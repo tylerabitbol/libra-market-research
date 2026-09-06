@@ -18,6 +18,10 @@ struct DashboardView: View {
                     SampleDataBanner()
                 }
 
+                // Below the sample-data warning deliberately: when both are
+                // showing, "these numbers are invented" is the more urgent one.
+                DisclaimerBanner()
+
                 section("Market", rows: model.market)
 
                 if !model.volatility.isEmpty {
