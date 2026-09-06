@@ -168,6 +168,6 @@ struct SecretsStoreTests {
     func onlyKeysAreMasked() {
         #expect(!SecretKey.secContactEmail.isSensitive)
         #expect(SecretKey.finnhubAPIKey.isSensitive)
-        #expect(SecretKey.anthropicAPIKey.isSensitive)
+        #expect(SecretKey.alpacaSecretKey.isSensitive)
     }
 }

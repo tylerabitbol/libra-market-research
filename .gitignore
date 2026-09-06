@@ -15,5 +15,7 @@ Vantage.xcodeproj/
 Secrets.xcconfig
 *.env
 
-# Claude Code local settings — machine-specific, and records literal commands
-.claude/settings.local.json
+# Claude Code local state — machine-specific, records literal commands, and is
+# where worktrees land. The whole directory, not just the settings file: a
+# `git add -A` would otherwise sweep up whatever else appears in here.
+.claude/

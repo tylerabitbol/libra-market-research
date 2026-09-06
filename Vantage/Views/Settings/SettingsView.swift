@@ -46,30 +46,19 @@ struct SettingsView: View {
             } header: {
                 Text("Data sources")
             } footer: {
-                Text("Keys are stored in the iOS Keychain on this device. They are never written to the app's database, never included in logs, and never sent anywhere except the provider they belong to.")
-            }
-
-            Section {
-                NavigationLink {
-                    SecretEntryView(key: .anthropicAPIKey, provider: .computed)
-                } label: {
-                    HStack {
-                        Text(SecretKey.anthropicAPIKey.displayName)
-                        Spacer()
-                        Text(app.hasKey(.anthropicAPIKey) ? "Set" : "Not set")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text("AI summaries")
-            } footer: {
-                Text("Optional. Every calculation in this app is deterministic Swift code and works without it. When enabled, AI is used only to summarise and organise data already fetched — it never supplies a figure of its own.")
+                // The FRED sentence is required verbatim by their API terms,
+                // which ask for it prominently in the application itself —
+                // a line in the repository's README would not satisfy it.
+                Text("Keys are stored in the iOS Keychain on this device. They are never written to the app's database, never included in logs, and never sent anywhere except the provider they belong to.\n\nThis product uses the FRED® API but is not endorsed or certified by the Federal Reserve Bank of St. Louis.")
             }
 
             Section("About") {
                 LabeledContent("Research tool", value: "Not investment advice")
                     .foregroundStyle(.secondary)
                 Text("This app analyses and organises published information. It does not make recommendations, predict prices, or tell you what to buy or sell.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("For educational and informational purposes only. Nothing here is investment advice or a recommendation to buy or sell any security. Data comes from third-party providers and carries no warranty as to accuracy, completeness or timeliness.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -15,7 +15,6 @@ enum SecretKey: String, CaseIterable, Sendable {
     case alpacaKeyID
     case alpacaSecretKey
     case fredAPIKey
-    case anthropicAPIKey
     /// Not a credential, but it belongs with them: SEC EDGAR's fair-access
     /// policy requires a contact address in the User-Agent header, and that
     /// address is personal data that shouldn't be committed to the repo.
@@ -31,7 +30,6 @@ enum SecretKey: String, CaseIterable, Sendable {
         case .alpacaKeyID: "Alpaca key ID"
         case .alpacaSecretKey: "Alpaca secret key"
         case .fredAPIKey: "FRED API key"
-        case .anthropicAPIKey: "Anthropic API key"
         case .secContactEmail: "SEC contact email"
         case .secOrganizationName: "SEC organisation name"
         }
@@ -49,8 +47,6 @@ enum SecretKey: String, CaseIterable, Sendable {
             "The secret half of the Alpaca key pair. Both halves are needed; neither works alone."
         case .fredAPIKey:
             "Free key from fred.stlouisfed.org. Used for macroeconomic series."
-        case .anthropicAPIKey:
-            "Optional. Only used if you turn on AI summaries. Calls are billed to your account."
         case .secContactEmail:
             "Required by the SEC. They ask every automated client to identify itself with a contact address. Requests to EDGAR are disabled until this is set."
         case .secOrganizationName:

@@ -8,8 +8,10 @@ Written so work can resume without the conversation that produced it.
 A personal investment **research** tool that answers "what changed, why did it
 change, how unusual is it, and what should I investigate?" — not "the stock is
 up 3%". It never makes buy/sell recommendations or gives personalised financial
-advice. Calculations are deterministic Swift; AI is confined to summarising and
-organising data already fetched.
+advice. Every calculation is deterministic Swift. There is no AI in the app at
+all: the spec allowed a summarisation layer over already-fetched data, and the
+Anthropic key slot that anticipated it was removed unbuilt — a settings field
+storing a credential nothing reads is a promise the app does not keep.
 
 ## Development phases
 
@@ -27,8 +29,9 @@ From the original specification. Status as of the latest commit.
 | 8 | **Polish** — performance, caching, error handling, accessibility, UI, testing | 🟡 Read-through caching and offline fallback done; accessibility pass on drawn elements done; iPad layout and Dynamic Type sweep outstanding |
 
 Five product areas: Dashboard, Watchlist, Security Detail, Research/Investigation,
-Settings. Dashboard, Watchlist, Security Detail and Research are built; Screener
-is still a placeholder.
+Settings. All are built. The Screener is scoped to what the store already holds
+— the watchlist plus anything visited — and issues no requests; free tiers make
+screening a real universe impossible, and its coverage is stated on screen.
 
 **409 tests**, all passing. Every wrong number caught in the last four commits
 was found by looking at rendered output on a real symbol — the suite stayed
@@ -39,8 +42,7 @@ see *Build and verify* below.
 displayed nowhere. Then the Dynamic Type and iPad sweep. Live-data
 verification is no longer the top item: the intraday charts and the benchmark
 pages were screen-checked against real FRED, Tiingo and Alpaca responses with
-keys in the simulator's Keychain.
-The AI layer is optional, last, and the only component with a cost. Working
+keys in the simulator's Keychain. Working
 plan in `~/.claude/plans/this-is-the-current-pure-storm.md`.
 
 ## Provider capabilities (measured against live keys, not assumed)
@@ -50,7 +52,7 @@ plan in `~/.claude/plans/this-is-the-current-pure-storm.md`.
 | **Finnhub** (free) | `quote`, `profile2`, `metric` (133 metrics + 39 annual / 41 quarterly historical ratio series), `recommendation`, `stock/earnings`, `insider-transactions`, `company-news` | `candle`, `eps-estimate`, `revenue-estimate`, `price-target`, `split`, index symbols — all 403 |
 | **Tiingo** (free) | Adjusted daily OHLCV back to 1980, ETFs included. 50 req/**hour**, 1000/day, 500 symbols/month | Intraday |
 | **FRED** | `SP500`, `DJIA`, `NASDAQCOM`, `VIXCLS`, macro series. Free, generous limits. Also the market leg for beta and attribution | Sector indexes, intraday |
-| **SEC EDGAR** | Ticker→CIK map, submissions/filing history. **No API key**; requires identifying User-Agent, ~10 req/sec | Form 4 parsing not yet implemented |
+| **SEC EDGAR** | Ticker→CIK map, submissions/filing history. **No API key**; requires identifying User-Agent, ~10 req/sec | Form 4 parsing is implemented but has never run against a live ownership document |
 
 Verify all four at any time: launch with `-VantageSelfTest` and read the log
 (`subsystem == "com.tylerabitbol.vantage"`). Credentials come from the Keychain,
