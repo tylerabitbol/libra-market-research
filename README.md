@@ -1,11 +1,11 @@
-# Vantage
+# Libra
 
 An iOS research tool that answers *what changed, why, and how unusual is it* —
 for a small number of companies you actually follow.
 
 <!-- SCREENSHOT: docs/dashboard.png — Dashboard on launch. Capture on iPhone 17 Pro. -->
 
-> **Educational and informational purposes only.** Vantage is a research tool.
+> **Educational and informational purposes only.** Libra is a research tool.
 > It is **not investment advice**, not a recommendation to buy or sell any
 > security, and carries **no warranty as to the accuracy, completeness or
 > timeliness of any data shown**. All data comes from third-party providers and
@@ -21,7 +21,7 @@ is whether 3% is large for *this* company, how much of it was the market
 dragging everything down, whether anything in the last filing moved underneath
 the price, and whether any of it is worth an hour of reading.
 
-Vantage is built around that question. It watches a handful of companies,
+Libra is built around that question. It watches a handful of companies,
 detects changes that are unusual *relative to each company's own history*,
 separates the market's contribution from the company's, and shows the
 arithmetic behind every figure so a reader can reject it. It never produces a
@@ -176,7 +176,7 @@ coverage is stated on screen.
 
 ## Setup
 
-Vantage is **bring-your-own-key**. It ships no market data and redistributes
+Libra is **bring-your-own-key**. It ships no market data and redistributes
 none: you create free accounts, and the app calls the providers as you. That is
 an architectural choice as much as a licensing one — every provider's free tier
 forbids redistribution, and holding no data means there is nothing to
@@ -209,13 +209,13 @@ Requires Xcode 26, an iOS 26 simulator, and
 
     brew install xcodegen
     xcodegen generate
-    open Vantage.xcodeproj
+    open Libra.xcodeproj
 
 The `.xcodeproj` is generated, not committed — edit `project.yml`. Code signing
 must be enabled: an unsigned build carries no Keychain entitlement, and every key
 you enter then silently fails to save.
 
-    xcodebuild -project Vantage.xcodeproj -scheme Vantage \
+    xcodebuild -project Libra.xcodeproj -scheme Libra \
       -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 
 409 tests. Provider tests decode captured payloads through the full mapping path
@@ -223,7 +223,7 @@ via a stubbed `URLSession`; no test touches the network.
 
 ## Status
 
-Honest about what is finished. Vantage is a personal project under active
+Honest about what is finished. Libra is a personal project under active
 development, not a product. The authoritative record is
 [ROADMAP.md](ROADMAP.md), which this table summarises.
 
@@ -270,7 +270,7 @@ Reserve Bank of St. Louis.
 Market and fundamental data are supplied by Finnhub, Tiingo, Alpaca, FRED and
 SEC EDGAR under each reader's own account and each provider's own terms. This
 repository contains no licensed market data. The files under
-`VantageTests/Fixtures/` are small trimmed API responses retained solely to
+`LibraTests/Fixtures/` are small trimmed API responses retained solely to
 exercise decoding, and EDGAR content is United States Government work in the
 public domain.
 

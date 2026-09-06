@@ -1,0 +1,1214 @@
+import Foundation
+import SwiftUI
+import OSLog
+
+/// Loads everything the Security Detail page shows.
+///
+/// Each section loads independently and records its own failure. Section 21
+/// requires that one provider failing degrades one section rather than the
+/// screen — and with four providers on three different rate limits, partial
+/// success is the normal case rather than an edge case.
+@Observable
+@MainActor
+final class SecurityDetailViewModel {
+    nonisolated static let logger = Logger(
+        subsystem: "com.tylerabitbol.libra", category: "detail"
+    )
+
+    let symbol: String
+
+    private(set) var profile: CompanyProfileDTO?
+    private(set) var quote: QuoteDTO?
+    private(set) var bars: [PriceBar] = []
+    private(set) var metrics: CompanyMetricsDTO?
+    private(set) var fundamentals: [FinancialFactDTO] = []
+    private(set) var filings: [FilingDTO] = []
+
+    /// The market's daily closes, for separating "the market moved" from
+    /// "this company moved". FRED's real S&P 500 index, not an ETF.
+    private(set) var marketCloses: [(date: Date, close: Double)] = []
+    /// The current session's market move, which FRED cannot supply because it
+    /// publishes at the close. An ETF stands in, and is labelled as one.
+    private(set) var marketIntradayMove: Double?
+    private(set) var beta: Beta?
+
+    /// The sector this company maps to, and its history. Nil when the profile
+    /// carries no sector, or names one we do not track — better than silently
+    /// comparing a bank against the technology sector.
+    private(set) var sectorBenchmark: Benchmark?
+    private(set) var sectorBars: [PriceBar] = []
+    private(set) var sectorIntradayMove: Double?
+    private(set) var sectorFactor: SectorFactor?
+
+    /// Published analyst ratings. Estimate revisions need a paid Finnhub tier
+    /// and are absent by design; what the free tier serves is the rating mix.
+    private(set) var ratings: RatingSnapshotDTO?
+    private(set) var insiderTransactions: [InsiderTransactionDTO] = []
+
+    /// Section 10's summary rather than a raw list of Form 4 lines.
+    var insiderSummary: InsiderActivity.Summary? {
+        InsiderActivity.summarize(insiderTransactions)
+    }
+
+    private(set) var quoteError: APIError?
+    private(set) var historyError: APIError?
+    private(set) var metricsError: APIError?
+    private(set) var fundamentalsError: APIError?
+    private(set) var filingsError: APIError?
+
+    /// The changes on screen: the pools below, narrowed to the chosen window
+    /// and kinds, most recent first.
+    private(set) var events: [DetectedEventDTO] = []
+    private(set) var lastVisit: Date?
+
+    /// Changes that describe the present rather than a moment — the open
+    /// session, the latest reported period, the newest restatement. They are
+    /// shown whatever window is chosen, including none, because they are not
+    /// dated into a window in the first place.
+    private var standingEvents: [DetectedEventDTO] = []
+    /// Changes that happened at a point in time, over all the history loaded,
+    /// plus everything previously detected and stored. These are what a window
+    /// selects from.
+    private var windowedEvents: [DetectedEventDTO] = []
+
+    /// How far back the panel looks. Changing it re-filters what is already
+    /// in hand; it never costs a request.
+    var changeWindow: ChangeWindow = .lastVisit {
+        didSet { applyChangeFilter() }
+    }
+    /// Which kinds to show. Empty means all — an explicit "no kinds" selection
+    /// would show an empty panel and is not a thing anyone means.
+    var kindFilter: Set<EventKind> = [] {
+        didSet { applyChangeFilter() }
+    }
+
+    /// The subset the user has not seen — everything that occurred after their
+    /// previous visit. Empty on a first visit by design.
+    ///
+    /// Deliberately measured against the pools rather than `events`: what is
+    /// new to the user does not change because they narrowed the panel to one
+    /// kind.
+    var newSinceLastVisit: [DetectedEventDTO] {
+        guard let lastVisit else { return [] }
+        return (standingEvents + windowedEvents).filter { $0.occurredAt > lastVisit }
+    }
+
+    /// The kinds actually present in what was loaded, in enum order.
+    ///
+    /// Ten of the eighteen `EventKind`s have a producer today. Offering a
+    /// toggle that can never match is the same defect as a sort that cannot
+    /// reorder anything, so the menu is derived from the events in hand.
+    var availableKinds: [EventKind] {
+        let present = Set((standingEvents + windowedEvents).map(\.kind))
+        return EventKind.allCases.filter(present.contains)
+    }
+
+    /// `availableKinds`, grouped under the Section 12 evidence buckets.
+    var availableKindsByCategory: [(category: EvidenceCategory, kinds: [EventKind])] {
+        let grouped = Dictionary(grouping: availableKinds, by: \.evidenceCategory)
+        return EvidenceCategory.allCases.compactMap { category in
+            grouped[category].map { (category, $0) }
+        }
+    }
+
+    /// What the chosen window cannot reach, or `nil` when it is fully covered.
+    ///
+    /// A window that starts before the earliest bar held returns less than was
+    /// asked for. Saying so is the difference between "the period was quiet"
+    /// and "the period was not examined".
+    var coverageNote: String? {
+        guard let start = changeWindow.startDate(lastVisit: lastVisit) else { return nil }
+        var notes: [String] = []
+        if let earliest = bars.map(\.date).min(), start < earliest {
+            notes.append("Price and volume history begins \(Format.shortDate(earliest)), "
+                         + "so nothing before that date was examined.")
+        }
+        if changeWindow.widensPast(lastVisit: lastVisit) {
+            notes.append("Fundamental changes are judged on the latest reported period "
+                         + "only, so earlier ones appear here as they are detected on "
+                         + "future visits rather than retroactively.")
+        }
+        return notes.isEmpty ? nil : notes.joined(separator: " ")
+    }
+
+    private(set) var isLoading = false
+    private(set) var lastRefreshedAt: Date?
+    private(set) var selectedRange: ChartRange = .oneYear
+
+    /// Intraday bars from Alpaca's IEX feed, for the 1D and 5D charts.
+    ///
+    /// Kept in its own property rather than merged into `bars` on purpose.
+    /// IEX is roughly 2.5% of US equity volume, so a volume anomaly measured
+    /// against it would be meaningless and a return computed from its prints
+    /// can differ from the consolidated tape. Nothing but the chart reads this:
+    /// `visibleBars`, and therefore `priceContext`, `rangeReturn` and every
+    /// detector, continue to see the daily series exclusively. The separation
+    /// is what makes that guarantee structural instead of a convention someone
+    /// has to remember.
+    /// Kept per resolution rather than as one array. 1D and 5D ask for
+    /// different resolutions, and clearing the series on every switch meant
+    /// toggling between them threw away a good chart and re-fetched it — and
+    /// left nothing on screen if that fetch failed.
+    private var intradayByResolution: [BarResolution: [PriceBar]] = [:]
+    private var intradayFetchedAt: [BarResolution: Date] = [:]
+    private var intradayErrors: [BarResolution: APIError] = [:]
+    private(set) var isLoadingIntraday = false
+
+    /// Which resolutions have had a fetch attempt run to completion, and
+    /// whether the daily load has. Only after an attempt has finished can the
+    /// chart honestly say a range has nothing to draw: before that it has not
+    /// looked, and reporting "unavailable" from a state nobody has tested is
+    /// how the chart came to flash an error card on every open.
+    private var attemptedIntraday: Set<BarResolution> = []
+    private(set) var hasCompletedLoad = false
+
+    var intradayBars: [PriceBar] { intradayByResolution[selectedRange.resolution] ?? [] }
+    var intradayError: APIError? { intradayErrors[selectedRange.resolution] }
+
+    private var loadTask: Task<Void, Never>?
+    /// Bars are the scarcest request in the app — Tiingo's free tier refills
+    /// about one token every 80 seconds — so a range change reuses what we
+    /// already fetched rather than re-requesting.
+    private var loadedBarWindow: (from: Date, to: Date)?
+
+    /// Observation times of what the store already holds, consulted before a
+    /// request is spent.
+    private var storedFreshness: [StoredDataKind: Date] = [:]
+    /// Set for the duration of a forced refresh, so pull-to-refresh reaches the
+    /// network even where the held copy would otherwise be considered fresh.
+    private var isForcingRefresh = false
+
+    /// Whether any section on this page was filled from the store.
+    private(set) var hydratedFromStore = false
+
+    /// What each periodic filing reported, keyed by accession number.
+    private(set) var filingAnalyses: [String: FilingAnalysis.Result] = [:]
+
+    /// The concepts this page works with, named once.
+    ///
+    /// The store read and the network fetch must ask for the same set, or a
+    /// hydrated page renders a series that the fetched page then drops.
+    static let trackedConcepts: [FinancialConcept] = [
+        .revenue, .netIncome, .grossProfit, .operatingIncome,
+        .operatingCashFlow, .capitalExpenditures,
+        .cashAndEquivalents, .totalDebt, .stockholdersEquity
+    ]
+
+    /// How far back fundamentals are asked for, on both paths.
+    static var fundamentalsSince: Date? {
+        Calendar.current.date(byAdding: .year, value: -6, to: .now)
+    }
+
+    init(symbol: String) {
+        self.symbol = symbol.uppercased()
+    }
+
+    var freshness: Freshness {
+        if isLoading { return .refreshing(previous: lastRefreshedAt) }
+        return StalenessPolicy.quote.evaluate(lastUpdated: lastRefreshedAt)
+    }
+
+    /// The market series as bars, so it can go through the same return
+    /// machinery as everything else.
+    var marketBars: [PriceBar] {
+        marketCloses.map {
+            PriceBar(date: $0.date, resolution: .daily, open: $0.close, high: $0.close,
+                     low: $0.close, close: $0.close, adjustedClose: $0.close)
+        }
+    }
+
+    /// Return over the selected range for the sector and the market, on the
+    /// same window as `rangeReturn`.
+    var sectorRangeReturn: PeriodReturn? {
+        ReturnCalculator.trailingReturn(bars: sectorBars, window: selectedRange.dateInterval)
+    }
+
+    var marketRangeReturn: PeriodReturn? {
+        ReturnCalculator.trailingReturn(bars: marketBars, window: selectedRange.dateInterval)
+    }
+
+    /// Section 7, finally on screen: the arithmetic of out- or
+    /// under-performance, stated in percentage points rather than adjectives.
+    var relativeToSector: RelativePerformance? {
+        ReturnCalculator.relativePerformance(security: rangeReturn, benchmark: sectorRangeReturn)
+    }
+
+    var relativeToMarket: RelativePerformance? {
+        ReturnCalculator.relativePerformance(security: rangeReturn, benchmark: marketRangeReturn)
+    }
+
+    /// How the sector itself did against the market — Section 13's "sector
+    /// strength", which is about the industry rather than this company.
+    var sectorVersusMarket: RelativePerformance? {
+        ReturnCalculator.relativePerformance(security: sectorRangeReturn,
+                                             benchmark: marketRangeReturn)
+    }
+
+    /// The eleven dimensions of Section 13, and with them Section 12's
+    /// disconfirming evidence. Recomputed from what is loaded rather than
+    /// stored, so it can never disagree with the figures above it.
+    var researchProfile: ResearchProfile {
+        ResearchProfileBuilder.build(ResearchProfileBuilder.Inputs(
+            bars: bars,
+            rangeReturn: rangeReturn,
+            relativeToMarket: relativeToMarket,
+            sectorRelativeToMarket: sectorVersusMarket,
+            sectorName: sectorBenchmark?.displayName,
+            fundamentals: fundamentals,
+            metrics: metrics,
+            ratings: ratings,
+            insiderPurchases: insiderSummary?.purchaseCount,
+            insiderSales: insiderSummary?.saleCount))
+    }
+
+    /// Bars trimmed to the selected range, from the single wide fetch.
+    var visibleBars: [PriceBar] {
+        let start = selectedRange.startDate()
+        return bars.filter { $0.date >= start }.sorted { $0.date < $1.date }
+    }
+
+    /// What the chart draws: the IEX series for 1D and 5D, the daily series
+    /// otherwise. The only reader of `intradayBars` in the app.
+    ///
+    /// The session and axis rules live in `ChartSeriesBuilder` so the
+    /// benchmark chart draws by the same arithmetic rather than a second copy
+    /// of it.
+    var chartBars: [PriceBar] {
+        guard selectedRange.usesIntraday else { return visibleBars }
+        return ChartSeriesBuilder.regularHoursBars(intradayBars, range: selectedRange)
+    }
+
+    var chartPoints: [ChartPoint] { ChartSeriesBuilder.points(chartBars) }
+
+    var chartSegments: [ChartSegment] { ChartSeriesBuilder.segments(chartPoints) }
+
+    var chartAxisTicks: [ChartAxisTick] {
+        ChartSeriesBuilder.axisTicks(chartPoints, range: selectedRange)
+    }
+
+    /// Whether the chart can be drawn, and if not, why.
+    ///
+    /// Replaces a bare `visibleBars.count < 2` spinner that never resolved:
+    /// with Tiingo refusing intraday, 1D and 5D had nothing to load and span
+    /// forever. A range with too little data must say so, and the spinner now
+    /// turns only while a request is genuinely in flight with nothing held.
+    var chartAvailability: ChartAvailability {
+        // Anything drawable wins, and the error becomes a note underneath.
+        // Checking the error first meant a failed refresh — a rate limit, a
+        // dropped connection, a closed market — replaced a chart we could
+        // still draw with an error card. That is the chart "disappearing".
+        if chartBars.count >= 2 { return .ready }
+
+        if selectedRange.usesIntraday {
+            if isLoadingIntraday { return .loading }
+            if let intradayError {
+                return .unavailable(intradayError.recoverySuggestion
+                                    ?? intradayError.shortDescription)
+            }
+            guard attemptedIntraday.contains(selectedRange.resolution) else { return .loading }
+            return .unavailable("No regular-session bars in this window. The "
+                                + "market may not have opened yet, or IEX carried "
+                                + "no trades in this symbol.")
+        }
+        if isLoading { return .loading }
+        if let historyError {
+            return .unavailable(historyError.recoverySuggestion ?? historyError.shortDescription)
+        }
+        guard hasCompletedLoad else { return .loading }
+        return .unavailable("Only \(chartBars.count) bar\(chartBars.count == 1 ? "" : "s") "
+                            + "of price history is available for this range.")
+    }
+
+    /// Said under a chart that is still drawable but out of date, so a failed
+    /// refresh is visible without the chart vanishing to report it.
+    var chartNote: String? {
+        guard chartBars.count >= 2 else { return nil }
+        let error = selectedRange.usesIntraday ? intradayError : historyError
+        guard let error else { return nil }
+        return "Showing the last copy held — the refresh failed. \(error.shortDescription)"
+    }
+
+    /// Price context over the visible range. "Down 18% from its peak" means a
+    /// different thing over a month than over five years, so it follows the
+    /// range the user chose rather than everything held.
+    var priceContext: PriceContext? {
+        ReturnCalculator.priceContext(bars: visibleBars)
+    }
+
+    /// Return over the selected range, computed from the visible bars.
+    var rangeReturn: PeriodReturn? {
+        ReturnCalculator.trailingReturn(bars: bars, window: selectedRange.dateInterval)
+    }
+
+    func select(_ range: ChartRange, registry: ProviderRegistry,
+                snapshots: SnapshotStore? = nil) {
+        selectedRange = range
+        // Intraday is a different series from a different vendor, so it has its
+        // own fetch rather than widening the daily window.
+        if range.usesIntraday {
+            Task { await loadIntraday(using: registry, snapshots: snapshots) }
+            return
+        }
+        // Only re-fetch when the new range reaches back further than what we hold.
+        let needed = range.startDate()
+        if let window = loadedBarWindow, window.from <= needed { return }
+        Task { await loadHistory(using: registry) }
+    }
+
+    /// Fetches the intraday series for the selected range.
+    ///
+    /// Alpaca allows 200 requests a minute, so unlike the daily bars this is
+    /// not a scarce request — but a five-minute-old copy is still current
+    /// enough to redraw from, which is what `StalenessPolicy.intradayCandles`
+    /// was defined for and never used on.
+    private func loadIntraday(using registry: ProviderRegistry,
+                              snapshots: SnapshotStore?) async {
+        let resolution = selectedRange.resolution
+        let from = selectedRange.intradayFetchStart()
+        let to = Date.now
+
+        defer { attemptedIntraday.insert(resolution) }
+
+        if let fetchedAt = intradayFetchedAt[resolution], !isForcingRefresh,
+           !(intradayByResolution[resolution] ?? []).isEmpty,
+           case .fresh = StalenessPolicy.intradayCandles.evaluate(lastUpdated: fetchedAt) {
+            intradayErrors[resolution] = nil
+            return
+        }
+        // Draw the held copy at once so the chart is not blank while the
+        // request runs. It is never treated as current: `PriceBarDTO` carries
+        // no observation time, so the age of a stored bar is unknowable here
+        // and the fetch below goes ahead regardless.
+        if let snapshots, (intradayByResolution[resolution] ?? []).isEmpty {
+            let held = (try? await snapshots.bars(symbol: symbol, from: from,
+                                                  to: to, resolution: resolution)) ?? []
+            intradayByResolution[resolution] = held.map {
+                PriceBar(date: $0.date, resolution: resolution, open: $0.open,
+                         high: $0.high, low: $0.low, close: $0.close,
+                         volume: $0.volume, adjustedClose: $0.adjustedClose)
+            }
+        }
+
+        isLoadingIntraday = true
+        defer { isLoadingIntraday = false }
+        do {
+            let fetched = try await registry.marketData.bars(
+                symbol: symbol, resolution: resolution, from: from, to: to
+            )
+            // An empty response must not erase a series already held. Alpaca
+            // returns no bars for a window with no trades, and a public
+            // holiday is not a reason to blank yesterday's chart.
+            if !fetched.isEmpty || (intradayByResolution[resolution] ?? []).isEmpty {
+                intradayByResolution[resolution] = fetched.map {
+                    PriceBar(date: $0.date, resolution: resolution, open: $0.open,
+                             high: $0.high, low: $0.low, close: $0.close,
+                             volume: $0.volume, adjustedClose: $0.adjustedClose)
+                }
+            }
+            intradayFetchedAt[resolution] = .now
+            intradayErrors[resolution] = nil
+            if let snapshots {
+                _ = try? await snapshots.record(bars: fetched, symbol: symbol,
+                                                resolution: resolution,
+                                                provider: registry.marketData.id)
+            }
+        } catch let error as APIError {
+            intradayErrors[resolution] = error
+            Self.logger.error("Intraday failed for \(self.symbol, privacy: .public): \(error.shortDescription, privacy: .public)")
+        } catch {
+            intradayErrors[resolution] = .transport(.alpaca, underlying: error.localizedDescription)
+        }
+    }
+
+    func load(
+        using registry: ProviderRegistry,
+        snapshots: SnapshotStore? = nil,
+        force: Bool = false
+    ) {
+        if !force, case .fresh = freshness {
+            hasCompletedLoad = true
+            return
+        }
+        loadTask?.cancel()
+        loadTask = Task { [weak self] in
+            await self?.perform(using: registry, snapshots: snapshots, force: force)
+        }
+    }
+
+    /// Pull-to-refresh, which must not return until the work is done.
+    ///
+    /// `load` spawns and returns, which is right for `.task` and wrong for
+    /// `.refreshable`: the control ended its spinner the moment the gesture
+    /// did, while the request was still in flight, so the gesture reported a
+    /// refresh that had not happened.
+    func refresh(using registry: ProviderRegistry, snapshots: SnapshotStore? = nil) async {
+        loadTask?.cancel()
+        await perform(using: registry, snapshots: snapshots, force: true)
+    }
+
+    private func perform(using registry: ProviderRegistry, snapshots: SnapshotStore?,
+                         force: Bool) async {
+        isForcingRefresh = force
+        await hydrate(from: snapshots)
+        await performLoad(using: registry, snapshots: snapshots)
+        await detectChanges(using: snapshots)
+        await persist(using: snapshots, registry: registry)
+        isForcingRefresh = false
+        hasCompletedLoad = true
+    }
+
+    /// True when a fetch failed and the page fell back to what was on disk.
+    ///
+    /// Deliberately not "some of this came from the store": a section skipped
+    /// because the held copy is still fresh is not a degraded state and does
+    /// not need announcing. This is the case the user needs told about.
+    var isShowingSavedCopy: Bool {
+        hydratedFromStore && (historyError != nil || quoteError != nil)
+    }
+
+    /// When the saved copy on screen was observed.
+    var savedCopyAsOf: Date? { storedFreshness[.bars] }
+
+    /// The price to show, falling back to the last stored close when no live
+    /// quote arrived. Standing alone that would misrepresent a close as a
+    /// current price, so it is only ever rendered beneath the saved-copy
+    /// notice that dates it.
+    var displayPrice: Double? { quote?.last ?? bars.last?.analysisClose }
+
+    var displayChangePercent: Double? { quote?.changePercent ?? lastStoredSessionChange }
+
+    /// The most recent closed session's move, from bars alone.
+    private var lastStoredSessionChange: Double? {
+        let closes = bars.suffix(2).map(\.analysisClose)
+        guard closes.count == 2, closes[0] != 0 else { return nil }
+        return (closes[1] - closes[0]) / closes[0] * 100
+    }
+
+    /// Fills the page from what the store already holds, before any request.
+    ///
+    /// Three things follow that did not before. A previously visited security
+    /// renders instantly and works offline. A failed fetch degrades to the last
+    /// good copy rather than to an empty section. And a section whose held copy
+    /// is still fresh costs no request at all — which is what makes Tiingo's
+    /// 50-requests-per-hour budget survivable on a page that reads five years
+    /// of history.
+    private func hydrate(from snapshots: SnapshotStore?) async {
+        guard let snapshots else { return }
+        do {
+            for kind in StoredDataKind.allCases {
+                storedFreshness[kind] = try await snapshots.latestObservedAt(
+                    symbol: symbol, kind: kind)
+            }
+
+            let storedBars = try await snapshots.bars(
+                symbol: symbol, from: ChartRange.fiveYear.startDate())
+            if !storedBars.isEmpty, bars.isEmpty {
+                bars = storedBars.map {
+                    PriceBar(date: $0.date, resolution: .daily, open: $0.open, high: $0.high,
+                             low: $0.low, close: $0.close, volume: $0.volume,
+                             adjustedClose: $0.adjustedClose)
+                }
+                // What we actually hold, which is what `select(_:registry:)`
+                // needs to decide whether a longer range requires a request.
+                if let first = storedBars.first?.date, let last = storedBars.last?.date {
+                    loadedBarWindow = (first, last)
+                }
+                hydratedFromStore = true
+            }
+
+            let storedFacts = try await snapshots.facts(
+                symbol: symbol, concepts: Self.trackedConcepts, since: Self.fundamentalsSince)
+            if !storedFacts.isEmpty, fundamentals.isEmpty {
+                fundamentals = storedFacts
+                hydratedFromStore = true
+            }
+
+            let storedFilings = try await snapshots.filings(symbol: symbol, limit: 15)
+            if !storedFilings.isEmpty, filings.isEmpty {
+                filings = storedFilings
+                hydratedFromStore = true
+            }
+        } catch {
+            // Hydration is an optimisation, not a requirement. A store that
+            // cannot be read leaves the page exactly as it was before: empty,
+            // and about to fetch.
+            Self.logger.error("Hydration failed for \(self.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Whether the held copy is recent enough that fetching would buy nothing.
+    private func isHeldCopyFresh(_ kind: StoredDataKind, policy: StalenessPolicy) -> Bool {
+        guard !isForcingRefresh, let observed = storedFreshness[kind] else { return false }
+        if case .fresh = policy.evaluate(lastUpdated: observed) { return true }
+        return false
+    }
+
+    /// Whether this event postdates the user's previous visit.
+    func isNew(_ event: DetectedEventDTO) -> Bool {
+        guard let lastVisit else { return false }
+        return event.occurredAt > lastVisit
+    }
+
+    /// Runs the Section 4 detectors over what was just loaded.
+    ///
+    /// The prior visit is read *before* anything is stamped: the question is
+    /// "what happened since last time", and marking this visit first would make
+    /// the answer permanently "nothing". Detection itself runs whether or not a
+    /// store is attached, so the panel works in previews and on a first launch;
+    /// only the persistence and the visit stamp need one.
+    private func detectChanges(using snapshots: SnapshotStore?) async {
+        if let snapshots {
+            lastVisit = try? await snapshots.lastViewed(symbol: symbol)
+        }
+        analyseFilings()
+        // The quote carries today; the bars stop at the previous close.
+        // These judge the present, so no window applies to them.
+        let standing = EventDetector.detect(bars: bars, quote: quote)
+            // What the business did, as distinct from what the price did.
+            // Judged against the company's own reported history, on the same
+            // rank-not-probability terms as everything above.
+            + FundamentalDetector.detect(facts: fundamentals)
+            + (await restatementEvents(using: snapshots))
+
+        // The backfill runs over everything loaded rather than over the gap
+        // since the last visit, so widening the window is a filter rather than
+        // a re-detection. The limits are raised to match: at the old default
+        // of ten, a ninety-day window would silently stop at the tenth event.
+        let backfilled = EventDetector.priceMoves(bars: bars, after: .distantPast, limit: 50)
+            + EventDetector.volumeAnomalies(bars: bars, after: .distantPast, limit: 50)
+            + EventDetector.newFilings(filings: filings, since: .distantPast, limit: 50)
+            + InsiderActivity.events(insiderTransactions, since: .distantPast, limit: 25)
+        // Previously detected events, which is where fundamental changes older
+        // than the latest reported period come from — `FundamentalDetector`
+        // has no backfill, so that depth accrues with use.
+        var stored: [DetectedEventDTO] = []
+        if let snapshots {
+            stored = (try? await snapshots.events(symbol: symbol, limit: 200)) ?? []
+        }
+
+        // The live detector and the backfill can both reach the most recent
+        // closed session. They describe it identically, so the list would show
+        // the same card twice — the store deduplicates on the same key, but
+        // the screen has no such protection. Freshly detected wins over the
+        // stored copy, which may predate a restatement.
+        var seen: Set<String> = []
+        standingEvents = standing
+            .filter { seen.insert($0.naturalKey).inserted }
+            .sorted { $0.occurredAt > $1.occurredAt }
+        windowedEvents = (backfilled + stored)
+            .filter { seen.insert($0.naturalKey).inserted }
+            .sorted { $0.occurredAt > $1.occurredAt }
+
+        // A kind can disappear between loads — a filter pinned to one that is
+        // no longer present would empty the panel with no way to tell why.
+        kindFilter.formIntersection(availableKinds)
+        applyChangeFilter()
+
+        #if DEBUG
+        let detected = standingEvents + windowedEvents
+        if let reading = EventDetector.latestReading(bars: bars, quote: quote) {
+            let measure = AnomalyMeasure.measure(
+                reading.reading.percent, against: reading.priors.map(\.percent)
+            )
+            Self.logger.notice("DETECT \(self.symbol, privacy: .public) bars=\(self.bars.count) intraday=\(reading.reading.isIntraday) move=\(reading.reading.percent) priors=\(reading.priors.count) scale=\(measure?.scale ?? -1) dev=\(measure?.deviations ?? -1) rank=\(measure?.unusualness ?? -1) events=\(detected.count)")
+        } else {
+            Self.logger.notice("DETECT \(self.symbol, privacy: .public) no reading available")
+        }
+        #endif
+    }
+
+    /// Narrows the pools to the chosen window and kinds.
+    ///
+    /// Pure filtering over data already in hand, so the menus respond without
+    /// a request — the point of detecting over all history up front.
+    private func applyChangeFilter() {
+        let start = changeWindow.startDate(lastVisit: lastVisit)
+        let kinds = kindFilter
+        func passesKind(_ event: DetectedEventDTO) -> Bool {
+            kinds.isEmpty || kinds.contains(event.kind)
+        }
+        // With no window — a first visit, before any prior visit is recorded —
+        // only the standing events show. Reporting five years of history as
+        // "what changed" on first open would be false.
+        let dated = start.map { start in
+            windowedEvents.filter { $0.occurredAt > start }
+        } ?? []
+        events = (standingEvents + dated)
+            .filter(passesKind)
+            .sorted { $0.occurredAt > $1.occurredAt }
+    }
+
+    /// Joins each periodic filing to the figures it reported.
+    ///
+    /// Costs nothing: every XBRL fact already carries the accession number of
+    /// the filing that reported it, and the submissions feed supplies the same
+    /// accession in the same format, so this is a filter over data in hand.
+    ///
+    /// `analyzedAt` on `FilingRecord` is deliberately left unset. It exists so
+    /// expensive extraction is not repeated, and this is a pass over an array
+    /// already in memory — writing the stamp would create state nothing reads.
+    private func analyseFilings() {
+        var analyses: [String: FilingAnalysis.Result] = [:]
+        for filing in filings {
+            guard let result = FilingAnalysis.analyse(filing: filing, facts: fundamentals)
+            else { continue }
+            analyses[filing.accessionNumber] = result
+        }
+        filingAnalyses = analyses
+    }
+
+    /// The analysis belonging to a filing event.
+    ///
+    /// Matched on `occurredAt`, which for a filing event is the filing's own
+    /// `filedAt`. EDGAR dates filings to the day, so an 8-K filed alongside a
+    /// 10-Q shares the timestamp — requiring an analysis to exist picks the
+    /// periodic report out of the pair.
+    func analysis(for event: DetectedEventDTO) -> FilingAnalysis.Result? {
+        guard event.kind == .newFiling else { return nil }
+        return filings
+            .first { $0.filedAt == event.occurredAt && filingAnalyses[$0.accessionNumber] != nil }
+            .flatMap { filingAnalyses[$0.accessionNumber] }
+    }
+
+    /// Restatements across the tracked concepts.
+    ///
+    /// Needs the superseded rows, which only the store holds: the provider
+    /// returns the current view of a company's history, and every other read
+    /// path in the app collapses revisions away on purpose.
+    ///
+    /// The freshly fetched facts are merged in rather than read back after
+    /// persisting, because `persist` runs after this and would otherwise delay
+    /// every restatement by one visit — the amendment would land, be stored,
+    /// and only be noticed the next time the page was opened.
+    ///
+    /// `naturalKey` is one event per kind per day, so several concepts revised
+    /// in the same amendment collapse to a single stored row regardless. The
+    /// most recent is chosen deliberately rather than letting an arbitrary one
+    /// win the race; the others remain visible in the fundamentals section.
+    private func restatementEvents(using snapshots: SnapshotStore?) async -> [DetectedEventDTO] {
+        guard let snapshots else { return [] }
+        var found: [DetectedEventDTO] = []
+        for concept in Self.trackedConcepts {
+            let stored = (try? await snapshots.factRevisions(
+                symbol: symbol, concept: concept, since: Self.fundamentalsSince)) ?? []
+            let merged = stored + fundamentals.filter { $0.concept == concept }
+            if let event = FundamentalDetector.restatements(revisions: merged, concept: concept) {
+                found.append(event)
+            }
+        }
+        return found.max { $0.occurredAt < $1.occurredAt }.map { [$0] } ?? []
+    }
+
+    /// Records everything the load produced.
+    ///
+    /// Deliberately after the UI has its data: persistence must never delay
+    /// what is on screen, and a write failure must not blank a loaded page.
+    ///
+    /// Each write names where its data came from, per source rather than for
+    /// the page as a whole. A run with a Finnhub and Tiingo key but no SEC
+    /// contact email holds real prices beside mocked filings, and it is the
+    /// filings alone that must not be stored — refusing the whole page would
+    /// throw away real history over an unrelated missing key.
+    private func persist(using snapshots: SnapshotStore?, registry: ProviderRegistry) async {
+        guard let snapshots else { return }
+        let symbol = self.symbol
+        let market = registry.marketData.id
+        let documents = registry.sec?.id ?? .sec
+        do {
+            if let quote {
+                try await snapshots.record(quote: quote, symbol: symbol, provider: market)
+            }
+            if !bars.isEmpty {
+                let dtos = bars.map {
+                    PriceBarDTO(date: $0.date, open: $0.open, high: $0.high, low: $0.low,
+                                close: $0.close, volume: $0.volume,
+                                adjustedClose: $0.adjustedClose)
+                }
+                try await snapshots.record(bars: dtos, symbol: symbol,
+                                           resolution: .daily, provider: market)
+            }
+            if !fundamentals.isEmpty {
+                // `registry.fundamentals` is the real SEC extractor or nothing
+                // at all, so a synthetic fact cannot reach here today. The
+                // argument is passed anyway, and defaults to `.sample` rather
+                // than `.sec`: an absent provider means facts of unknown
+                // origin, and this is the same reasoning `accepts` was built
+                // on — refusing at the door is the version that survives
+                // someone adding a mock fundamentals provider later.
+                try await snapshots.record(facts: fundamentals, symbol: symbol,
+                                           provider: registry.fundamentals?.id ?? .sample)
+            }
+            if !filings.isEmpty {
+                try await snapshots.record(filings: filings, symbol: symbol, provider: documents)
+            }
+            if !insiderTransactions.isEmpty {
+                try await snapshots.record(insiders: insiderTransactions,
+                                           symbol: symbol, provider: documents)
+            }
+            if !events.isEmpty {
+                // Detection runs over bars and filings together, so an event is
+                // only storable when both were real.
+                let inputs: DataProviderID = (market.isSynthetic || documents.isSynthetic)
+                    ? .sample : .computed
+                try await snapshots.record(events: events, symbol: symbol, provider: inputs)
+            }
+            // Stamped last, and only when the load actually completed.
+            // Cancelling mid-load leaves `lastRefreshedAt` nil; stamping there
+            // would advance the reference point past changes the user never
+            // saw, and they would never be reported again.
+            if lastRefreshedAt != nil {
+                try await snapshots.markViewed(symbol: symbol)
+            }
+        } catch {
+            Self.logger.error("Persist failed for \(symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    private func performLoad(using registry: ProviderRegistry,
+                             snapshots: SnapshotStore?) async {
+        isLoading = true
+        defer { isLoading = false }
+
+        // Independent sections, run concurrently, each swallowing only its own
+        // failure into its own error slot.
+        async let profileWork: Void = loadProfile(using: registry)
+        async let quoteWork: Void = loadQuote(using: registry)
+        async let historyWork: Void = loadHistory(using: registry)
+        async let metricsWork: Void = loadMetrics(using: registry)
+        async let ratingsWork: Void = loadRatings(using: registry)
+        async let marketWork: Void = loadMarketContext(using: registry)
+        _ = await (profileWork, quoteWork, historyWork, metricsWork, marketWork, ratingsWork)
+
+        // Needs the profile's sector, so it follows the concurrent block
+        // rather than running inside it.
+        await loadSectorHistory(using: registry, snapshots: snapshots)
+        computeBeta()
+
+        // These need the CIK, which comes from the profile or a lookup, so they
+        // follow rather than run alongside.
+        await loadSECSections(using: registry)
+
+        guard !Task.isCancelled else { return }
+        lastRefreshedAt = .now
+    }
+
+    private func loadProfile(using registry: ProviderRegistry) async {
+        profile = try? await registry.marketData.profile(symbol: symbol)
+    }
+
+    private func loadQuote(using registry: ProviderRegistry) async {
+        do {
+            quote = try await registry.marketData.quote(symbol: symbol)
+            quoteError = nil
+        } catch let error as APIError {
+            quoteError = error
+        } catch {
+            quoteError = .transport(.finnhub, underlying: error.localizedDescription)
+        }
+    }
+
+    private func loadHistory(using registry: ProviderRegistry) async {
+        // Bars are the scarcest request in the app. When hydration produced a
+        // copy that is still fresh, the page is already correct and the request
+        // is pure cost against a budget that refills one token every 80 seconds.
+        if !bars.isEmpty, isHeldCopyFresh(.bars, policy: .dailyCandles) {
+            historyError = nil
+            return
+        }
+        // Fetch the widest range once. Five years of daily bars is a single
+        // request and covers every shorter range without another.
+        let from = ChartRange.fiveYear.startDate()
+        let to = Date.now
+        do {
+            let fetched = try await registry.marketData.bars(
+                symbol: symbol, resolution: .daily, from: from, to: to
+            )
+            bars = fetched.map {
+                PriceBar(date: $0.date, resolution: .daily, open: $0.open, high: $0.high,
+                         low: $0.low, close: $0.close, volume: $0.volume,
+                         adjustedClose: $0.adjustedClose)
+            }
+            loadedBarWindow = (from, to)
+            historyError = nil
+        } catch let error as APIError {
+            historyError = error
+            Self.logger.error("History failed for \(self.symbol, privacy: .public): \(error.shortDescription, privacy: .public)")
+        } catch {
+            historyError = .transport(.tiingo, underlying: error.localizedDescription)
+        }
+    }
+
+    /// Loads the market series the attribution rests on.
+    ///
+    /// Failures are swallowed on purpose: attribution is additional context,
+    /// and losing it must not mark the page as failed or hide the price move
+    /// it annotates. The UI shows attribution only when it exists.
+    private func loadMarketContext(using registry: ProviderRegistry) async {
+        async let history: Void = loadMarketHistory(using: registry)
+        async let live: Void = loadMarketIntraday(using: registry)
+        _ = await (history, live)
+    }
+
+    private func loadMarketHistory(using registry: ProviderRegistry) async {
+        guard let macro = registry.macro else { return }
+        let from = ChartRange.fiveYear.startDate()
+        do {
+            let observations = try await macro.observations(
+                seriesID: Benchmark.marketSeriesID, from: from, to: .now
+            )
+            marketCloses = observations.map { (date: $0.date, close: $0.value) }
+        } catch {
+            Self.logger.error("Market context unavailable for \(self.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// The index itself is end-of-day, so the current session comes from a
+    /// broad-market ETF. Declared a proxy everywhere it is shown.
+    private func loadMarketIntraday(using registry: ProviderRegistry) async {
+        guard symbol != Benchmark.marketProxySymbol else { return }
+        let proxy = try? await registry.marketData.quote(symbol: Benchmark.marketProxySymbol)
+        marketIntradayMove = proxy?.changePercent
+    }
+
+    private func computeBeta() {
+        guard !bars.isEmpty, !marketCloses.isEmpty else {
+            beta = nil
+            sectorFactor = nil
+            return
+        }
+        beta = RelativeAnalysis.beta(
+            RelativeAnalysis.align(security: bars, market: marketCloses)
+        )
+
+        guard let sectorBenchmark, !sectorBars.isEmpty else {
+            sectorFactor = nil
+            return
+        }
+        sectorFactor = RelativeAnalysis.sectorFactor(
+            RelativeAnalysis.align(security: bars, market: marketCloses, sector: sectorBars),
+            name: sectorBenchmark.displayName,
+            isProxy: sectorBenchmark.isProxy || sectorBenchmark.fredSeriesID == nil)
+    }
+
+    /// The sector's history, when the company maps to one we track.
+    ///
+    /// One bars request per distinct sector, cached in the store afterwards —
+    /// eleven companies in the same sector share one series, which is what
+    /// makes this affordable against Tiingo's hourly budget.
+    private func loadSectorHistory(using registry: ProviderRegistry,
+                                   snapshots: SnapshotStore?) async {
+        guard let benchmark = Benchmark.sector(matching: profile?.sector),
+              let symbol = benchmark.etfSymbol,
+              symbol != self.symbol
+        else {
+            sectorBenchmark = nil
+            return
+        }
+        sectorBenchmark = benchmark
+
+        if let snapshots {
+            try? await snapshots.ensureBenchmark(symbol: symbol, name: benchmark.displayName)
+            let stored = (try? await snapshots.bars(
+                symbol: symbol, from: ChartRange.fiveYear.startDate())) ?? []
+            let observed = try? await snapshots.latestObservedAt(symbol: symbol, kind: .bars)
+            if !stored.isEmpty, let observed,
+               case .fresh = StalenessPolicy.dailyCandles.evaluate(lastUpdated: observed),
+               !isForcingRefresh {
+                sectorBars = stored.map(Self.priceBar)
+                return
+            }
+        }
+
+        do {
+            let fetched = try await registry.marketData.bars(
+                symbol: symbol, resolution: .daily,
+                from: ChartRange.fiveYear.startDate(), to: .now)
+            sectorBars = fetched.map(Self.priceBar)
+            if let snapshots {
+                _ = try? await snapshots.record(bars: fetched, symbol: symbol,
+                                                resolution: .daily,
+                                                provider: registry.marketData.id)
+            }
+        } catch {
+            // Sector context is additional, exactly like market attribution.
+            // Losing it must not mark the page as failed.
+            Self.logger.error("Sector history unavailable for \(self.symbol, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        sectorIntradayMove = try? await registry.marketData.quote(symbol: symbol).changePercent
+    }
+
+    private static func priceBar(_ dto: PriceBarDTO) -> PriceBar {
+        PriceBar(date: dto.date, resolution: .daily, open: dto.open, high: dto.high,
+                 low: dto.low, close: dto.close, volume: dto.volume,
+                 adjustedClose: dto.adjustedClose)
+    }
+
+    /// How much of the most recent move the market accounts for.
+    ///
+    /// Nil rather than a guess when the market leg for that session is
+    /// missing — an attribution computed against the wrong day's market move
+    /// would be worse than none.
+    var latestAttribution: MoveAttribution? {
+        guard let reading = EventDetector.latestReading(bars: bars, quote: quote)?.reading
+        else { return nil }
+
+        let marketMove: Double
+        let isProxy: Bool
+        if reading.isIntraday {
+            guard let intraday = marketIntradayMove else { return nil }
+            marketMove = intraday
+            isProxy = true
+        } else {
+            let aligned = RelativeAnalysis.align(security: bars, market: marketCloses)
+            let day = Calendar.current.startOfDay(for: reading.date)
+            guard let match = aligned.last(where: {
+                Calendar.current.startOfDay(for: $0.date) == day
+            }) else { return nil }
+            marketMove = match.market
+            isProxy = false
+        }
+
+        // The sector leg must come from the same session as the market leg.
+        // An intraday reading needs the sector's live quote; a closed session
+        // needs its bar for that day.
+        let sectorMove: Double?
+        if reading.isIntraday {
+            sectorMove = sectorIntradayMove
+        } else {
+            let day = Calendar.current.startOfDay(for: reading.date)
+            let sorted = sectorBars.sorted { $0.date < $1.date }
+            if let index = sorted.lastIndex(where: {
+                Calendar.current.startOfDay(for: $0.date) == day
+            }), index > 0 {
+                sectorMove = ReturnCalculator.simpleReturn(
+                    from: sorted[index - 1].analysisClose, to: sorted[index].analysisClose)
+            } else {
+                sectorMove = nil
+            }
+        }
+
+        return RelativeAnalysis.attribute(
+            securityMove: reading.percent,
+            marketMove: marketMove,
+            marketName: isProxy ? "S&P 500 (SPY)" : "S&P 500",
+            beta: beta,
+            sector: sectorFactor,
+            sectorMove: sectorMove,
+            isMarketProxy: isProxy
+        )
+    }
+
+    private func loadMetrics(using registry: ProviderRegistry) async {
+        guard let provider = registry.metrics else { return }
+        do {
+            metrics = try await provider.metrics(symbol: symbol)
+            metricsError = nil
+        } catch let error as APIError {
+            metricsError = error
+        } catch {
+            metricsError = .transport(.finnhub, underlying: error.localizedDescription)
+        }
+    }
+
+    /// Ratings, where the tier serves them.
+    ///
+    /// Swallows its failure like the other context sections: the rating mix is
+    /// one dimension of eleven, and losing it must not mark the page as failed.
+    private func loadRatings(using registry: ProviderRegistry) async {
+        guard let analyst = registry.analyst else { return }
+        ratings = try? await analyst.ratings(symbol: symbol).last
+    }
+
+    private func loadSECSections(using registry: ProviderRegistry) async {
+        guard let sec = registry.sec else { return }
+
+        // Resolving the CIK is itself a request. With nothing left to fetch it
+        // buys nothing, so the check happens before it rather than inside each
+        // section below.
+        let filingsHeld = !filings.isEmpty && isHeldCopyFresh(.filings, policy: .filings)
+        let factsHeld = !fundamentals.isEmpty && isHeldCopyFresh(.facts, policy: .fundamentals)
+        if filingsHeld && factsHeld {
+            filingsError = nil
+            fundamentalsError = nil
+            return
+        }
+
+        let cik: String
+        do {
+            // `??` takes an autoclosure, which cannot contain an await.
+            if let known = profile?.cik {
+                cik = known
+            } else {
+                cik = try await sec.resolveCIK(symbol: symbol)
+            }
+        } catch let error as APIError {
+            fundamentalsError = error
+            filingsError = error
+            return
+        } catch {
+            return
+        }
+
+        async let filingWork: Void = loadFilings(cik: cik, sec: sec)
+        async let factWork: Void = loadFundamentals(cik: cik, registry: registry)
+        async let insiderWork: Void = loadInsiders(cik: cik, sec: sec)
+        _ = await (filingWork, factWork, insiderWork)
+    }
+
+    private func loadFilings(cik: String, sec: any SECDataProvider) async {
+        if !filings.isEmpty, isHeldCopyFresh(.filings, policy: .filings) {
+            filingsError = nil
+            return
+        }
+        do {
+            filings = try await sec.filings(
+                cik: cik,
+                formTypes: ["10-K", "10-Q", "8-K", "4"],
+                limit: 15
+            )
+            filingsError = nil
+        } catch let error as APIError {
+            filingsError = error
+        } catch {
+            filingsError = .transport(.sec, underlying: error.localizedDescription)
+        }
+    }
+
+    /// Form 4 lines for the past year.
+    ///
+    /// Costs one EDGAR request per ownership document, which is why it is
+    /// bounded by a date rather than pulling a prolific filer's whole history.
+    /// Its failure is swallowed: insider activity is one dimension of eleven.
+    private func loadInsiders(cik: String, sec: any SECDataProvider) async {
+        let since = Calendar.current.date(byAdding: .year, value: -1, to: .now)
+        insiderTransactions = (try? await sec.insiderTransactions(cik: cik, since: since)) ?? []
+    }
+
+    private func loadFundamentals(cik: String, registry: ProviderRegistry) async {
+        guard let provider = registry.fundamentals else { return }
+        if !fundamentals.isEmpty, isHeldCopyFresh(.facts, policy: .fundamentals) {
+            fundamentalsError = nil
+            return
+        }
+        do {
+            fundamentals = try await provider.facts(
+                symbol: symbol, cik: cik,
+                concepts: Self.trackedConcepts,
+                since: Self.fundamentalsSince
+            )
+            fundamentalsError = nil
+        } catch let error as APIError {
+            fundamentalsError = error
+        } catch {
+            fundamentalsError = .transport(.sec, underlying: error.localizedDescription)
+        }
+    }
+
+    #if DEBUG
+    /// Injects fundamentals so the derived figures can be tested without a
+    /// provider. The stored property is private(set), and the derivations —
+    /// growth linking and the free-cash-flow subtraction — are exactly the
+    /// arithmetic worth pinning down.
+    func applyFundamentalsForTesting(_ facts: [FinancialFactDTO]) {
+        fundamentals = facts
+    }
+    #endif
+
+    // MARK: - Derived views of the data
+
+    /// Valuation metrics that have enough history to be ranked. Metrics without
+    /// it are omitted rather than shown as a bare number implying context.
+    var valuationContexts: [RankedMetric] {
+        guard let metrics else { return [] }
+        return ValuationMetric.all.compactMap { metric in
+            // Both halves normalised to one scale before comparison; see
+            // ValuationMetric for why that is load-bearing.
+            guard let pair = metrics.normalized(for: metric),
+                  let context = ValuationCalculator.historicalContext(
+                    current: pair.current,
+                    history: pair.history,
+                    lowerIsCheaper: metric.lowerIsCheaper,
+                    currentIsFromHistory: pair.currentIsFromHistory)
+            else { return nil }
+            return RankedMetric(metric: metric, context: context, asOf: pair.asOf)
+        }
+    }
+
+    /// Annual revenue with year-over-year growth, most recent first.
+    var annualRevenue: [AnnualFigure] {
+        let annual = fundamentals
+            .filter { $0.concept == .revenue && $0.periodKind == .annual }
+            .sorted { $0.periodEnd < $1.periodEnd }
+        return annual.enumerated().reversed().map { index, fact in
+            let previous = index > 0 ? annual[index - 1].value : nil
+            let growth = previous.flatMap { ReturnCalculator.simpleReturn(from: $0, to: fact.value) }
+            return AnnualFigure(fact: fact, growth: growth)
+        }
+    }
+
+    /// Free cash flow per annual period: operating cash flow less capex.
+    ///
+    /// Computed rather than read, because issuers do not file an "FCF" concept.
+    /// A period missing either input yields no figure, never a partial one.
+    ///
+    /// Keyed on the period the figures describe, **not** on `fiscalYear`. That
+    /// field is the *filing's* fiscal context, so a restatement carries the
+    /// filing's year rather than the period's — which pairs cash-flow figures
+    /// with the wrong dates and puts a real number under a wrong year. The same
+    /// mistake was already fixed once in XBRL extraction; it survived here.
+    var annualFreeCashFlow: [CashFlowPoint] {
+        let ocf = annualValuesByPeriod(.operatingCashFlow)
+        let capex = annualValuesByPeriod(.capitalExpenditures)
+
+        return ocf.compactMap { period, operating -> CashFlowPoint? in
+            guard let spend = capex[period] else { return nil }
+            // Capex is filed as a positive outflow.
+            return CashFlowPoint(period: period, value: operating - abs(spend))
+        }
+        .sorted { $0.period < $1.period }
+    }
+
+    /// Annual values for one concept, keyed by the period they describe.
+    /// Where a period has been restated, the most recently filed figure wins —
+    /// the original is still in the store, which is the point of keeping it.
+    private func annualValuesByPeriod(_ concept: FinancialConcept) -> [Date: Double] {
+        let facts = fundamentals
+            .filter { $0.concept == concept && $0.periodKind == .annual }
+            .sorted { ($0.filedAt ?? .distantPast) < ($1.filedAt ?? .distantPast) }
+        return Dictionary(facts.map { ($0.periodEnd, $0.value) },
+                          uniquingKeysWith: { _, latest in latest })
+    }
+}
+
+/// A valuation metric together with where it sits in its own history.
+struct RankedMetric: Identifiable, Sendable {
+    var id: String { metric.id }
+    let metric: ValuationMetric
+    let context: HistoricalContext
+    /// The date the current value refers to. Equal to now for live figures;
+    /// older for metrics sourced from the quarterly series.
+    let asOf: Date
+}
+
+/// One annual figure with its year-over-year growth, when a prior year exists.
+struct AnnualFigure: Identifiable, Sendable {
+    var id: Date { fact.periodEnd }
+    let fact: FinancialFactDTO
+    let growth: Double?
+
+    /// The year the period actually ended in.
+    ///
+    /// Not `fact.fiscalYear`: that is the filing's fiscal context, and a
+    /// restated period carries the restating filing's year. Two different years
+    /// then render under the same label — observed on screen as two "2022"
+    /// rows holding FY2022 and FY2021 revenue.
+    var periodLabel: String {
+        Calendar.current.component(.year, from: fact.periodEnd).formatted(.number.grouping(.never))
+    }
+}
+
+struct CashFlowPoint: Identifiable, Sendable {
+    var id: Date { period }
+    let period: Date
+    let value: Double
+}

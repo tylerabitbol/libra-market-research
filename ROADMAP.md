@@ -1,4 +1,4 @@
-# Vantage — Roadmap and Working Context
+# Libra — Roadmap and Working Context
 
 Durable record of the plan, current state, and the decisions behind it.
 Written so work can resume without the conversation that produced it.
@@ -54,8 +54,8 @@ plan in `~/.claude/plans/this-is-the-current-pure-storm.md`.
 | **FRED** | `SP500`, `DJIA`, `NASDAQCOM`, `VIXCLS`, macro series. Free, generous limits. Also the market leg for beta and attribution | Sector indexes, intraday |
 | **SEC EDGAR** | Ticker→CIK map, submissions/filing history. **No API key**; requires identifying User-Agent, ~10 req/sec | Form 4 parsing is implemented but has never run against a live ownership document |
 
-Verify all four at any time: launch with `-VantageSelfTest` and read the log
-(`subsystem == "com.tylerabitbol.vantage"`). Credentials come from the Keychain,
+Verify all four at any time: launch with `-LibraSelfTest` and read the log
+(`subsystem == "com.tylerabitbol.libra"`). Credentials come from the Keychain,
 so they never enter a command line.
 
 ## Decisions worth not re-litigating
@@ -143,7 +143,7 @@ so they never enter a command line.
   ones.** Detection runs before persistence, so reading the store alone would
   delay every amendment by one visit — it would land, be stored, and only be
   noticed the next time the page was opened.
-- **Never edit navigation to capture a screenshot.** Use `-VantageOpenSymbol`.
+- **Never edit navigation to capture a screenshot.** Use `-LibraOpenSymbol`.
   A hand-edit for a screenshot once reached a commit and left the Watchlist tab
   wired to a hardcoded symbol.
 - **Unusualness is a rank, never a probability.** A 3σ day is a 1-in-370 event
@@ -208,8 +208,8 @@ so they never enter a command line.
   market — and any percentage-of-the-move framing breaks down entirely there.
 - **Percentage points ≠ percent.** Relative performance reports `pp` throughout.
 - **No secrets in source.** Keys live in the Keychain, entered by the user.
-  `DeveloperOptions` can seed from `VANTAGE_*` environment variables, gated on a
-  DEBUG build plus an explicit `-VantageSeedKeys` argument.
+  `DeveloperOptions` can seed from `LIBRA_*` environment variables, gated on a
+  DEBUG build plus an explicit `-LibraSeedKeys` argument.
 
 ## Debug launch arguments
 
@@ -217,13 +217,13 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 
 | Argument | Effect |
 |---|---|
-| `-VantageSelfTest` | Keychain round-trip, live connection test per provider, and end-to-end valuation/fundamentals checks; results go to the unified log |
-| `-VantageSeedKeys` | Seeds the Keychain from `VANTAGE_*` environment variables |
-| `-VantageSeedWatchlist` | Adds AAPL, NVDA, COST to the watchlist without touching existing entries |
-| `-VantageCaptureFixtures` | Writes a trimmed `companyfacts` payload into the app container for use as a test fixture |
-| `-VantageBackdateVisits 45` | Moves every visit stamp back that many days, so "what changed since you last looked" can be exercised without waiting days between runs. Moves the reference point only — no event is fabricated |
+| `-LibraSelfTest` | Keychain round-trip, live connection test per provider, and end-to-end valuation/fundamentals checks; results go to the unified log |
+| `-LibraSeedKeys` | Seeds the Keychain from `LIBRA_*` environment variables |
+| `-LibraSeedWatchlist` | Adds AAPL, NVDA, COST to the watchlist without touching existing entries |
+| `-LibraCaptureFixtures` | Writes a trimmed `companyfacts` payload into the app container for use as a test fixture |
+| `-LibraBackdateVisits 45` | Moves every visit stamp back that many days, so "what changed since you last looked" can be exercised without waiting days between runs. Moves the reference point only — no event is fabricated |
 | `DETECT` log line | Not an argument: a DEBUG-only `.notice` in `detectChanges` reporting what the detectors saw and why they stayed silent |
-| `-VantageOpenSymbol AAPL` | Opens straight to a security's detail page. Added because capturing that screen used to mean hand-editing `RootView`, and one such edit reached a commit |
+| `-LibraOpenSymbol AAPL` | Opens straight to a security's detail page. Added because capturing that screen used to mean hand-editing `RootView`, and one such edit reached a commit |
 
 ## Known gaps
 
@@ -298,7 +298,7 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
 ```bash
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 xcodegen generate                      # .xcodeproj is generated, not committed
-xcodebuild -project Vantage.xcodeproj -scheme Vantage \
+xcodebuild -project Libra.xcodeproj -scheme Libra \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 ```
 
@@ -310,7 +310,7 @@ Provider tests decode real captured payloads through the full mapping path via a
 stubbed `URLSession`; no test touches the network.
 
 EDGAR fixtures cannot be captured with `curl` without putting a contact address
-in the User-Agent, so `-VantageCaptureFixtures` has the app fetch and trim them
+in the User-Agent, so `-LibraCaptureFixtures` has the app fetch and trim them
 into its own container instead; lift them out with `simctl get_app_container`.
 The `companyfacts` fixture was captured that way. The two `sec_submissions_*`
 fixtures remain hand-authored, since their value is exercising ragged and
