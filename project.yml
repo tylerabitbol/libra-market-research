@@ -1,4 +1,4 @@
-name: Vantage
+name: Libra
 options:
   bundleIdPrefix: com.tylerabitbol
   deploymentTarget:
@@ -20,42 +20,42 @@ settings:
     DEVELOPMENT_TEAM: 3RSPVBC57V
 
 targets:
-  Vantage:
+  Libra:
     type: application
     platform: iOS
     sources:
-      - path: Vantage
+      - path: Libra
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tylerabitbol.vantage
+        PRODUCT_BUNDLE_IDENTIFIER: com.tylerabitbol.libra
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        INFOPLIST_KEY_CFBundleDisplayName: Vantage
+        INFOPLIST_KEY_CFBundleDisplayName: Libra
         GENERATE_INFOPLIST_FILE: YES
         TARGETED_DEVICE_FAMILY: "1,2"
         ENABLE_PREVIEWS: YES
 
-  VantageTests:
+  LibraTests:
     type: bundle.unit-test
     platform: iOS
     sources:
-      - path: VantageTests
+      - path: LibraTests
     dependencies:
-      - target: Vantage
+      - target: Libra
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.tylerabitbol.vantage.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.tylerabitbol.libra.tests
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
-  Vantage:
+  Libra:
     build:
       targets:
-        Vantage: all
+        Libra: all
     test:
       targets:
-        - VantageTests
+        - LibraTests
       gatherCoverageData: true
     run:
       config: Debug
