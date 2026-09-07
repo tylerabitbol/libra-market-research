@@ -3,6 +3,12 @@
 An iOS research tool that answers *what changed, why, and how unusual is it* —
 for a small number of companies you actually follow.
 
+<p align="center">
+  <img src="docs/LI-1-dashboard.png" width="245" alt="Dashboard: index levels from FRED, each row naming its own source">
+  <img src="docs/RM-7-security-detail.png" width="245" alt="Security detail: NVDA header and a one-year price chart">
+  <img src="docs/RM-6-market-attribution.png" width="245" alt="How much of a move the market accounts for, in percentage points">
+</p>
+
 > **Educational and informational purposes only.** Libra is a research tool.
 > It is **not investment advice**, not a recommendation to buy or sell any
 > security, and carries **no warranty as to the accuracy, completeness or
@@ -10,39 +16,6 @@ for a small number of companies you actually follow.
 > may be delayed, incomplete or wrong. Nothing here is a solicitation, and
 > nothing here should be relied on to make a financial decision. Do your own
 > research and consult a licensed professional.
-
-<table>
-<tr>
-<td width="33%"><img src="docs/LI-1-dashboard.png" alt="Dashboard with index levels from FRED"></td>
-<td width="33%"><img src="docs/LI-2-relative-performance.png" alt="Relative performance against sector and index"></td>
-<td width="33%"><img src="docs/LI-3-research-profile.png" alt="Research profile with no overall score"></td>
-</tr>
-<tr>
-<td><b>Every row names its source.</b> <code>FRED SP500</code>, never an unattributed “S&P 500”. Where only an ETF exists, it is marked as a proxy.</td>
-<td><b>The sentence and its audit trail agree.</b> The verb carries the direction and the figure is unsigned; the arithmetic keeps the signed −9.4 pp.</td>
-<td><b>No total.</b> Dimensions are grouped by which way they point, and the one that could not be measured is counted, not treated as neutral.</td>
-</tr>
-<tr>
-<td><img src="docs/LI-4-margin-change.png" alt="A margin change compared year-over-year"></td>
-<td><img src="docs/RM-5-filing-reported.png" alt="What a filing actually reported"></td>
-<td><img src="docs/RM-6-market-attribution.png" alt="Market attribution with beta and window stated"></td>
-</tr>
-<tr>
-<td><b>Year-over-year, never sequential.</b> Most businesses are seasonal, so consecutive quarters would report the calendar as news.</td>
-<td><b>What the filing said, not that it exists.</b> Each figure is set against the same quarter a year earlier, with the accession number on screen.</td>
-<td><b>The market’s share of a move, in percentage points.</b> The beta and the 500 sessions it was fitted over are both named.</td>
-</tr>
-<tr>
-<td><img src="docs/RM-7-security-detail.png" alt="Security detail header"></td>
-<td><img src="docs/RM-8-valuation-in-context.png" alt="Valuation multiples ranked against the company's own history"></td>
-<td><img src="docs/RM-9-change-filters.png" alt="Filtering detected changes by kind"></td>
-</tr>
-<tr>
-<td><b>A vendor figure is labelled as one.</b> The header beta comes from Finnhub and says so, because the app fits its own beta elsewhere.</td>
-<td><b>Ranked against its own history</b>, so “expensive” means expensive for this company — not against one it shares no economics with.</td>
-<td><b>The list states its own coverage.</b> Changes filter by kind, and the app never implies it watched more than it did.</td>
-</tr>
-</table>
 
 ## What problem it solves
 
@@ -72,6 +45,8 @@ nothing at all, while looking more authoritative than either input. The
 components are what a reader can act on; the total would only look like it.
 The same reasoning refuses a recommendation anywhere in the app.
 
+<img src="docs/RM-8-valuation-in-context.png" width="320" align="right" alt="Valuation in context: each multiple ranked against the company's own history, and a note explaining why no overall score is shown">
+
 The app says this on screen rather than only in a readme: *"No overall score is
 shown. Weighing these against one another is the judgement this tool leaves to
 you — a single number would only look like it had made it for you."* Underneath
@@ -79,6 +54,8 @@ it, each multiple is ranked against the company's own past — NVDA at a P/E in
 the 42nd percentile of its own range while its P/B sits in the 87th, which is a
 more useful pair of facts than either multiple alone. Dimensions that cannot be
 measured are counted and named, never quietly folded in as neutral.
+
+<br clear="right">
 
 **There is no AI anywhere in the app.** Every number — returns, betas,
 percentiles, margins, anomaly ranks — is pure Swift over data already fetched,
@@ -212,6 +189,14 @@ visited — reading only from the store and issuing no requests. Free tiers make
 screening a real universe impossible, and a screen that quietly examined six
 stocks while looking like it examined six thousand would be worse than none. The
 coverage is stated on screen.
+
+<p align="center">
+  <img src="docs/LI-2-relative-performance.png" width="245" alt="Relative performance: the verb carries the direction, the figure is unsigned, the arithmetic underneath keeps the sign">
+  <img src="docs/LI-4-margin-change.png" width="245" alt="A margin change in percentage points, ranked against this company's own reported quarters">
+  <img src="docs/LI-3-research-profile.png" width="245" alt="Research profile grouping dimensions by which way they point, with no total">
+  <img src="docs/RM-5-filing-reported.png" width="245" alt="What a filing reported, set against the same quarter a year earlier, with its accession number">
+  <img src="docs/RM-9-change-filters.png" width="245" alt="Detected changes filtered by kind, with the coverage stated on screen">
+</p>
 
 ## Setup
 
