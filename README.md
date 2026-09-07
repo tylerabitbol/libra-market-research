@@ -4,9 +4,9 @@ An iOS research tool that answers *what changed, why, and how unusual is it* —
 for a small number of companies you actually follow.
 
 <p align="center">
-  <img src="docs/dashboard.png" width="245" alt="Dashboard: index levels from FRED with each source named">
-  <img src="docs/security-detail.png" width="245" alt="Security detail: NVDA header and one-year price chart">
-  <img src="docs/what-changed.png" width="245" alt="A detected price move, its arithmetic, and how much the market accounts for">
+  <img src="docs/LI-1-dashboard.png" width="245" alt="Dashboard: index levels from FRED, each row naming its own source">
+  <img src="docs/RM-7-security-detail.png" width="245" alt="Security detail: NVDA header and one-year price chart">
+  <img src="docs/RM-6-market-attribution.png" width="245" alt="How much of a move the market accounts for, in percentage points">
 </p>
 
 > **Educational and informational purposes only.** Libra is a research tool.
@@ -45,8 +45,6 @@ nothing at all, while looking more authoritative than either input. The
 components are what a reader can act on; the total would only look like it.
 The same reasoning refuses a recommendation anywhere in the app.
 
-<img src="docs/valuation-in-context.png" width="320" align="right" alt="Valuation in context: each multiple ranked against the company's own history, and a note explaining why no overall score is shown">
-
 The app says this on screen rather than only in a readme: *"No overall score is
 shown. Weighing these against one another is the judgement this tool leaves to
 you — a single number would only look like it had made it for you."* Underneath
@@ -54,8 +52,6 @@ it, each multiple is ranked against the company's own past — NVDA at a P/E in
 the 42nd percentile of its own range while its P/B sits in the 87th, which is a
 more useful pair of facts than either multiple alone. Dimensions that cannot be
 measured are counted and named, never quietly folded in as neutral.
-
-<br clear="right">
 
 **There is no AI anywhere in the app.** Every number — returns, betas,
 percentiles, margins, anomaly ranks — is pure Swift over data already fetched,
@@ -190,11 +186,68 @@ screening a real universe impossible, and a screen that quietly examined six
 stocks while looking like it examined six thousand would be worse than none. The
 coverage is stated on screen.
 
-<p align="center">
-  <img src="docs/watchlist.png" width="245" alt="Watchlist with three companies and their daily change">
-  <img src="docs/fundamental-change.png" width="245" alt="A detected debt change ranked against nineteen reported quarters, with its interpretation">
-  <img src="docs/research-profile.png" width="245" alt="Research profile grouping dimensions by which way they point, with no total">
-</p>
+## The screens
+
+Captured from live FRED, Tiingo, Finnhub and SEC EDGAR responses. Each caption
+says what the screen decides, not what it displays.
+
+<img src="docs/LI-1-dashboard.png" width="300" alt="Dashboard">
+
+**Every row names its own source.** `FRED SP500` rather than an unattributed
+"S&P 500". The Russell 2000 carries a warning marker instead, because no free
+index series exists for it and what you are looking at is an ETF standing in.
+
+<img src="docs/LI-2-relative-performance.png" width="300" alt="Relative performance against sector and index">
+
+**The sentence and its audit trail must never contradict each other.** The verb
+carries the direction and the figure is unsigned — "underperformed by 9.4 pp" —
+while the arithmetic underneath keeps the signed `−9.4 pp`. One is for reading,
+the other is for checking. The sector leg names XLK as a proxy.
+
+<img src="docs/LI-3-research-profile.png" width="300" alt="Research profile with no overall score">
+
+**No total.** Dimensions are grouped by which way they point, and weighing them
+against one another is the judgement the tool leaves to the reader. The
+dimension it could not measure is counted and named rather than quietly treated
+as neutral.
+
+<img src="docs/LI-4-margin-change.png" width="300" alt="A detected margin change compared year-over-year">
+
+**Year-over-year, never quarter-over-quarter.** Most businesses are seasonal, so
+a detector built on consecutive quarters fires every December and reports the
+calendar as news. The change is in percentage points, and the rank is against
+this company's own reported history.
+
+<img src="docs/RM-5-filing-reported.png" width="300" alt="What a filing actually reported">
+
+**A filing card says what the document reported, not that a document exists.**
+Every figure is compared with the same quarter a year earlier, so seasonality is
+already removed, and the accession number is on screen so any line can be
+checked against EDGAR itself.
+
+<img src="docs/RM-6-market-attribution.png" width="300" alt="Market attribution with beta and window stated">
+
+**The market's share of a move is stated, not the move's cause.** Percentage
+points, with the beta and the 500 sessions it was fitted over both named, and
+the ETF identified as a proxy because the index publishes only at the close.
+The interpretation says where to look and stops there.
+
+<img src="docs/RM-7-security-detail.png" width="300" alt="Security detail header">
+
+**A vendor figure is labelled as one.** The header beta comes from Finnhub and
+says so, because the app fits its own beta elsewhere and a reader seeing two
+different numbers for one company must be able to tell which is which.
+
+<img src="docs/RM-8-valuation-in-context.png" width="300" alt="Valuation multiples ranked against the company's own history">
+
+**Ranked against this company's own history, so "expensive" means expensive for
+them** — not expensive against a company it shares no economics with. A multiple
+that cannot be meaningfully ranked is shown and flagged rather than dropped.
+
+<img src="docs/RM-9-change-filters.png" width="300" alt="Filtering detected changes by kind">
+
+**The list states its own coverage.** Changes can be filtered by kind, and the
+app never implies it watched more than it did.
 
 ## Setup
 
