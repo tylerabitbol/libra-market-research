@@ -293,7 +293,7 @@ you enter then silently fails to save.
     xcodebuild -project Libra.xcodeproj -scheme Libra \
       -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
 
-409 tests. Provider tests decode captured payloads through the full mapping path
+416 tests. Provider tests decode captured payloads through the full mapping path
 via a stubbed `URLSession`; no test touches the network.
 
 ## Status
