@@ -36,7 +36,7 @@ struct ResearchProfileCard: View {
                 } label: {
                     Label(isShowingUnavailable
                           ? "Hide what could not be measured"
-                          : "\(profile.unavailable.count) dimensions could not be measured",
+                          : "\(Format.count(profile.unavailable.count, "dimension")) could not be measured",
                           systemImage: isShowingUnavailable ? "chevron.up" : "chevron.down")
                         .font(.caption)
                 }

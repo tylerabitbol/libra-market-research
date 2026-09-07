@@ -163,6 +163,35 @@ struct RelativePerformanceTests {
         let claim = result.claim(securityName: "X", benchmarkName: "Y")
         #expect(claim.text.contains("underperformed"))
     }
+
+    @Test("The verb carries the direction, so the sentence's figure is unsigned")
+    func sentenceDoesNotContradictItsVerb() throws {
+        let result = try #require(ReturnCalculator.relativePerformance(
+            security: period(2, startOffsetDays: 30),
+            benchmark: period(9, startOffsetDays: 30)
+        ))
+        let claim = result.claim(securityName: "AAPL", benchmarkName: "Information Technology")
+
+        #expect(claim.text.contains("underperformed"))
+        #expect(claim.text.contains("7.0 pp"))
+        #expect(!claim.text.contains("+"),
+                "\"underperformed by +7.0 pp\" states the direction twice and disagrees with itself")
+
+        // The derivation is the audit trail and stays literal.
+        #expect(claim.derivation?.result == "-7.0 pp")
+    }
+
+    @Test("Outperformance reads the same way, without a redundant sign")
+    func outperformanceIsAlsoUnsigned() throws {
+        let result = try #require(ReturnCalculator.relativePerformance(
+            security: period(12, startOffsetDays: 30),
+            benchmark: period(5, startOffsetDays: 30)
+        ))
+        let claim = result.claim(securityName: "NVDA", benchmarkName: "Information Technology")
+        #expect(claim.text.contains("outperformed Information Technology by 7.0 pp"))
+        #expect(!claim.text.contains("+7.0 pp"))
+        #expect(claim.derivation?.result == "+7.0 pp")
+    }
 }
 
 /// Price context: where a price sits against its own averages and its peak.

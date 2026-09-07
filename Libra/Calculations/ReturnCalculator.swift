@@ -133,7 +133,7 @@ struct RelativePerformance: Sendable, Hashable {
         return Claim(
             kind: .calculation,
             text: "\(securityName) \(verb) \(benchmarkName) by "
-                + "\(Format.percentagePoints(abs(differencePoints))) "
+                + "\(Format.percentagePoints(abs(differencePoints), signed: false)) "
                 + "between \(Format.shortDate(startDate)) and \(Format.shortDate(endDate)).",
             derivation: Derivation(
                 formula: "securityReturn - benchmarkReturn",

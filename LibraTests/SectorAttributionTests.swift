@@ -190,6 +190,17 @@ struct SectorAttributionTests {
         #expect(attribution.claim.text.contains("one-factor"))
     }
 
+    @Test("The company-specific reading is a complete sentence without a sector")
+    func companySpecificReadingKeepsItsVerb() {
+        let attribution = RelativeAnalysis.attribute(
+            securityMove: 8.0, marketMove: 0.5, marketName: "S&P 500",
+            beta: Beta(value: 1.0, observationCount: 200, earliest: day(0), latest: day(200)),
+            sector: nil, sectorMove: nil)
+
+        #expect(attribution.claim.text.contains("does not explain most of this move"),
+                "A dropped verb read \"S&P 500 does not most of this move\"")
+    }
+
     @Test("A sector move with no fitted factor is not guessed at")
     func sectorMoveWithoutFactorIsIgnored() {
         let attribution = RelativeAnalysis.attribute(
