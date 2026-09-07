@@ -33,7 +33,7 @@ Settings. All are built. The Screener is scoped to what the store already holds
 — the watchlist plus anything visited — and issues no requests; free tiers make
 screening a real universe impossible, and its coverage is stated on screen.
 
-**409 tests**, all passing. Every wrong number caught in the last four commits
+**416 tests**, all passing. Every wrong number caught in the last four commits
 was found by looking at rendered output on a real symbol — the suite stayed
 green throughout. Treat a screen check as part of "done", not optional polish;
 see *Build and verify* below.
@@ -207,6 +207,12 @@ so they never enter a command line.
   two parts can point in opposite directions — a stock can rise on a falling
   market — and any percentage-of-the-move framing breaks down entirely there.
 - **Percentage points ≠ percent.** Relative performance reports `pp` throughout.
+- **A direction word and a signed magnitude never appear together.** "AAPL
+  underperformed Information Technology by +9.4 pp" states the direction twice
+  and disagrees with itself. Sentences carry the verb and an unsigned figure;
+  the derivation block underneath keeps the sign, because that is the audit
+  trail. `Format.percentagePoints(_:signed:)` exists for exactly this, and four
+  call sites had the contradiction before it did.
 - **No secrets in source.** Keys live in the Keychain, entered by the user.
   `DeveloperOptions` can seed from `LIBRA_*` environment variables, gated on a
   DEBUG build plus an explicit `-LibraSeedKeys` argument.
@@ -247,6 +253,12 @@ Debug builds only, each gated on an explicit argument so nothing fires by accide
   actually shipped. The idea it encoded is still worth having: probe once and
   say "estimate revisions aren't in your Finnhub plan" rather than showing a
   broken section.
+- **The industry→sector table is written from observed labels, not a published
+  list.** `Benchmark.sector(matching:)` maps industry-level labels up to their
+  GICS sector so "Semiconductors" reaches XLK, but Finnhub publishes no
+  enumeration of `finnhubIndustry` values. Unmatched labels fall through to no
+  sector benchmark — never to a guess — and each one is logged, so the table
+  should be extended from those log lines rather than from assumption.
 - **The four macro cards are dead ends.** CPI, Fed funds, 10Y and unemployment
   show a value and a date and go nowhere, the same problem the benchmark rows
   had. The FRED chart they would need now exists.
