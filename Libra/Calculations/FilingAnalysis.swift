@@ -207,7 +207,7 @@ enum FilingAnalysis {
             let change = current - prior
             return ("\(Format.percentagePoints(change)) YoY",
                     "\(change >= 0 ? "up" : "down") "
-                        + "\(Format.percentagePoints(abs(change))) from",
+                        + "\(Format.percentagePoints(abs(change), signed: false)) from",
                     "current - prior")
         case .absoluteCurrency:
             let change = current - prior

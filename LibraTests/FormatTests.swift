@@ -130,4 +130,41 @@ struct BenchmarkTests {
                 "A wrong sector comparison is worse than none")
         #expect(Benchmark.sector(matching: nil) == nil)
     }
+
+    @Test("An industry-level label resolves to its GICS sector")
+    func industryLabelsMapUpToTheirSector() {
+        // NVIDIA reports "Semiconductors", which shares no substring with any
+        // sector name and previously fell through to no benchmark at all.
+        #expect(Benchmark.sector(matching: "Semiconductors")?.etfSymbol == "XLK")
+        #expect(Benchmark.sector(matching: "Pharmaceuticals")?.etfSymbol == "XLV")
+        #expect(Benchmark.sector(matching: "Banking")?.etfSymbol == "XLF")
+        #expect(Benchmark.sector(matching: "Beverages")?.etfSymbol == "XLP")
+        #expect(Benchmark.sector(matching: "Aerospace & Defense")?.etfSymbol == "XLI")
+        #expect(Benchmark.sector(matching: "  semiconductors  ")?.etfSymbol == "XLK",
+                "Case and surrounding whitespace are the vendor's, not the reader's")
+    }
+
+    @Test("A label with no sensible parent still falls through")
+    func diversifiedLabelsAreNotGuessedAt() {
+        #expect(Benchmark.sector(matching: "Diversified Financial Services") == nil,
+                "A genuinely diversified issuer has no single sector to name")
+    }
+
+    @Test("A count agrees in number with its noun")
+    func countsAgreeWithTheirNoun() {
+        #expect(Format.count(1, "dimension") == "1 dimension")
+        #expect(Format.count(2, "dimension") == "2 dimensions")
+        #expect(Format.count(0, "session") == "0 sessions")
+        #expect(Format.count(1, "company", plural: "companies") == "1 company")
+        #expect(Format.count(3, "company", plural: "companies") == "3 companies")
+    }
+
+    @Test("Percentage points can be rendered without a sign for verb-paired text")
+    func unsignedPercentagePoints() {
+        #expect(Format.percentagePoints(9.4) == "+9.4 pp")
+        #expect(Format.percentagePoints(9.4, signed: false) == "9.4 pp")
+        #expect(Format.percentagePoints(-9.4, signed: false) == "-9.4 pp",
+                "Suppressing the plus must not suppress a minus")
+        #expect(Format.percentagePoints(nil, signed: false) == Format.notAvailable)
+    }
 }

@@ -112,7 +112,7 @@ struct ClaimRow: View {
         Divider()
         ClaimRow(claim: Claim(
             kind: .calculation,
-            text: "NVDA outperformed Information Technology by +7.0 pp over the last month.",
+            text: "NVDA outperformed Information Technology by 7.0 pp over the last month.",
             derivation: Derivation(
                 formula: "securityReturn - benchmarkReturn",
                 inputs: [

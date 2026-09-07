@@ -441,7 +441,10 @@ struct MoveAttribution: Sendable, Hashable {
         default:
             let unexplained = sector.map { "Neither \(marketName) nor \($0.name)" }
                 ?? "\(marketName) does not"
-            let verb = sector == nil ? "" : " accounts for"
+            // Both branches need a verb. "Neither A nor B" takes the
+            // singular "accounts for"; the single-subject form needs the bare
+            // infinitive after "does not".
+            let verb = sector == nil ? " explain" : " accounts for"
             text = "\(unexplained)\(verb) most of this move under \(model), which points "
                 + "at something specific to this company. Filings, earnings, and its own "
                 + "news are where to look."

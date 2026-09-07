@@ -131,7 +131,7 @@ enum FundamentalDetector {
             kind: .marginChange,
             occurredAt: latestFiledAt ?? period,
             headline: "\(strongest.label) \(direction) "
-                + "\(Format.percentagePoints(abs(strongest.change))) year-over-year",
+                + "\(Format.percentagePoints(abs(strongest.change), signed: false)) year-over-year",
             detailLines: lines,
             context: "One quarter against the year-ago quarter, not a trailing "
                 + "twelve-month figure — a single quarter can carry a gain or a "
@@ -241,7 +241,7 @@ enum FundamentalDetector {
             kind: .freeCashFlowChange,
             occurredAt: move.filedAt ?? move.period,
             headline: "Free cash flow margin \(direction) "
-                + "\(Format.percentagePoints(abs(move.change))) year-over-year",
+                + "\(Format.percentagePoints(abs(move.change), signed: false)) year-over-year",
             detailLines: lines,
             context: "Free cash flow is operating cash flow less capital expenditures, as "
                 + "reported. A quarter of heavy investment and a quarter of weak collections "

@@ -347,8 +347,8 @@ enum EventDetector {
                 + (liveVolume != nil ? "so far today" : "on \(Format.dayAndMonth(latest.date))"),
             detailLines: [
                 "Volume: \(Format.compact(latest.volume)) shares",
-                "Median of prior \(priors.count) sessions: \(Format.compact(median)) shares",
-                "Higher than \(exceeded) of those \(priors.count) sessions"
+                "Median of prior \(Format.count(priors.count, "session")): \(Format.compact(median)) shares",
+                "Higher than \(exceeded) of those \(Format.count(priors.count, "session"))"
             ] + (liveVolume != nil
                  ? ["Session still open — the day's total will be higher"] : []),
             context: "Elevated volume means more shares changed hands than usual, which "
@@ -411,7 +411,7 @@ enum EventDetector {
                 + "against \(Format.percent(priorVol, precision: 1)) before that",
             detailLines: [
                 "Recent \(recentWindow) sessions: \(Format.percent(recentVol, precision: 1)) annualised",
-                "Prior \(prior.count) sessions: \(Format.percent(priorVol, precision: 1)) annualised",
+                "Prior \(Format.count(prior.count, "session")): \(Format.percent(priorVol, precision: 1)) annualised",
                 "Ratio: \(Format.multiple(ratio, precision: 2))"
             ],
             context: "Realised volatility is the spread of recent daily returns, annualised. "

@@ -81,10 +81,25 @@ enum Format {
     /// 7 percentage points". Percentage points and percent are different units
     /// and conflating them is a real source of wrong numbers, so the unit is
     /// spelled out rather than reusing the "%" symbol.
-    static func percentagePoints(_ value: Double?, precision: Int = 1) -> String {
+    ///
+    /// `signed` exists because a sentence that already carries a direction word
+    /// must not also carry a sign: "underperformed by +9.4 pp" states the
+    /// direction twice and contradicts itself once. Callers that pair this with
+    /// a verb pass `signed: false` and take the magnitude; the derivation block
+    /// underneath keeps the signed value, because that is the audit trail.
+    static func percentagePoints(_ value: Double?, precision: Int = 1,
+                                 signed: Bool = true) -> String {
         guard let value else { return notAvailable }
-        let sign = value > 0 ? "+" : ""
+        let sign = (signed && value > 0) ? "+" : ""
         return "\(sign)\(value.formatted(.number.precision(.fractionLength(precision)))) pp"
+    }
+
+    /// A count with its noun in the right number: "1 dimension", "2 dimensions".
+    ///
+    /// Written once because "1 dimensions could not be measured" is the kind of
+    /// error that reappears at every new call site otherwise.
+    static func count(_ value: Int, _ singular: String, plural: String? = nil) -> String {
+        "\(value) \(value == 1 ? singular : (plural ?? singular + "s"))"
     }
 
     // MARK: - Ratios and multiples

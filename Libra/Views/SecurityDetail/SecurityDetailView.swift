@@ -128,7 +128,7 @@ struct SecurityDetailView: View {
                            value: dayRange, isAvailable: model.quote?.high != nil)
                 MetricCell(label: "52-week range", value: fiftyTwoWeekRange,
                            isAvailable: model.metrics?.currentValue("52WeekHigh") != nil)
-                MetricCell(label: "Beta", value: Format.ratio(model.metrics?.currentValue("beta"), precision: 2),
+                MetricCell(label: "Beta (Finnhub)", value: Format.ratio(model.metrics?.currentValue("beta"), precision: 2),
                            isAvailable: model.metrics?.currentValue("beta") != nil)
                 MetricCell(label: "Avg volume (10d)",
                            value: Format.compact(model.metrics?.currentValue("10DayAverageTradingVolume").map { $0 * 1_000_000 }),
@@ -281,7 +281,7 @@ struct SecurityDetailView: View {
                 : "No price history loaded, so nothing can be compared."
         }
         if model.bars.count < EventDetector.minimumSample {
-            return "Only \(model.bars.count) sessions of history are available. "
+            return "Only \(Format.count(model.bars.count, "session")) of history is available. "
                 + "At least \(EventDetector.minimumSample) are needed before "
                 + "\"unusual\" means anything."
         }
