@@ -51,7 +51,38 @@ interface WatchlistDao {
 
     @Query("DELETE FROM watchlist WHERE symbol = :symbol")
     suspend fun remove(symbol: String)
+
+    /**
+     * The watchlist joined to the securities it names.
+     *
+     * SwiftData gave `WatchlistEntry.security` for free through the object
+     * graph. Room's entities carry plain foreign-key columns — see
+     * `KNOWN_ISSUES.md` — so the join is written out, and it is an inner join
+     * because a watchlist row naming a security the store has never seen has
+     * no name to render.
+     */
+    @Query(
+        """
+        SELECT w.symbol AS symbol, s.name AS name, s.sector AS sector,
+               w.priority AS priority
+        FROM watchlist w
+        INNER JOIN securities s ON s.symbol = w.symbol
+        ORDER BY w.priority, w.symbol
+        """
+    )
+    suspend fun members(): List<WatchlistMember>
 }
+
+/**
+ * A watchlist row with the identity the list needs to render before any
+ * request: the name and sector from the store, and the user's own ordering.
+ */
+data class WatchlistMember(
+    val symbol: String,
+    val name: String,
+    val sector: String? = null,
+    val priority: Int = 0
+)
 
 @Dao
 interface QuoteDao {

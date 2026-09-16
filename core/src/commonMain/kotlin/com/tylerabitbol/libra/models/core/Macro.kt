@@ -1,5 +1,7 @@
 package com.tylerabitbol.libra.models.core
 
+import com.tylerabitbol.libra.services.providers.MacroObservationDTO
+
 enum class MacroUnit(val raw: String) {
     Percent("percent"),
     Index("index"),
@@ -63,3 +65,34 @@ data class MacroIndicator(
         )
     }
 }
+
+/**
+ * FRED's index series as bars.
+ *
+ * FRED publishes closes only, so every bar carries the same value for open,
+ * high and low. That is fine for return arithmetic, which reads
+ * [PriceBar.analysisClose] — but it means these bars must never be drawn as a
+ * range or a candle, and must never reach a detector that reasons about
+ * intraday extremes.
+ *
+ * One function rather than two, because the dashboard row and the benchmark
+ * chart were building this same fiction independently.
+ *
+ * Missed in Phase 1, which ported the rest of this file; added in Phase 7
+ * where the dashboard first needs it.
+ */
+fun PriceBar.Companion.closeOnly(
+    observations: List<MacroObservationDTO>
+): List<PriceBar> = observations
+    .sortedBy { it.date }
+    .map { observation ->
+        PriceBar(
+            date = observation.date,
+            resolution = BarResolution.Daily,
+            open = observation.value,
+            high = observation.value,
+            low = observation.value,
+            close = observation.value,
+            adjustedClose = observation.value
+        )
+    }

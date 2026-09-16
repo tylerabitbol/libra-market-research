@@ -59,4 +59,11 @@ data class PriceBar(
      * return or moving-average calculation should be built on.
      */
     val analysisClose: Double get() = adjustedClose ?: close
+
+    /**
+     * Exists so `closeOnly` can hang off the type the way Swift's static did.
+     * Room does not mind an empty companion on an entity.
+     */
+    companion object
+
 }
