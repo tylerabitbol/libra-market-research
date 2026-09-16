@@ -17,3 +17,4 @@ rootProject.name = "libra"
 
 include(":core")
 include(":app")
+include(":androidApp")

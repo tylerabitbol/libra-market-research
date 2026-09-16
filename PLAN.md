@@ -51,13 +51,14 @@ Translation/
     src/commonTest/kotlin/...    ported tests
     src/commonTest/resources/    fixtures (JSON/XML) copied from LibraTests
     src/androidMain/  src/iosMain/   expect/actual only (Keychain, sqlite driver, logging)
-  app/                           Compose Multiplatform
+  app/                           Compose Multiplatform (KMP *library*, not the Android app)
     src/commonMain/kotlin/com/tylerabitbol/libra/ui/
       components/ dashboard/ research/ screener/ securitydetail/ settings/ watchlist/
       App.kt  Navigation.kt  Theme.kt
     src/commonMain/composeResources/   strings, app icon, disclaimer text
-    src/androidMain/   MainActivity, Application, Android preview annotations
     src/iosMain/       MainViewController.kt (ComposeUIViewController)
+  androidApp/                    thin Android shell: MainActivity, manifest, theme
+    src/main/kotlin/...          (pure Android module; AGP 9 forbids com.android.application on a KMP module)
   iosApp/                        thin Xcode project (XcodeGen project.yml), links app framework
   KNOWN_ISSUES.md
 ```
@@ -72,9 +73,12 @@ Package root: `com.tylerabitbol.libra`. Swift directory → Kotlin package, 1:1.
 
 ## 2. Dependencies (pin latest stable at implementation time)
 
+Versions live in `gradle/libs.versions.toml`. **Query `maven-metadata.xml`
+before adding any version — never guess.**
+
 | Need | Library | Note |
 |---|---|---|
-| Language/build | Kotlin 2.x, Gradle 8.x, AGP 8.x, JDK 17 | K2 compiler |
+| Language/build | Kotlin 2.4.20, Gradle 9.7.1, AGP 9.4.0, JDK 21 | verified 2026-09-15 |
 | UI | Compose Multiplatform (org.jetbrains.compose), Material 3 | |
 | Navigation | `org.jetbrains.androidx.navigation:navigation-compose` | multiplatform since 2.8 |
 | ViewModel | `org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose` | `viewModelScope` in common |
