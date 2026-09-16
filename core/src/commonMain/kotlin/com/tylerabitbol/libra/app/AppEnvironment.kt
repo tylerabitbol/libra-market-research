@@ -24,6 +24,8 @@ import com.tylerabitbol.libra.services.secrets.InMemorySecretsStore
 import com.tylerabitbol.libra.services.secrets.SecretKey
 import com.tylerabitbol.libra.services.secrets.SecretsHealth
 import com.tylerabitbol.libra.services.secrets.SecretsStore
+import com.tylerabitbol.libra.support.InMemoryPreferenceStore
+import com.tylerabitbol.libra.support.PreferenceStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +45,12 @@ import kotlinx.coroutines.flow.asStateFlow
 class AppEnvironment(
     val secrets: SecretsStore = InMemorySecretsStore(),
     val httpClient: HTTPClient = HTTPClient(),
+    /**
+     * Where saved screens live. Injected for the same reason [secrets] is:
+     * the platform shells supply `NSUserDefaults` or `SharedPreferences`, and
+     * a test or a preview must never write into the real ones.
+     */
+    val preferences: PreferenceStore = InMemoryPreferenceStore(),
 ) {
     private val _registry = MutableStateFlow(ProviderRegistry.sample)
     val registry: StateFlow<ProviderRegistry> = _registry.asStateFlow()

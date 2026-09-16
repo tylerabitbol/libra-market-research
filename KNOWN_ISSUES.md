@@ -641,3 +641,54 @@ up.
 by the compiler and the `SavedState` argument API never appears. Switching tabs
 saves and restores each section's stack, which is what Swift gets from one
 `NavigationStack` per tab.
+
+**`.combine` is `mergeDescendants`, not `clearAndSetSemantics`.** The first two
+Compose UI tests failed with "Expected exactly '1' node but could not find any
+node… the unmerged tree contains '1' node that matches", because every
+`.accessibilityElement(children: .combine)` had been translated as
+`clearAndSetSemantics`. The two are not the same: `.combine` and
+`mergeDescendants` gather the children's text into one node, while
+`clearAndSetSemantics` *discards* it and keeps only what the block sets. Every
+combined element had therefore become an unlabelled box to a screen reader.
+`clearAndSetSemantics` now appears only where Swift wrote
+`.accessibilityElement(children: .ignore)` — the attribution bar and the
+unusualness meter, both of which supply their own sentence. This was worth the
+whole UI-test decision on its own.
+
+**`:app` never sees Room.** Exposing `LibraDatabase` from `AppEnvironment` put
+`androidx.room.RoomDatabase` on `:app`'s compile path, where Room is not a
+dependency (it is `implementation` in `:core`). Rather than widen the
+dependency, the watchlist's three operations moved behind
+`core/.../persistence/WatchlistStore.kt` and `AppEnvironment` exposes that. The
+module boundary is the point: the UI layer works in terms of the app's own
+types and cannot accidentally take a dependency on the storage engine.
+
+**The toolbar becomes a screen header.** Swift hangs sort menus and the
+screener's action menu off `.toolbar`, which needs a `NavigationStack` title
+bar. The Compose shell is a bottom `NavigationBar` with no top bar, so each
+screen that had toolbar items draws its own header row — title on the left,
+controls on the right. Watchlist established the shape; Research and Screener
+follow it. The alternative, a `TopAppBar` in the shell, would have put a second
+title above five screens that mostly do not want one.
+
+**Swipe-to-delete becomes a visible control.** `onDelete` on a `ForEach` and
+`.swipeActions` give SwiftUI list rows a delete gesture for free. The screener's
+rules and saved screens now carry an explicit "Remove"/"Delete" button instead.
+A swipe that nothing announces is not discoverable, and Compose's
+`SwipeToDismissBox` would have needed per-row dismiss state for an action that
+is used rarely.
+
+**The screener's threshold is edited as text.** SwiftUI's
+`TextField(value:format:.number)` binds a `Double` directly. Doing the same in
+Compose — reformatting the field from the parsed number on every keystroke —
+makes "-", "1." and "0.0" impossible to type. The field holds the draft string
+and commits only when it parses, so the rule keeps its last valid threshold
+while a partial number is being typed.
+
+**`AppEnvironment` gained a `preferences` parameter.** Swift's
+`ScreenerViewModel` reached `UserDefaults.standard` directly. `PreferenceStore`
+has a `NSUserDefaults` implementation on iOS and a `SharedPreferences` one on
+Android, but neither is reachable from common code, so the composition root now
+injects it exactly as it injects `secrets` — defaulting to the in-memory store,
+which is what a test and a preview should get. Phase 9 passes the real one from
+each shell.
