@@ -1,0 +1,851 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "66cfdf7f85857e541bf290975cda482c",
+    "entities": [
+      {
+        "tableName": "securities",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`symbol` TEXT NOT NULL, `name` TEXT NOT NULL, `exchange` TEXT, `sector` TEXT, `industry` TEXT, `cik` TEXT, `currency` TEXT, `isBenchmark` INTEGER NOT NULL, `profileUpdatedAt` INTEGER, `createdAt` INTEGER NOT NULL, `lastViewedAt` INTEGER, PRIMARY KEY(`symbol`))",
+        "fields": [
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exchange",
+            "columnName": "exchange",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "sector",
+            "columnName": "sector",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "industry",
+            "columnName": "industry",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cik",
+            "columnName": "cik",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "currency",
+            "columnName": "currency",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isBenchmark",
+            "columnName": "isBenchmark",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profileUpdatedAt",
+            "columnName": "profileUpdatedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastViewedAt",
+            "columnName": "lastViewedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "symbol"
+          ]
+        }
+      },
+      {
+        "tableName": "watchlist",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `symbol` TEXT NOT NULL, `addedAt` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `notes` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "addedAt",
+            "columnName": "addedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "notes",
+            "columnName": "notes",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_watchlist_symbol",
+            "unique": true,
+            "columnNames": [
+              "symbol"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_watchlist_symbol` ON `${TABLE_NAME}` (`symbol`)"
+          }
+        ]
+      },
+      {
+        "tableName": "quotes",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `symbol` TEXT NOT NULL, `observedAt` INTEGER NOT NULL, `quoteTime` INTEGER, `last` REAL NOT NULL, `open` REAL, `high` REAL, `low` REAL, `previousClose` REAL, `volume` REAL, `providerRaw` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "observedAt",
+            "columnName": "observedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quoteTime",
+            "columnName": "quoteTime",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "last",
+            "columnName": "last",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "open",
+            "columnName": "open",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "high",
+            "columnName": "high",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "low",
+            "columnName": "low",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "previousClose",
+            "columnName": "previousClose",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "volume",
+            "columnName": "volume",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "providerRaw",
+            "columnName": "providerRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_quotes_symbol",
+            "unique": false,
+            "columnNames": [
+              "symbol"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_quotes_symbol` ON `${TABLE_NAME}` (`symbol`)"
+          },
+          {
+            "name": "index_quotes_symbol_observedAt",
+            "unique": false,
+            "columnNames": [
+              "symbol",
+              "observedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_quotes_symbol_observedAt` ON `${TABLE_NAME}` (`symbol`, `observedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "price_bars",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`date` INTEGER NOT NULL, `resolution` TEXT NOT NULL, `open` REAL NOT NULL, `high` REAL NOT NULL, `low` REAL NOT NULL, `close` REAL NOT NULL, `volume` REAL, `adjustedClose` REAL, `symbol` TEXT, `observedAt` INTEGER, `provider` TEXT, `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "resolution",
+            "columnName": "resolution",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "open",
+            "columnName": "open",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "high",
+            "columnName": "high",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "low",
+            "columnName": "low",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "close",
+            "columnName": "close",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "volume",
+            "columnName": "volume",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "adjustedClose",
+            "columnName": "adjustedClose",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "observedAt",
+            "columnName": "observedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "provider",
+            "columnName": "provider",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_price_bars_symbol",
+            "unique": false,
+            "columnNames": [
+              "symbol"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_price_bars_symbol` ON `${TABLE_NAME}` (`symbol`)"
+          },
+          {
+            "name": "index_price_bars_symbol_resolution",
+            "unique": false,
+            "columnNames": [
+              "symbol",
+              "resolution"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_price_bars_symbol_resolution` ON `${TABLE_NAME}` (`symbol`, `resolution`)"
+          },
+          {
+            "name": "index_price_bars_symbol_date",
+            "unique": false,
+            "columnNames": [
+              "symbol",
+              "date"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_price_bars_symbol_date` ON `${TABLE_NAME}` (`symbol`, `date`)"
+          }
+        ]
+      },
+      {
+        "tableName": "financial_facts",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `symbol` TEXT NOT NULL, `concept` TEXT NOT NULL, `rawTag` TEXT, `periodStart` INTEGER, `periodEnd` INTEGER NOT NULL, `fiscalYear` INTEGER NOT NULL, `fiscalQuarter` INTEGER, `isAnnual` INTEGER NOT NULL, `value` REAL NOT NULL, `unit` TEXT NOT NULL, `filedAt` INTEGER, `accessionNumber` TEXT, `observedAt` INTEGER NOT NULL, `providerRaw` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "concept",
+            "columnName": "concept",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rawTag",
+            "columnName": "rawTag",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "periodStart",
+            "columnName": "periodStart",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "periodEnd",
+            "columnName": "periodEnd",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fiscalYear",
+            "columnName": "fiscalYear",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fiscalQuarter",
+            "columnName": "fiscalQuarter",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "isAnnual",
+            "columnName": "isAnnual",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "unit",
+            "columnName": "unit",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filedAt",
+            "columnName": "filedAt",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "accessionNumber",
+            "columnName": "accessionNumber",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "observedAt",
+            "columnName": "observedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "providerRaw",
+            "columnName": "providerRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_financial_facts_symbol",
+            "unique": false,
+            "columnNames": [
+              "symbol"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_financial_facts_symbol` ON `${TABLE_NAME}` (`symbol`)"
+          },
+          {
+            "name": "index_financial_facts_symbol_concept",
+            "unique": false,
+            "columnNames": [
+              "symbol",
+              "concept"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_financial_facts_symbol_concept` ON `${TABLE_NAME}` (`symbol`, `concept`)"
+          },
+          {
+            "name": "index_financial_facts_accessionNumber",
+            "unique": false,
+            "columnNames": [
+              "accessionNumber"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_financial_facts_accessionNumber` ON `${TABLE_NAME}` (`accessionNumber`)"
+          }
+        ]
+      },
+      {
+        "tableName": "filings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`accessionNumber` TEXT NOT NULL, `symbol` TEXT NOT NULL, `formType` TEXT NOT NULL, `filedAt` INTEGER NOT NULL, `periodOfReport` INTEGER, `primaryDocumentURL` TEXT, `filingIndexURL` TEXT, `observedAt` INTEGER NOT NULL, `analyzedAt` INTEGER, PRIMARY KEY(`accessionNumber`))",
+        "fields": [
+          {
+            "fieldPath": "accessionNumber",
+            "columnName": "accessionNumber",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "formType",
+            "columnName": "formType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filedAt",
+            "columnName": "filedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "periodOfReport",
+            "columnName": "periodOfReport",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "primaryDocumentURL",
+            "columnName": "primaryDocumentURL",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "filingIndexURL",
+            "columnName": "filingIndexURL",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "observedAt",
+            "columnName": "observedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "analyzedAt",
+            "columnName": "analyzedAt",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "accessionNumber"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_filings_symbol",
+            "unique": false,
+            "columnNames": [
+              "symbol"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_filings_symbol` ON `${TABLE_NAME}` (`symbol`)"
+          },
+          {
+            "name": "index_filings_symbol_filedAt",
+            "unique": false,
+            "columnNames": [
+              "symbol",
+              "filedAt"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_filings_symbol_filedAt` ON `${TABLE_NAME}` (`symbol`, `filedAt`)"
+          }
+        ]
+      },
+      {
+        "tableName": "insider_transactions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `symbol` TEXT NOT NULL, `accessionNumber` TEXT NOT NULL, `insiderName` TEXT NOT NULL, `insiderTitle` TEXT, `isDirector` INTEGER NOT NULL, `isOfficer` INTEGER NOT NULL, `isTenPercentOwner` INTEGER NOT NULL, `transactionDate` INTEGER NOT NULL, `filedAt` INTEGER NOT NULL, `transactionCode` TEXT NOT NULL, `isUnderTradingPlan` INTEGER NOT NULL, `shares` REAL, `pricePerShare` REAL, `sharesOwnedAfter` REAL, `observedAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "accessionNumber",
+            "columnName": "accessionNumber",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "insiderName",
+            "columnName": "insiderName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "insiderTitle",
+            "columnName": "insiderTitle",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isDirector",
+            "columnName": "isDirector",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isOfficer",
+            "columnName": "isOfficer",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isTenPercentOwner",
+            "columnName": "isTenPercentOwner",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transactionDate",
+            "columnName": "transactionDate",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filedAt",
+            "columnName": "filedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "transactionCode",
+            "columnName": "transactionCode",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isUnderTradingPlan",
+            "columnName": "isUnderTradingPlan",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shares",
+            "columnName": "shares",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "pricePerShare",
+            "columnName": "pricePerShare",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "sharesOwnedAfter",
+            "columnName": "sharesOwnedAfter",
+            "affinity": "REAL"
+          },
+          {
+            "fieldPath": "observedAt",
+            "columnName": "observedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_insider_transactions_symbol",
+            "unique": false,
+            "columnNames": [
+              "symbol"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_insider_transactions_symbol` ON `${TABLE_NAME}` (`symbol`)"
+          },
+          {
+            "name": "index_insider_transactions_accessionNumber",
+            "unique": false,
+            "columnNames": [
+              "accessionNumber"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_insider_transactions_accessionNumber` ON `${TABLE_NAME}` (`accessionNumber`)"
+          }
+        ]
+      },
+      {
+        "tableName": "events",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `symbol` TEXT NOT NULL, `naturalKey` TEXT NOT NULL, `kindRaw` TEXT NOT NULL, `detectedAt` INTEGER NOT NULL, `occurredAt` INTEGER NOT NULL, `headline` TEXT NOT NULL, `detailLines` TEXT NOT NULL, `context` TEXT, `unusualness` REAL NOT NULL, `isAcknowledged` INTEGER NOT NULL, `sourceDetails` TEXT NOT NULL, `sourceURLs` TEXT NOT NULL, `derivationJSON` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "symbol",
+            "columnName": "symbol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "naturalKey",
+            "columnName": "naturalKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kindRaw",
+            "columnName": "kindRaw",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "detectedAt",
+            "columnName": "detectedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAt",
+            "columnName": "occurredAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "headline",
+            "columnName": "headline",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "detailLines",
+            "columnName": "detailLines",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "context",
+            "columnName": "context",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "unusualness",
+            "columnName": "unusualness",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAcknowledged",
+            "columnName": "isAcknowledged",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceDetails",
+            "columnName": "sourceDetails",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceURLs",
+            "columnName": "sourceURLs",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "derivationJSON",
+            "columnName": "derivationJSON",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_events_symbol",
+            "unique": false,
+            "columnNames": [
+              "symbol"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_events_symbol` ON `${TABLE_NAME}` (`symbol`)"
+          },
+          {
+            "name": "index_events_symbol_naturalKey",
+            "unique": true,
+            "columnNames": [
+              "symbol",
+              "naturalKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_events_symbol_naturalKey` ON `${TABLE_NAME}` (`symbol`, `naturalKey`)"
+          }
+        ]
+      },
+      {
+        "tableName": "macro_observations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `seriesID` TEXT NOT NULL, `date` INTEGER NOT NULL, `value` REAL NOT NULL, `observedAt` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "seriesID",
+            "columnName": "seriesID",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "date",
+            "columnName": "date",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "observedAt",
+            "columnName": "observedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_macro_observations_seriesID",
+            "unique": false,
+            "columnNames": [
+              "seriesID"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_macro_observations_seriesID` ON `${TABLE_NAME}` (`seriesID`)"
+          },
+          {
+            "name": "index_macro_observations_seriesID_date",
+            "unique": true,
+            "columnNames": [
+              "seriesID",
+              "date"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_macro_observations_seriesID_date` ON `${TABLE_NAME}` (`seriesID`, `date`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '66cfdf7f85857e541bf290975cda482c')"
+    ]
+  }
+}

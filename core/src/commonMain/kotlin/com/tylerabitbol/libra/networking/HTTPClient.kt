@@ -183,10 +183,20 @@ class HTTPClient(
             "invalid token", "invalid api key", "not authorized", "invalid credentials"
         )
 
+        /**
+         * One decoder for every vendor.
+         *
+         * `isLenient` because Tiingo and Alpaca mix numeric strings with
+         * numbers in the same field, `coerceInputValues` because several send
+         * an explicit `null` where the shape says a value, and
+         * `ignoreUnknownKeys` because every one of them adds fields without
+         * notice.
+         */
         val libraJson: Json = Json {
             ignoreUnknownKeys = true
             isLenient = true
             explicitNulls = false
+            coerceInputValues = true
         }
     }
 }

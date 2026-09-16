@@ -1,0 +1,113 @@
+<?xml version="1.0"?>
+<!--
+  Hand-authored, like the two sec_submissions fixtures and for the same reason:
+  its value is exercising the parsing paths — wrapped values, a plan-marked
+  sale, a discretionary purchase, non-discretionary codes and a derivative
+  line — rather than reproducing one company's real filing. A captured
+  document cannot be fetched without a contact address in the User-Agent.
+-->
+<ownershipDocument>
+  <schemaVersion>X0508</schemaVersion>
+  <documentType>4</documentType>
+  <periodOfReport>2026-08-24</periodOfReport>
+  <issuer>
+    <issuerCik>0000320193</issuerCik>
+    <issuerName>Example Corp</issuerName>
+    <issuerTradingSymbol>EXMP</issuerTradingSymbol>
+  </issuer>
+  <reportingOwner>
+    <reportingOwnerId>
+      <rptOwnerCik>0001214156</rptOwnerCik>
+      <rptOwnerName>DOE JANE</rptOwnerName>
+    </reportingOwnerId>
+    <reportingOwnerRelationship>
+      <isDirector>0</isDirector>
+      <isOfficer>1</isOfficer>
+      <isTenPercentOwner>0</isTenPercentOwner>
+      <officerTitle>Chief Financial Officer</officerTitle>
+    </reportingOwnerRelationship>
+  </reportingOwner>
+  <nonDerivativeTable>
+    <!-- A sale under a pre-arranged plan, marked only by footnote. -->
+    <nonDerivativeTransaction>
+      <securityTitle><value>Common Stock</value></securityTitle>
+      <transactionDate><value>2026-08-24</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4</transactionFormType>
+        <transactionCode>S</transactionCode>
+        <equitySwapInvolved>0</equitySwapInvolved>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>25000</value></transactionShares>
+        <transactionPricePerShare><value>212.50</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>D</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <postTransactionAmounts>
+        <sharesOwnedFollowingTransaction><value>180000</value></sharesOwnedFollowingTransaction>
+      </postTransactionAmounts>
+      <footnoteId id="F1"/>
+    </nonDerivativeTransaction>
+    <!-- A discretionary open-market purchase. -->
+    <nonDerivativeTransaction>
+      <securityTitle><value>Common Stock</value></securityTitle>
+      <transactionDate><value>2026-08-22</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4</transactionFormType>
+        <transactionCode>P</transactionCode>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>4000</value></transactionShares>
+        <transactionPricePerShare><value>205.00</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode>
+      </transactionAmounts>
+      <postTransactionAmounts>
+        <sharesOwnedFollowingTransaction><value>205000</value></sharesOwnedFollowingTransaction>
+      </postTransactionAmounts>
+    </nonDerivativeTransaction>
+    <!-- Shares withheld to cover tax on vesting. Not a market decision. -->
+    <nonDerivativeTransaction>
+      <securityTitle><value>Common Stock</value></securityTitle>
+      <transactionDate><value>2026-08-20</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4</transactionFormType>
+        <transactionCode>F</transactionCode>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>1200</value></transactionShares>
+        <transactionPricePerShare><value>203.10</value></transactionPricePerShare>
+      </transactionAmounts>
+    </nonDerivativeTransaction>
+    <!-- An award. Text on the outer element rather than a value wrapper. -->
+    <nonDerivativeTransaction>
+      <securityTitle><value>Common Stock</value></securityTitle>
+      <transactionDate><value>2026-08-18</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4</transactionFormType>
+        <transactionCode>A</transactionCode>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares>9000</transactionShares>
+      </transactionAmounts>
+    </nonDerivativeTransaction>
+  </nonDerivativeTable>
+  <derivativeTable>
+    <!-- An option exercise, with the modern explicit plan checkbox. -->
+    <derivativeTransaction>
+      <securityTitle><value>Employee Stock Option</value></securityTitle>
+      <transactionDate><value>2026-08-19</value></transactionDate>
+      <transactionCoding>
+        <transactionFormType>4</transactionFormType>
+        <transactionCode>M</transactionCode>
+        <aff10b5One><value>1</value></aff10b5One>
+      </transactionCoding>
+      <transactionAmounts>
+        <transactionShares><value>15000</value></transactionShares>
+        <transactionPricePerShare><value>0.00</value></transactionPricePerShare>
+      </transactionAmounts>
+    </derivativeTransaction>
+  </derivativeTable>
+  <footnotes>
+    <footnote id="F1">This transaction was made pursuant to a Rule 10b5-1 trading
+      plan adopted by the reporting person on 12 February 2026.</footnote>
+  </footnotes>
+</ownershipDocument>

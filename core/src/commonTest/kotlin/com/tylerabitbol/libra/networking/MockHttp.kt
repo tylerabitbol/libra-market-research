@@ -66,6 +66,55 @@ object MockHttp {
         }
     }
 
+    /**
+     * Routes by path, the way Swift's `StubURLProtocol.stub(path:fixture:)` did.
+     *
+     * A provider test usually drives several endpoints in one call — Finnhub's
+     * metrics page needs `/stock/metric` *and* `/stock/profile2` — so matching
+     * on the path is what makes those tests expressible at all. Matching is by
+     * suffix on the path, since the base URL differs per vendor and the query
+     * string carries credentials that must not be part of the match.
+     */
+    class Router {
+        val recorder = Recorder()
+        private val routes = mutableListOf<Pair<String, Reply>>()
+        private var fallback: Reply? = null
+
+        /** Registers [reply] for any request whose path ends with [path]. */
+        fun stub(path: String, reply: Reply): Router = apply { routes.add(path to reply) }
+
+        fun stub(path: String, body: String, status: HttpStatusCode = HttpStatusCode.OK): Router =
+            stub(path, Reply(status = status, body = body))
+
+        /** Answers anything unmatched, instead of failing the test. */
+        fun stubAll(reply: Reply): Router = apply { fallback = reply }
+
+        val requests: List<HttpRequestData> get() = recorder.requests
+
+        fun requests(path: String): List<HttpRequestData> =
+            recorder.requests.filter { it.url.encodedPath.endsWith(path) }
+
+        fun engine(): MockEngine = MockEngine { request ->
+            recorder.requests.add(request)
+            val encodedPath = request.url.encodedPath
+            val reply = routes.firstOrNull { encodedPath.endsWith(it.first) }?.second
+                ?: fallback
+                ?: Reply(
+                    status = HttpStatusCode.NotFound,
+                    body = "No stub registered for $encodedPath",
+                )
+            respond(
+                content = ByteReadChannel(reply.body),
+                status = reply.status,
+                headers = headersOf(
+                    *reply.headers.map { (key, value) -> key to listOf(value) }.toTypedArray()
+                )
+            )
+        }
+    }
+
+    fun router(): Router = Router()
+
     /** An engine whose transport fails outright, as an offline device would. */
     fun failing(message: String = "The network is unreachable"): MockEngine = MockEngine {
         throw kotlinx.io.IOException(message)
