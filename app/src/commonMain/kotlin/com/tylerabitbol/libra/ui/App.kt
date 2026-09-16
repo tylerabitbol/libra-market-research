@@ -7,6 +7,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.fillMaxSize
 import com.tylerabitbol.libra.app.AppEnvironment
+import com.tylerabitbol.libra.ui.components.LocalUrlOpener
 
 /**
  * The composition root, reached the way Swift reaches it: one instance, put
@@ -25,11 +26,25 @@ val LocalAppEnvironment = staticCompositionLocalOf<AppEnvironment> {
 fun App(
     environment: AppEnvironment,
     screens: LibraScreens = libraScreens(),
+    /**
+     * Opens straight to a security's page. Set by `-LibraOpenSymbol AAPL` in a
+     * debug build, and null in every other case; see `DeveloperOptions`.
+     */
+    openSymbol: String? = null,
+    /**
+     * How a source link is opened. The shells pass an `Intent` or
+     * `UIApplication.openURL`; the default does nothing, which is what a test
+     * and a preview should get.
+     */
+    openUrl: (String) -> Unit = {},
 ) {
-    CompositionLocalProvider(LocalAppEnvironment provides environment) {
+    CompositionLocalProvider(
+        LocalAppEnvironment provides environment,
+        LocalUrlOpener provides openUrl,
+    ) {
         LibraTheme {
             Surface(Modifier.fillMaxSize()) {
-                LibraNavigation(screens)
+                LibraNavigation(screens, openSymbol = openSymbol)
             }
         }
     }

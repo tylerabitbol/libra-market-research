@@ -1,6 +1,6 @@
 # Where the port stands
 
-**Last checkpoint: Phase 8 is complete. Next is Phase 9.**
+**Last checkpoint: Phase 8 complete; Phase 9 started — the iOS shell is wired.**
 Phases 0–7 complete: 475 `:core` tests green on both JVM and the iOS
 simulator. Phase 8 so far: theme, navigation, the component set, and the Settings,
 SecretEntry, Watchlist, Dashboard, BenchmarkDetail, Research, Screener and
@@ -44,7 +44,43 @@ listed again below so it is not lost.
   `Mock*Provider` family. Plus the vendor serializers and the fixture harness:
   all 19 fixtures are in, reached through a generated Kotlin source file.
 
-## Next: Phase 9
+## Next: finish Phase 9
+
+Phase 9 so far: `core/.../app/AppLaunch.kt` holds the launch sequence both
+shells share (self-test, key seeding, watchlist seeding, visit backdating,
+attaching the database), and `app/src/iosMain/.../MainViewController.kt` uses it
+— `KeychainSecretsStore`, `UserDefaultsPreferenceStore`, `openLibraDatabase()`,
+`UIApplication.openURL` for `LocalUrlOpener`, argv and the process environment
+for `LaunchEnvironment`, and `-LibraOpenSymbol` opening a security page. `App()`
+now takes `openSymbol` and `openUrl`, and the `Scaffold` takes
+`WindowInsets.safeDrawing` so the first row of a screen clears the status bar
+and the notch.
+
+Remaining, in order:
+
+1. **The Android shell.** An `Application` subclass building `AppLaunch` and
+   `AppEnvironment` once for the process, `MainActivity` reading them, the real
+   `KeystoreSecretsStore` and `SharedPreferencesStore`, `openLibraDatabase(context)`,
+   an `Intent(ACTION_VIEW)` for `LocalUrlOpener`, and `BuildConfig.DEBUG` for
+   `LaunchEnvironment.isDebugBuild` (which needs `buildFeatures { buildConfig = true }`).
+   Decide where Android's launch *arguments* come from — iOS has argv and
+   Android has none, so the intent's extras are the obvious stand-in; log
+   whatever you choose in `KNOWN_ISSUES.md`.
+2. **The app icon.** One 1024×1024 PNG at
+   `../Libra/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png`. It
+   needs an `iosApp` asset catalog (`project.yml` has none yet) and Android
+   mipmaps; `sips -z` resamples it without another tool.
+3. **`README.md` for this branch** — how to build both, how to run the tests,
+   the `JAVA_HOME` export, and that `:app` UI tests run on `iosSimulatorArm64`.
+4. **A manual pass on both platforms**, per `PLAN.md §7`.
+
+`PLAN.md §9` also lists "Compose resources for strings" and an
+`expect fun appPaths()`. Neither looks worth doing as written: the per-platform
+`openLibraDatabase` already puts the file where each platform wants it, so
+`appPaths()` would be an abstraction over one call site, and extracting every
+English string into a resource bundle is churn that `PLAN.md §8`'s "English
+only, don't localise during the port" rules out the benefit of. Make the call
+and write it down either way.
 
 Phases 7 and 8 are done: `AppEnvironment`, all six view models (`Dashboard`,
 `BenchmarkDetail`, `Watchlist` + `SymbolSearch`, `SecurityDetail`, `Research`,

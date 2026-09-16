@@ -1,6 +1,8 @@
 package com.tylerabitbol.libra.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
@@ -9,6 +11,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -75,11 +78,22 @@ enum class AppSection(
 fun LibraNavigation(
     screens: LibraScreens,
     navController: NavHostController = rememberNavController(),
+    openSymbol: String? = null,
 ) {
     val backStackEntry by navController.currentBackStackEntryAsState()
     val current = backStackEntry?.destination
 
+    // `-LibraOpenSymbol AAPL`, pushed once rather than made the start
+    // destination, so the back gesture still lands on the Dashboard.
+    LaunchedEffect(openSymbol) {
+        if (openSymbol != null) navController.navigate(SecurityDetailRoute(openSymbol))
+    }
+
     Scaffold(
+        // No top bar, so nothing else would keep the first row of a screen out
+        // from under the status bar and the iOS notch. The bottom bar consumes
+        // its own inset and Scaffold subtracts it before padding the content.
+        contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
             NavigationBar {
                 for (section in AppSection.entries) {

@@ -736,3 +736,19 @@ Swift got from `AxisMarks(values: .automatic(desiredCount: 4))`. The formatters
 are total now as well, so a position the placer did not choose can never yield an
 empty string. Nothing caught this before the UI test because the crash needs the
 chart to actually measure itself.
+
+**Launch wiring lives in `:core`, not in each shell.** Swift splits it between
+`LibraApp.init` (self-test, key seeding) and `RootView.task` (watchlist seed,
+visit backdating, attaching the container). Two Compose shells would each carry
+a copy of that sequence and the copies would drift, so `app/AppLaunch.kt` holds
+it once and the shells pass in only what is genuinely per-platform: where the
+launch arguments come from, which secrets store to build, and which database
+file to open. `AppLaunch.start` returns the environment; `AppLaunch.attach` is
+suspending and runs off the critical path, because the seeds write rows and a
+write on the main thread at launch is what makes a cold start stutter.
+
+**`Platform.isDebugBinary` rather than an Xcode build setting.** `PLAN.md §9`
+says argv on iOS and `BuildConfig` on Android. Kotlin/Native already knows
+whether it is a debug binary, so the iOS shell reads that instead of threading a
+constant through the Xcode configuration to say the same thing. Android still
+uses `BuildConfig.DEBUG`, which is the same fact by the same name.
