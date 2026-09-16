@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -48,7 +49,7 @@ fun MetricCell(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = "$label: $value" },
+            .semantics(mergeDescendants = true) { contentDescription = "$label: $value" },
         horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
@@ -144,7 +145,7 @@ fun FigureRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clearAndSetSemantics { contentDescription = "$label: $value" },
+            .semantics(mergeDescendants = true) { contentDescription = "$label: $value" },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.Top,
     ) {

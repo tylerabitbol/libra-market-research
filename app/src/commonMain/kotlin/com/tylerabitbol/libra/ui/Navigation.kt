@@ -49,6 +49,14 @@ import kotlin.reflect.KClass
 
 @Serializable data class BenchmarkDetailRoute(val id: String)
 
+/**
+ * One credential's entry screen.
+ *
+ * Carries the key's storage name, not a value: nothing about a secret travels
+ * through navigation, which is saved state the app does not control.
+ */
+@Serializable data class SecretEntryRoute(val key: String, val provider: String)
+
 /** A tab: its route, its title, and the glyph SF Symbols gave the Swift app. */
 enum class AppSection(
     val route: Any,
@@ -102,6 +110,10 @@ fun LibraNavigation(
                 composable<BenchmarkDetailRoute> { entry ->
                     screens.benchmarkDetail(entry.toRoute<BenchmarkDetailRoute>().id, navController)
                 }
+                composable<SecretEntryRoute> { entry ->
+                    val route = entry.toRoute<SecretEntryRoute>()
+                    screens.secretEntry(route, navController)
+                }
             }
         }
     }
@@ -135,4 +147,5 @@ data class LibraScreens(
     val settings: @Composable (NavHostController) -> Unit,
     val securityDetail: @Composable (String, NavHostController) -> Unit,
     val benchmarkDetail: @Composable (String, NavHostController) -> Unit,
+    val secretEntry: @Composable (SecretEntryRoute, NavHostController) -> Unit,
 )

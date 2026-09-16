@@ -27,6 +27,17 @@ kotlin {
     }
 
     sourceSets {
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            // Compose's own test harness. These run on the iOS simulator
+            // target rather than a desktop one: the app ships on iOS and
+            // Android, and adding a JVM target to :app only to host tests
+            // would mean testing a third platform nobody uses.
+            @OptIn(org.jetbrains.compose.ExperimentalComposeLibrary::class)
+            implementation(compose.uiTest)
+            implementation(libs.kotlinx.coroutines.test)
+        }
+
         commonMain.dependencies {
             api(project(":core"))
             implementation(compose.runtime)

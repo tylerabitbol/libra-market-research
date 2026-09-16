@@ -4,6 +4,7 @@ import com.tylerabitbol.libra.models.provenance.DataProviderID
 import com.tylerabitbol.libra.networking.HTTPClient
 import com.tylerabitbol.libra.persistence.LibraDatabase
 import com.tylerabitbol.libra.persistence.SnapshotStore
+import com.tylerabitbol.libra.persistence.WatchlistStore
 import com.tylerabitbol.libra.services.mock.MockMacroDataProvider
 import com.tylerabitbol.libra.services.mock.MockMarketDataProvider
 import com.tylerabitbol.libra.services.mock.MockSECDataProvider
@@ -82,10 +83,24 @@ class AppEnvironment(
 
     fun hasKey(key: SecretKey): Boolean = key in _configuredKeys.value
 
-    /** Attaches the store once the database is available. */
+    private val _watchlist = MutableStateFlow<WatchlistStore?>(null)
+
+    /**
+     * Watchlist membership, for the screen that edits what the user follows
+     * rather than recording what was fetched.
+     *
+     * SwiftUI hands a view its `modelContext` from the environment, so the
+     * watchlist screen writes rows directly. Compose has no equivalent, and
+     * handing `:app` the database instead would put Room on the UI module's
+     * compile classpath for the sake of two calls.
+     */
+    val watchlist: StateFlow<WatchlistStore?> = _watchlist.asStateFlow()
+
+    /** Attaches the stores once the database is available. */
     fun attach(database: LibraDatabase) {
         if (_snapshots.value != null) return
         _snapshots.value = SnapshotStore(database)
+        _watchlist.value = WatchlistStore(database)
     }
 
     fun setSecret(value: String?, key: SecretKey) {
