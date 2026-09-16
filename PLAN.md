@@ -106,8 +106,8 @@ needs it), Arrow.
 | `enum` with associated values | `sealed interface` + data classes / objects |
 | `enum: String, CaseIterable` | `enum class` with `val raw`; `entries` |
 | `protocol P: Sendable` | `interface P` |
-| `actor` | `class` + `Mutex` (`withLock`) |
-| `@Observable @MainActor final class VM` | `class VM : ViewModel()`; one `StateFlow<XUiState>` data class |
+| `actor` | `class` + `Mutex` (`withLock`); test counters: `AtomicReference` + CAS loop |
+| `@Observable @MainActor final class VM` | plain `class VM(scope: CoroutineScope)` in `:core`, no AndroidX `ViewModel`; one `StateFlow<XUiState>`; every Swift computed property → extension `val` on the UiState |
 | `@Model final class` | `@Entity data class` + DAO; relationships → foreign-key columns, not object refs |
 | `@ModelActor SnapshotStore` | `class SnapshotStore(db)`; all DAO calls are `suspend`, Room dispatches |
 | `throws` / `APIError` | `sealed class APIError : Exception()`; `throw` |
@@ -118,16 +118,25 @@ needs it), Arrow.
 | `Codable` | `@Serializable` + custom serializers for dates/`"."` |
 | `URLSession` / `HTTPClient` | `HttpClient` wrapper with the same method signatures |
 | `TaskGroup` / `async let` | `coroutineScope { async {} }` / `awaitAll` |
-| `Task { }` in VM | `viewModelScope.launch` |
+| `Task { }` in VM | `scope.launch`, job kept so tests can `awaitLoad()` |
 | `os.Logger` | `Kermit Logger.withTag` |
 | `some View` | `@Composable fun` |
 | `NavigationStack` + `.navigationDestination` | `NavHost` with typed routes (`@Serializable` route classes) |
-| `List` / `Section` | `LazyColumn` / `stickyHeader` |
+| `List` / `Section` | `LazyColumn` / plain header item |
+| `.toolbar` items | in-screen header row (title left, controls right) — the shell has no top bar |
+| `.swipeActions` / `onDelete` | visible Remove/Delete button |
+| `TextField(value:format:.number)` | draft `String`, commit on parse |
 | `.sheet` / `.alert` | `ModalBottomSheet` / `AlertDialog` |
 | `.task {}` / `.refreshable` | `LaunchedEffect(key)` / `PullToRefreshBox` |
 | `SecureField` | `OutlinedTextField` + `PasswordVisualTransformation` |
 | `.accessibilityLabel/Value` | `Modifier.semantics { contentDescription; stateDescription }` |
-| `Chart { LineMark... }` | Vico `CartesianChartHost` |
+| `.accessibilityElement(children: .combine)` | `semantics(mergeDescendants = true)` — **never** `clearAndSetSemantics`, which discards child text |
+| `.accessibilityElement(children: .ignore)` | `clearAndSetSemantics` |
+| `Image(systemName:)` | hand-built `ImageVector` for tab icons; decorative card glyphs dropped (no material-icons multiplatform past 1.7.3) |
+| `Link` / `openURL` | `LocalUrlOpener` composition local; shells provide |
+| `.secondary` / `.tertiary` / `.orange` | `LibraColors.secondaryText / tertiaryText / caution` |
+| `UserDefaults.standard` | `PreferenceStore` injected via `AppEnvironment(preferences)` |
+| `Chart { LineMark... }` | Vico 2.5.2 multiplatform; intraday gap = `LineStroke.Dashed`, one series per segment |
 | `@Environment(\.dismiss)` | `navController.popBackStack()` |
 | Swift Testing `@Test` / `#expect` | `@Test fun` / `assertEquals` (tolerance for doubles) |
 
@@ -314,13 +323,27 @@ Order: `Theme.kt` + `Navigation.kt` → `Components/*` → `Settings` →
 - `PriceChartView` → `PriceChart.kt` with Vico: line for daily, segmented
   line for intraday sessions, trailing y-axis, custom x ticks from
   `ChartAxisTick`. Reproduce `intradayChartLabel/Value` as
-  `contentDescription`/`stateDescription`. If Vico can't do the segment gap,
-  draw with `Canvas` — ~300 LOC, acceptable.
+  `contentDescription`/`stateDescription`. Vico does the segment gap
+  (`LineStroke.Dashed`); the Canvas fallback was not needed.
 - Settings → Data Sources: masked fields, per-key help text, "Test
   connection" using `ConnectionTest`, `SecretsHealth` warning when the
   Keychain probe fails.
 - Accessibility: every tappable row gets `Role`, every chart gets a text
-  description, every figure cell merges descendants. Use `sp` only.
+  description, every figure cell merges descendants
+  (`semantics(mergeDescendants = true)`). Use `sp` only.
+- Routes are `@Serializable` objects/data classes read with `toRoute<T>()`;
+  they carry ids, never values. An id the catalog no longer knows pops the
+  back stack. Per-tab back stacks via `popUpTo(start){saveState}` +
+  `restoreState`.
+- `:app` never sees Room: expose `:core` types (`WatchlistStore`,
+  `SnapshotStore`), never `LibraDatabase`.
+- Sort/action menus live in a per-screen header row; the shell is a bottom
+  `NavigationBar` only.
+- Drafts of credentials use `remember(key)`, never `rememberSaveable`.
+- UI tests: `runComposeUiTest` in `app/commonTest`, run on
+  `iosSimulatorArm64` (no desktop target). First run ~21 min, then ~15–40 s.
+  Targets: banners, provenance label on every figure, chart description.
+- Keep the `compose.*` accessor deprecations; material3 has no stable 1.12.0.
 - Landscape and iPad/tablet: don't design for them; just don't break
   (no fixed widths).
 - No custom fonts. No animations beyond defaults.
