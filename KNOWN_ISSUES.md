@@ -692,3 +692,20 @@ Android, but neither is reachable from common code, so the composition root now
 injects it exactly as it injects `secrets` — defaulting to the in-memory store,
 which is what a test and a preview should get. Phase 9 passes the real one from
 each shell.
+
+**`PriceChartView`'s value format is the security page's default.** The
+benchmark page passes `state.valueFormat` because an index level is not a
+price; the security page passes nothing, which is `PriceChart`'s currency
+default. Same component, two callers, no branch inside it.
+
+**The custom-date sheet is a `DatePickerDialog`.** Swift presented a graphical
+`DatePicker` in a half-height sheet. Material 3's dialog is the nearest
+equivalent, and `SelectableDates` enforces the same `...Date.now` bound so a
+window cannot open in the future. `ChangeWindow.Custom` would otherwise have
+been a model state the UI could never reach.
+
+**`Divider()` inside a menu, plus `✓ ` prefixes.** SwiftUI's `Menu` takes
+`Section` headers and `Label(…, systemImage: "checkmark")` for the selected
+item. `DropdownMenu` has neither, so the kind filter draws its category
+headers as plain text rows and marks the current selection with a leading
+`✓ ` (and three spaces when unselected, so the labels stay aligned).

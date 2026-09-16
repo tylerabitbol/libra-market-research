@@ -14,6 +14,7 @@ import com.tylerabitbol.libra.models.provenance.DataProviderID
 import com.tylerabitbol.libra.services.secrets.SecretKey
 import com.tylerabitbol.libra.ui.research.ResearchHost
 import com.tylerabitbol.libra.ui.screener.ScreenerHost
+import com.tylerabitbol.libra.ui.security.SecurityDetailHost
 import com.tylerabitbol.libra.ui.settings.SecretEntryScreen
 import com.tylerabitbol.libra.ui.dashboard.BenchmarkDetailHost
 import com.tylerabitbol.libra.ui.dashboard.DashboardHost
@@ -61,7 +62,9 @@ fun libraScreens(): LibraScreens = LibraScreens(
             },
         )
     },
-    securityDetail = { symbol, _ -> UnportedScreen("Security detail — $symbol") },
+    securityDetail = { symbol, _ ->
+        SecurityDetailHost(symbol = symbol, environment = LocalAppEnvironment.current)
+    },
     benchmarkDetail = { id, navController ->
         // Same reasoning as `secretEntry`: the route carries the stable id, not
         // the value, so a restored back stack cannot resurrect a benchmark the
