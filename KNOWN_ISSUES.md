@@ -127,3 +127,20 @@ annotated `@Serializable` when the dependency lands, rather than pulling a
 serialization plugin into Phase 2 for one type. The deferred tests are
 `savedScreensRoundTrip`, `benchmarksAreNotScreened` and the stored-figures
 case; the last two need the store regardless.
+
+**Three cross-cutting Swift test suites are split across later phases.** They
+were listed under Phase 2, but each is written against a layer that does not
+exist yet, so the parts that are pure calculation are ported now and the rest
+travels with the layer it tests:
+
+- `CorrectnessRegressionTests.swift` — the four valuation suites (metric key
+  mapping, unrankable multiples, percentile self-exclusion, scale validation,
+  13 cases) are ported. `CIKTests` needs `SECProvider` (Phase 6);
+  `SortOptionTests` needs `WatchlistViewModel` and `AnnualPeriodKeyingTests`
+  needs `SecurityDetailViewModel` (both Phase 7).
+- `SyntheticDataTests.swift` — entirely `SnapshotStore`, `AppModelContainer`
+  and the `Mock*Provider` family. Phase 4 for the store, Phase 6 for the mocks.
+- `WatchlistIntelligenceTests.swift` — `WatchlistRow` ordering and the store.
+  Phase 7.
+
+Nothing is dropped; each is named against the phase that will pick it up.
