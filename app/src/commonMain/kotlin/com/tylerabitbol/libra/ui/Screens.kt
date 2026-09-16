@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import com.tylerabitbol.libra.models.core.Benchmark
 import com.tylerabitbol.libra.models.provenance.DataProviderID
 import com.tylerabitbol.libra.services.secrets.SecretKey
+import com.tylerabitbol.libra.ui.research.ResearchHost
 import com.tylerabitbol.libra.ui.settings.SecretEntryScreen
 import com.tylerabitbol.libra.ui.dashboard.BenchmarkDetailHost
 import com.tylerabitbol.libra.ui.dashboard.DashboardHost
@@ -39,7 +40,12 @@ fun libraScreens(): LibraScreens = LibraScreens(
             onOpenSecurity = { navController.navigate(SecurityDetailRoute(it)) },
         )
     },
-    research = { UnportedScreen("Research") },
+    research = { navController ->
+        ResearchHost(
+            environment = LocalAppEnvironment.current,
+            onOpenSecurity = { navController.navigate(SecurityDetailRoute(it)) },
+        )
+    },
     screener = { UnportedScreen("Screener") },
     settings = { navController ->
         SettingsScreen(
