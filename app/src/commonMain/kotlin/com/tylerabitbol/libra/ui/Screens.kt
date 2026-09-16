@@ -9,9 +9,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.tylerabitbol.libra.models.core.Benchmark
 import com.tylerabitbol.libra.models.provenance.DataProviderID
 import com.tylerabitbol.libra.services.secrets.SecretKey
 import com.tylerabitbol.libra.ui.settings.SecretEntryScreen
+import com.tylerabitbol.libra.ui.dashboard.BenchmarkDetailHost
 import com.tylerabitbol.libra.ui.dashboard.DashboardHost
 import com.tylerabitbol.libra.ui.settings.SettingsScreen
 import com.tylerabitbol.libra.ui.watchlist.WatchlistHost
@@ -48,7 +50,20 @@ fun libraScreens(): LibraScreens = LibraScreens(
         )
     },
     securityDetail = { symbol, _ -> UnportedScreen("Security detail — $symbol") },
-    benchmarkDetail = { id, _ -> UnportedScreen("Benchmark detail — $id") },
+    benchmarkDetail = { id, navController ->
+        // Same reasoning as `secretEntry`: the route carries the stable id, not
+        // the value, so a restored back stack cannot resurrect a benchmark the
+        // catalog has since dropped.
+        val benchmark = Benchmark.all.firstOrNull { it.id == id }
+        if (benchmark == null) {
+            navController.popBackStack()
+        } else {
+            BenchmarkDetailHost(
+                benchmark = benchmark,
+                environment = LocalAppEnvironment.current,
+            )
+        }
+    },
     secretEntry = { route, navController ->
         val key = SecretKey.fromRaw(route.key)
         val provider = DataProviderID.fromRaw(route.provider)
