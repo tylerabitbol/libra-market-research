@@ -1,10 +1,10 @@
 # Where the port stands
 
-**Last checkpoint: Phase 8 (UI) — every screen but `SecurityDetail` ported.**
+**Last checkpoint: Phase 8 (UI) — all nine screens ported.**
 Phases 0–7 complete: 475 `:core` tests green on both JVM and the iOS
 simulator. Phase 8 so far: theme, navigation, the component set, and the Settings,
-SecretEntry, Watchlist, Dashboard, BenchmarkDetail, Research and Screener
-screens, all compiling on both `iosSimulatorArm64` and `android`, with
+SecretEntry, Watchlist, Dashboard, BenchmarkDetail, Research, Screener and
+SecurityDetail screens, all compiling on both `iosSimulatorArm64` and `android`, with
 `:app:iosSimulatorArm64Test` green (`app/src/commonTest/.../ui/BannerTest.kt`
 — the first run costs ~21 min, later ones ~15-40 s).
 Every commit is on this branch; nothing is stashed.
@@ -68,20 +68,18 @@ Done, in `PLAN.md §8`'s order: `Theme.kt`, `Icons.kt`, `Navigation.kt`,
 `App.kt`, `Screens.kt`; `Components/*` (banners, claim badge, data cells,
 attribution card, event card, research profile card, filing analysis card,
 `PriceChart`); `Settings` + `SecretEntry`; `Watchlist` + `AddSymbolSheet`;
-`Dashboard`; `BenchmarkDetail`; `Research`; `Screener`.
+`Dashboard`; `BenchmarkDetail`; `Research`; `Screener`; `SecurityDetail`.
+No `UnportedScreen` placeholders remain.
 
 Remaining:
 
-1. **SecurityDetail** — `Libra/Views/Security/SecurityDetailView.swift`, 841
-   Swift lines, deliberately last because it uses every component. A `Screen` +
-   a `Host`, then the `UnportedScreen` placeholder in `Screens.kt` is replaced.
-   `SecurityDetailViewModel` is already ported and carries ~30 derived values as
-   extension vals; `SecurityDetailViewModel.awaitLoad()` joins both the load and
-   the job a range change spawns.
-2. More Compose UI tests for the risky bits — a provenance label on every
+1. More Compose UI tests for the risky bits — a provenance label on every
    figure, the chart's content description.
-3. This file updated again. `KNOWN_ISSUES.md`'s Phase 8 section is current
-   through the screener.
+2. This file updated again. `KNOWN_ISSUES.md`'s Phase 8 section is current
+   through `SecurityDetail`.
+
+Then **Phase 9** (4 h) — see `PLAN.md §4`. Its wiring list is the payoff for
+everything Phases 7–8 left injectable with safe defaults.
 
 Phase 8 also still owns the `compose.runtime` / `foundation` / `material3`
 accessor deprecations in `app/build.gradle.kts`.
