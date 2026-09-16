@@ -291,3 +291,82 @@ which clears that one. Still open: `compose.runtime` / `compose.foundation` /
 `compose.material3` accessors in `app/build.gradle.kts` are deprecated in
 favour of naming the artifacts directly. Phase 8 rewrites those dependencies
 anyway, so they move with the UI work rather than churning the catalog twice.
+
+
+## Phase 5 — Secrets
+
+**`SecretsStore` is an interface, not an `expect class`.** `PLAN.md §5` asked
+for `expect class SecretsStore`. Swift's shape is a `protocol SecretsStoring`
+with two conformers — `KeychainSecretsStore` and `InMemorySecretsStore` — and
+the in-memory one is what every test and preview uses. An `expect class` admits
+exactly one implementation per target, so it would have made the store
+untestable and previews dependent on a real keychain. The interface carries
+`hasValue`, `fingerprint`, `require` and `diagnose` as defaults, exactly as
+Swift's extension did. `KeychainSecretsStore` lives in `iosMain`,
+`KeystoreSecretsStore` in `androidMain`, and neither is named from
+`commonMain` — the app wires the right one at startup, the same way the
+`PreferenceStore` and HTTP engine choices already work.
+
+**`OSStatus` constants are restated in `commonMain`.** `SecretsError.explain`
+holds the user-facing judgement — that `-34018` is a build problem and not the
+user's fault — and that is the part worth testing on every target, not just
+iOS. The codes are stable ABI values, so `OSStatusCode` restates the seven the
+app reacts to rather than pulling `platform.Security` into common code.
+`explain` takes an optional `systemMessage`, which is what
+`SecCopyErrorMessageString` returns; only the iOS store can supply it, and the
+fallback still prints the raw code so an unmapped status is never swallowed.
+
+**Android encrypts into SharedPreferences under an AndroidKeyStore AES key.**
+Per the plan, and explicitly not `androidx.security:security-crypto`, which is
+deprecated. Each record is `Base64(iv ‖ ciphertext)` under AES-256-GCM with a
+per-write 12-byte IV, so re-saving the same key produces different ciphertext
+and tampering surfaces as a decrypt failure. A `GeneralSecurityException` on
+read drops the orphaned record and reports "not set": the keystore entry can
+vanish on a restored backup, and throwing from a read the whole settings screen
+depends on would be worse than losing a value the user must re-enter anyway.
+
+**The Android key is not user-authentication-bound.** `setUserAuthenticationRequired(false)`
+matches iOS's `kSecAttrAccessibleAfterFirstUnlock`: background refreshes need
+the credentials while the screen is off. Keeping the two platforms aligned
+matters more here than a stricter Android-only rule.
+
+**`NSString` does not bridge to `kotlin.String`.** `CFBridgingRelease(...) as?
+String` works for a `CFStringRef`, but `NSString.create(data:encoding:) as
+String?` is a cast the compiler proves can never succeed. The keychain store
+converts through raw bytes (`usePinned` + `memcpy`) in both directions instead.
+
+**Keychain dictionaries are retained and released explicitly.** Swift's
+`query as CFDictionary` was an ARC-managed bridge. Kotlin/Native has none, so
+every query goes through a `withCFDictionary` helper that releases in a
+`finally`; writing `CFBridgingRetain(...)` inline would leak one dictionary per
+keychain access.
+
+**`InMemorySecretsStore` uses an atomic reference, not a mutable map.** Swift
+guarded its dictionary with an `NSLock`. `SecretsStore` is not a suspending
+interface, so a `Mutex` is unavailable; the store holds an immutable map behind
+`AtomicReference` and updates it by compare-and-set. A bare `MutableMap` shared
+across threads is a data race under Kotlin/Native's memory model.
+
+**`KeystoreSecretsStore` has no automated test.** It needs a real
+`AndroidKeyStore`, which exists only on a device or emulator, and `:core` has
+no Android instrumentation source set. It is compile-verified by
+`:androidApp:assembleDebug`. The logic that *can* be tested off-device — the
+key metadata, the fingerprint masking, the `require` contract and the status
+explanations — is covered by the 24 common tests, which run on both JVM and
+the iOS simulator.
+
+**Eleven tests beyond the Swift suites.** Swift had 13 cases across
+`Keychain error reporting`, `Key fingerprints` and `Secrets store`; all 13 are
+ported. The additions pin things the Kotlin port newly made possible to get
+wrong: the storage account names (renaming a `SecretKey` case would orphan a
+credential the user already entered), the round trip through `fromRaw`, that
+every key has help text, that a trailing newline in a paste does not inflate
+the fingerprint length, and that `SecretsError.message` carries the
+explanation rather than a code.
+
+**`displayName` and `helpText` stay as constants.** Per the plan — they move to
+`composeResources` in Phase 8.
+
+**The `project.yml` signing note needed no work.** Phase 0 already carried the
+`CODE_SIGN_STYLE: Automatic` / `DEVELOPMENT_TEAM` block and the -34018
+explanation into `iosApp/project.yml` verbatim.

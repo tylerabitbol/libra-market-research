@@ -1,6 +1,6 @@
 # Where the port stands
 
-**Last checkpoint: Phase 4 (Persistence) complete.** 298 tests green on both
+**Last checkpoint: Phase 5 (Secrets) complete.** 322 tests green on both
 JVM and the iOS simulator; `:androidApp:assembleDebug` and
 `:app:linkDebugFrameworkIosSimulatorArm64` green. Every commit is on this branch; nothing is stashed.
 
@@ -28,33 +28,30 @@ listed again below so it is not lost.
   entities, nine DAOs, per-platform builders, `SnapshotStore`,
   `evictSyntheticRows`, `FactPeriods`, and a `PreferenceStore` backing
   `SavedScreens`.
+- **Phase 5 — Secrets.** `SecretKey`, `SecretsHealth`, `SecretsError` and the
+  `SecretsStore` interface in `commonMain`, with a Keychain implementation on
+  iOS, an AndroidKeyStore + SharedPreferences one on Android, and the
+  in-memory store the tests and previews use.
 
-## Next: Phase 5 — Secrets (~3h)
+## Next: Phase 6 — Services / providers (~10 h)
 
-Per `PLAN.md §5`. `expect class SecretsStore` with `get` / `set` / `delete` /
-`healthCheck`.
+Per `PLAN.md §6`. `FinnhubProvider`, `TiingoProvider`, `AlpacaProvider`,
+`FREDProvider`, `SECProvider`, `SECFundamentalsProvider`, `Form4Parser`,
+`CompositeMarketDataProvider`, `ProviderRegistry`, `ConnectionTest` and the
+`Mock*Provider` family.
 
-- **iOS actual** via `platform.Security` cinterop: `SecItemAdd`,
-  `SecItemCopyMatching`, `SecItemUpdate`, `SecItemDelete` against
-  `kSecClassGenericPassword`. Keep the `SecretsHealth` write-then-read probe
-  and the `errSecMissingEntitlement (-34018)` explanation verbatim.
-- **Android actual** via an AES key in the AndroidKeyStore wrapping an
-  encrypted `SharedPreferences` file. Do *not* use `security-crypto`; it is
-  deprecated.
-- Port the three deferred suites from `NetworkingTests.swift` (keychain
-  errors, key fingerprints, secrets store — 14 cases).
-
-Section 19 of the spec still governs: a key never appears in the UI or in
-source, is never written to the snapshot store, never logged, and never part
-of a cache key. Tyler enters the keys himself — implement the integration and
-stop at the credential.
+- `MockHttp` in `commonTest` (Phase 3) is the harness the decoding tests use.
+- `FactPeriods` is already ported — Phase 4 needed it for `SnapshotStore.facts`.
+- Each provider reads its credential through `SecretsStore.require`, which
+  throws `APIError.MissingCredentials` the UI already knows how to render.
+  **Tyler enters the keys himself: implement the integration and stop at the
+  credential.** No key belongs in source, in a fixture, or in a cache key.
 
 ## Deferred work, by the phase that owns it
 
 | Owed in | What |
 |---|---|
 | Phase 6 | 2 fixture-backed `FilingAnalysisTests`; `CIKTests`; `HydrationTests`; `SampleDataTests` (all need the `Mock*Provider` family) |
-| Phase 5 | The keychain, fingerprint and secrets-store suites from `NetworkingTests.swift` (14 cases) |
 | Phase 7 | `SortOptionTests`, `AnnualPeriodKeyingTests`, `WatchlistIntelligenceTests`, `DetailAndWatchlistTests`, and the `Dashboard request budget` suite (all need view models) |
 | Phase 8 | The `compose.runtime` / `foundation` / `material3` accessor deprecations in `app/build.gradle.kts` |
 
