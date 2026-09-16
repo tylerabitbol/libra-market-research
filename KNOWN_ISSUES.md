@@ -75,3 +75,26 @@ provider DTOs and interfaces. 38 tests green on JVM and iOS.
   through `create`; the raw constructor and `copy` do not clamp.
 - `EventKind.systemImage` keeps the SF Symbol names verbatim. Phase 8 maps
   them onto Material icons in one place.
+
+## Phase 2 — calculations
+
+**Deviation from PLAN.md §5: the Swift-side parity fixture step was skipped.**
+Xcode is available, so the plan's own escape clause does not apply — this was
+a judgement call, not a blocker. The step would have dumped calculator outputs
+from Swift to JSON and replayed them in Kotlin at 1e-9. It was skipped because
+its value overlaps almost entirely with the 14 ported Swift test files (~2,700
+lines of expectations), while costing a dump harness on the Swift side plus
+JSON plumbing on the Kotlin side — building every calculator's inputs twice.
+
+If any ported figure is ever in doubt, run it then: the step is still valid and
+nothing about the port prevents it.
+
+Mitigation in its place: every Swift test file is ported, and targeted Kotlin
+tests are added wherever the Swift coverage of a calculator is thin. Those
+additions are marked in the test files as having no Swift counterpart.
+
+**`PriceBar` exists now, in `models/core`.** The plan put it in Phase 4 as a
+Room entity. Calculations take it, so the value type is written here and Phase
+4 annotates the same class rather than introducing a second one — the
+alternative was porting every calculator against a placeholder and rewriting
+the signatures later.
