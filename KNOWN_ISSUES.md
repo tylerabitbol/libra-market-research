@@ -118,3 +118,12 @@ persistence. The detection suite is ported in full here.
 `sec_companyfacts_AAPL` fixture through `SECFundamentalsProvider.extract`.
 Both arrive with the SEC provider. The other nine cases are ported and green;
 the deferral is noted at the top of `FilingAnalysisTest.kt`.
+
+**`SavedScreens` and three `ScreenerTests` cases are deferred.** `SavedScreens`
+is `UserDefaults` plus `Codable`; the multiplatform equivalent needs both a
+settings store (Phase 4) and kotlinx-serialization (added in Phase 3 with
+Ktor). `Screen` and its rules are ported now as plain data classes and will be
+annotated `@Serializable` when the dependency lands, rather than pulling a
+serialization plugin into Phase 2 for one type. The deferred tests are
+`savedScreensRoundTrip`, `benchmarksAreNotScreened` and the stored-figures
+case; the last two need the store regardless.
