@@ -37,3 +37,41 @@ On a machine without `openjdk@21` there, edit that script.
 - Gradle emits "incompatible with Gradle 10" deprecation warnings from the
   plugins, not from our scripts. Nothing to do until the plugins update.
 - `iosApp` has no app icon or launch screen yet (Phase 9).
+
+## Phase 1 — support and models
+
+Ported: `APIError`, `Claim`/provenance, `Format`, `Freshness`,
+`RelativeTimeText`, and the value types and enums from `Models/Core` plus the
+provider DTOs and interfaces. 38 tests green on JVM and iOS.
+
+**Deferred out of Phase 1, by design:**
+
+- `ChartSeriesBuilder` (`Models/Core/ChartSeries.swift`) takes `PriceBar`, a
+  stored row, so it moves to Phase 2 with the other pure calculations.
+- Every `@Model` class is Phase 4. `FilingRecord`'s `isPeriodicReport` and
+  friends go with the entity; only the form-type set is here so far.
+
+**Deviations:**
+
+- `Format` is hand-rolled. Foundation's `FormatStyle` has no multiplatform
+  equal, so fixed-point rendering, grouping separators and **half-to-even**
+  rounding are written out. Half-to-even because that is ICU's default, which
+  the Swift expectations were written against — `FormatTests` avoids an exact
+  .5 tie on purpose. A `grouped_thousands_never_render_in_scientific_notation`
+  test was added; it has no Swift counterpart and guards the failure mode
+  `toString()` would introduce.
+- `Format.currency` renders non-USD as `"EUR 1,234.50"` rather than matching
+  Foundation's per-locale currency symbols. Nothing calls it with a non-USD
+  code, and no test covers it.
+- `RelativeTimeText` replaces `RelativeDateTimeFormatter`. Unit selection is
+  written out and approximates ICU at the month and year boundaries; nothing
+  in the app reads above weeks.
+- `URL` becomes `String` throughout. Kotlin common has no URL type, and every
+  use is either display or a Ktor request.
+- `Claim.id` uses a hand-rolled v4-shaped `randomId()` rather than
+  `kotlin.uuid.Uuid`, which is still opt-in. Ids are UI identity only.
+- `DetectedEventDTO` clamps `unusualness` in a `create` factory, because a
+  Kotlin `data class` cannot transform a constructor parameter. Construct
+  through `create`; the raw constructor and `copy` do not clamp.
+- `EventKind.systemImage` keeps the SF Symbol names verbatim. Phase 8 maps
+  them onto Material icons in one place.
