@@ -26,9 +26,8 @@ import kotlinx.datetime.toLocalDateTime
  * confident wrong number: seasonality read as change, a cumulative period read
  * as a quarter, and a percentage change taken through zero.
  *
- * The four restatement tests from the Swift suite are not here: `restatements`
- * needs `SECFundamentalsProvider.periodKey`, which arrives with the providers
- * in Phase 6. See KNOWN_ISSUES.md.
+ * The restatement cases are here too: `periodKey` moved to `FactPeriods` in
+ * Phase 4, when the store turned out to need it for its own read path.
  */
 class FundamentalDetectionTest {
 
@@ -265,6 +264,96 @@ class FundamentalDetectionTest {
         // Filed with a duration, these are not balance-sheet figures and must
         // not be treated as though they were.
         assertTrue(FundamentalDetector.instant(facts, FinancialConcept.TotalDebt).isEmpty())
+    }
+
+    // MARK: - Restatements
+
+    private fun version(
+        period: Instant,
+        value: Double,
+        accession: String,
+        filedDays: Int,
+        kind: FiscalPeriodKind = FiscalPeriodKind.Quarter
+    ): FinancialFactDTO = FinancialFactDTO(
+        concept = FinancialConcept.Revenue,
+        periodStart = period - (if (kind == FiscalPeriodKind.Annual) 365 else 90).days,
+        periodEnd = period,
+        fiscalYear = 2020,
+        fiscalQuarter = if (kind == FiscalPeriodKind.Annual) null else 1,
+        isAnnual = kind == FiscalPeriodKind.Annual,
+        periodKind = kind,
+        value = value,
+        unit = "USD",
+        filedAt = period + filedDays.days,
+        accessionNumber = accession
+    )
+
+    @Test
+    fun restatementIsDetected() {
+        val period = quarterEnd(4)
+        val event = assertNotNull(
+            FundamentalDetector.restatements(
+                revisions = listOf(
+                    version(period, 1_000.0, "original", 30),
+                    version(period, 1_100.0, "amended", 200)
+                ),
+                concept = FinancialConcept.Revenue
+            )
+        )
+
+        assertEquals(EventKind.FundamentalShift, event.kind)
+        assertTrue(event.headline.contains("restated"))
+        assertEquals(
+            period + 200.days, event.occurredAt,
+            "Dated to the amendment, which is when it became knowable"
+        )
+        // Reported, never characterised: an issuer restates for reasons ranging
+        // from adopting a standard to correcting an error.
+        assertEquals(0.0, event.unusualness)
+    }
+
+    @Test
+    fun annualAndQuarterlyPeriodsAreNotConflated() {
+        // Found by looking at a rendered screen, not by a test: Apple's Q4
+        // FY2020 revenue of \$64.7B was being paired against its FY2020 revenue
+        // of \$275B and reported as a +324% restatement. Both periods end on
+        // 26 September 2020, and the grouping key was the date alone.
+        val period = LocalDate(2020, 9, 26).atStartOfDayIn(zone)
+        assertNull(
+            FundamentalDetector.restatements(
+                revisions = listOf(
+                    version(period, 64_700.0, "10-K-q4", 30, FiscalPeriodKind.Quarter),
+                    version(period, 274_500.0, "10-K-fy", 30, FiscalPeriodKind.Annual)
+                ),
+                concept = FinancialConcept.Revenue
+            )
+        )
+    }
+
+    @Test
+    fun singleFilingIsNotRestatement() {
+        val period = quarterEnd(4)
+        assertNull(
+            FundamentalDetector.restatements(
+                revisions = listOf(version(period, 1_000.0, "only", 0)),
+                concept = FinancialConcept.Revenue
+            )
+        )
+    }
+
+    @Test
+    fun trivialRevisionIsIgnored() {
+        val period = quarterEnd(4)
+        assertNull(
+            FundamentalDetector.restatements(
+                revisions = listOf(
+                    version(period, 1_000.0, "a", 0),
+                    version(period, 1_001.0, "b", 0)
+                ),
+                concept = FinancialConcept.Revenue,
+                minimumChangePercent = 1.0
+            )
+        )
     }
 
     // MARK: - Period handling

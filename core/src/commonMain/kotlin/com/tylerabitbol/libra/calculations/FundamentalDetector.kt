@@ -3,6 +3,7 @@ package com.tylerabitbol.libra.calculations
 import com.tylerabitbol.libra.models.core.DetectedEventDTO
 import com.tylerabitbol.libra.models.core.EventKind
 import com.tylerabitbol.libra.models.core.FinancialConcept
+import com.tylerabitbol.libra.services.providers.FactPeriods
 import com.tylerabitbol.libra.services.providers.FinancialFactDTO
 import com.tylerabitbol.libra.services.providers.FiscalPeriodKind
 import com.tylerabitbol.libra.support.Format
@@ -363,6 +364,73 @@ object FundamentalDetector {
             derivation = measure.derivation(
                 label = "Total debt change",
                 formatted = Format.signedPercent(latest.value, precision = 1)
+            )
+        )
+    }
+
+    // MARK: - Restatements
+
+    /**
+     * A period an issuer has reported more than once with a different figure.
+     *
+     * The one detector that needs the superseded rows rather than the current
+     * view of history, so it takes `SnapshotStore.factRevisions` output rather
+     * than `facts`. Every other read path in the app deliberately collapses
+     * exactly what this looks for.
+     *
+     * A revision is reported, never characterised. Issuers restate for reasons
+     * ranging from an accounting-standard adoption to a discovered error, and
+     * the figure alone does not say which.
+     */
+    fun restatements(
+        revisions: List<FinancialFactDTO>,
+        concept: FinancialConcept,
+        minimumChangePercent: Double = 1.0,
+        sourceDetail: String = "SEC XBRL company facts"
+    ): DetectedEventDTO? {
+        // Keyed on the duration as well as the date, exactly as `deduplicated`
+        // is. A fiscal year and its own fourth quarter end on the same day, so
+        // keying on the date alone pairs Apple's Q4 FY2020 revenue against its
+        // FY2020 revenue and reports a +324% restatement that never happened.
+        val byPeriod = revisions
+            .filter { it.concept == concept }
+            .groupBy { FactPeriods.groupKey(it) }
+
+        val revised = byPeriod.values.mapNotNull { versions ->
+            val ordered = versions.sortedBy { it.filedAt ?: Instant.DISTANT_PAST }
+            val original = ordered.firstOrNull() ?: return@mapNotNull null
+            val latest = ordered.lastOrNull() ?: return@mapNotNull null
+            if (ordered.size <= 1) return@mapNotNull null
+            if (original.accessionNumber == latest.accessionNumber) return@mapNotNull null
+            if (original.value == 0.0) return@mapNotNull null
+            val change = (latest.value - original.value) / abs(original.value) * 100
+            if (abs(change) < minimumChangePercent) return@mapNotNull null
+            Triple(original, latest, change)
+        }
+
+        val mostRecent = revised.maxByOrNull {
+            it.second.filedAt ?: Instant.DISTANT_PAST
+        } ?: return null
+        val (original, latest, change) = mostRecent
+
+        return DetectedEventDTO.create(
+            kind = EventKind.FundamentalShift,
+            occurredAt = latest.filedAt ?: latest.periodEnd,
+            headline = "${concept.displayName} for " +
+                "${Format.shortDate(latest.periodEnd)} was restated",
+            detailLines = listOf(
+                "As first reported: ${Format.compactCurrency(original.value)}",
+                "As now reported: ${Format.compactCurrency(latest.value)}",
+                "Change: ${Format.signedPercent(change, precision = 1)}"
+            ),
+            context = "The issuer has reported this period twice with different figures. " +
+                "Restatements follow from adopting a new accounting standard, " +
+                "reclassifying a segment, or correcting an error, and the revised " +
+                "figure alone does not distinguish them.",
+            unusualness = 0.0,
+            sourceDetails = listOf(
+                "$sourceDetail, original filing ${original.accessionNumber ?: "unknown"}",
+                "$sourceDetail, revised filing ${latest.accessionNumber ?: "unknown"}"
             )
         )
     }

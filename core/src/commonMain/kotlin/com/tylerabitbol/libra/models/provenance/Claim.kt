@@ -2,6 +2,7 @@ package com.tylerabitbol.libra.models.provenance
 
 import com.tylerabitbol.libra.support.randomId
 import kotlin.time.Instant
+import kotlinx.serialization.Serializable
 
 /**
  * The epistemic status of a statement the app puts on screen.
@@ -46,6 +47,7 @@ enum class ClaimKind(val raw: String) {
 }
 
 /** Identifies which upstream service a piece of data came from. */
+@Serializable
 enum class DataProviderID(val raw: String) {
     SEC("sec"),
     Finnhub("finnhub"),
@@ -100,6 +102,7 @@ enum class DataProviderID(val raw: String) {
  * Every [Claim] must carry at least one of these for facts, so the user can
  * always get from a sentence on screen to the underlying record.
  */
+@Serializable
 data class SourceReference(
     val provider: DataProviderID,
     /** Human-readable description of the specific record, e.g. "10-Q filed 2026-07-28". */
@@ -122,6 +125,7 @@ data class SourceReference(
  * misdescribing its own epistemic status, which is the one thing Section 24
  * exists to stop.
  */
+@Serializable
 data class Derivation(
     /** e.g. "(revenue - revenuePriorYear) / revenuePriorYear" */
     val formula: String,
@@ -129,6 +133,7 @@ data class Derivation(
     val inputs: List<Input>,
     val result: String
 ) {
+    @Serializable
     data class Input(
         val name: String,
         val value: String,
