@@ -155,6 +155,16 @@ class SecurityDetailViewModel(
         perform(registry, snapshots, force = true)
     }
 
+    /**
+     * Joins the load [load] spawned.
+     *
+     * Swift's tests slept for a fixed interval and hoped; a job to join is both
+     * exact and faster.
+     */
+    internal suspend fun awaitLoad() {
+        loadJob?.join()
+    }
+
     private suspend fun perform(
         registry: ProviderRegistry,
         snapshots: SnapshotStore?,

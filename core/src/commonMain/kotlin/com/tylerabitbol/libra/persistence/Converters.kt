@@ -31,14 +31,36 @@ internal object Converters {
 
     private val json = Json
 
+    /**
+     * The last second a nanosecond count fits a Long in, which is in 2262.
+     * Anything beyond saturates rather than wrapping.
+     *
+     * It wrapped before, and silently: `Instant.DISTANT_FUTURE` multiplied out
+     * to about 3e21, overflowed to a negative number, and every bounded range
+     * query that used it as an open upper bound — which is how `SnapshotStore`
+     * expresses "everything from this date onwards" — matched nothing. The
+     * store looked empty, so every page re-fetched five years of history it
+     * already held, against the scarcest budget in the app.
+     */
+    private const val MAX_WHOLE_SECONDS = Long.MAX_VALUE / 1_000_000_000L
+    private const val MIN_WHOLE_SECONDS = Long.MIN_VALUE / 1_000_000_000L
+
     @TypeConverter
     fun instantToLong(value: Instant?): Long? = value?.let {
-        it.epochSeconds * 1_000_000_000L + it.nanosecondsOfSecond
+        when {
+            it.epochSeconds >= MAX_WHOLE_SECONDS -> Long.MAX_VALUE
+            it.epochSeconds <= MIN_WHOLE_SECONDS -> Long.MIN_VALUE
+            else -> it.epochSeconds * 1_000_000_000L + it.nanosecondsOfSecond
+        }
     }
 
     @TypeConverter
     fun longToInstant(value: Long?): Instant? = value?.let {
-        Instant.fromEpochSeconds(it.floorDiv(1_000_000_000L), it.mod(1_000_000_000L))
+        when (it) {
+            Long.MAX_VALUE -> Instant.DISTANT_FUTURE
+            Long.MIN_VALUE -> Instant.DISTANT_PAST
+            else -> Instant.fromEpochSeconds(it.floorDiv(1_000_000_000L), it.mod(1_000_000_000L))
+        }
     }
 
     @TypeConverter

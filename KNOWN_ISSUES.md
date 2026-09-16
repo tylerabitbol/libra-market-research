@@ -477,3 +477,70 @@ date strings are dropped from the metric map, that the SEC User-Agent falls
 back to the app name, that a Finnhub failure which is not a miss does not
 quietly switch vendors, that sample filings carry the evictable accession
 prefix, and that no mock answers to a real vendor's identity.
+
+## Phase 7 — App environment and view models
+
+**View models are plain Kotlin in `:core`, not `androidx.lifecycle.ViewModel`
+in `:app`.** Swift's `@Observable @MainActor final class` has no direct
+equivalent that is also testable off-device. Each one takes a `CoroutineScope`,
+holds a `private val _state = MutableStateFlow(…UiState())`, and exposes
+`state: StateFlow<…>`. Every Swift computed property becomes an extension val
+on the UiState, so the derivations are pure functions of a value and can be
+asserted without constructing a view model at all. The cost is that `:app` must
+supply the scope and cancel it; the gain is that the whole phase's tests run in
+`commonTest` on the JVM in seconds.
+
+**`WatchlistEntry.security` becomes an explicit join.** SwiftData handed the
+view model an object graph; Room entities carry plain foreign-key columns. A
+`WatchlistDao.members()` query returns a `WatchlistMember(symbol, name, sector,
+priority)` row instead, and the view model builds its rows from that.
+
+**`PriceBar.closeOnly` was missed in Phase 1.** Added as
+`fun PriceBar.Companion.closeOnly(observations: List<MacroObservationDTO>)`
+next to the macro models, with an empty `companion object` on `PriceBar` for it
+to hang off.
+
+**`ChartValueFormat` moves out of the SwiftUI chart view** into
+`BenchmarkDetailViewModel.kt`, where the view model that decides the format
+lives. `SecurityDetailViewModel` reuses it rather than declaring a second copy.
+
+**`DeveloperOptions` and `SelfTest` take a `LaunchEnvironment` rather than
+reading the process.** Swift reads `CommandLine.arguments` and
+`ProcessInfo.environment` directly and compiles the whole file out of release
+builds with `#if DEBUG`. None of the three has a Kotlin equivalent that works
+on both targets: an Android process has no argv, and common source has no
+build-configuration flag. So arguments, environment and `isDebugBuild` are
+passed in, with release defaults — a shell that supplies nothing gets a
+`DeveloperOptions` that does nothing, which is what the Swift compiler gave.
+Phase 9 wires the two shells to it.
+
+**Fixture capture returns JSON instead of writing a file.** Swift's
+`SelfTest.captureFixtures` wrote into the app container for `simctl
+get_app_container` to lift out. There is no common filesystem API in this
+stack and the two platforms put private storage in different places, so the
+trimmed payload is returned and the platform shell writes it.
+
+**`SecurityDetailViewModel` gains `awaitLoad()`.** `load` spawns and returns,
+and Swift's tests slept 600 ms and hoped. Joining the job is exact, faster, and
+the only test affordance the file needed beyond the
+`applyFundamentalsForTesting` Swift already had.
+
+**The detection diagnostic is logged at debug level rather than compiled out.**
+Swift wraps the `DETECT …` line in `#if DEBUG`; Kotlin has no equivalent, so
+the sink drops it in release instead of the compiler.
+
+### A bug the port surfaced
+
+**`Instant` overflowed the Room converter, and every bounded range query
+returned nothing.** Instants are stored as nanoseconds in a `Long`.
+`Instant.DISTANT_FUTURE` is about 3×10²¹ nanoseconds, which wraps to a negative
+number, so `SnapshotStore.bars(symbol, from = …)` — which passes
+`DISTANT_FUTURE` as its open upper bound — matched no rows at all. The store
+looked permanently empty: nothing hydrated, and every page re-fetched five
+years of history it already held, against the scarcest budget in the app. The
+converter now saturates at `Long.MAX_VALUE`/`MIN_VALUE` and maps those back to
+the distant sentinels. Nanosecond precision caps real dates at 2262, which is
+unchanged from before and not a limit this app can reach.
+
+This was invisible until `HydrationTests` ran, which is the argument for
+porting the tests alongside the code rather than after it.
