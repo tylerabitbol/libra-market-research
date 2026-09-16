@@ -1,7 +1,7 @@
 # Where the port stands
 
-**Last checkpoint: Phase 7 (App environment + view models) about 85% done.**
-455 tests green on both JVM and the iOS simulator;
+**Last checkpoint: Phase 7 (App environment + view models) complete.**
+475 tests green on both JVM and the iOS simulator;
 `:app:linkDebugFrameworkIosSimulatorArm64` green. Every commit is on this
 branch; nothing is stashed.
 
@@ -39,38 +39,24 @@ listed again below so it is not lost.
   `Mock*Provider` family. Plus the vendor serializers and the fixture harness:
   all 19 fixtures are in, reached through a generated Kotlin source file.
 
-## Next: finish Phase 7, then Phase 8
+## Next: Phase 8 — UI (~18 h)
 
-Ported and committed so far: `AppEnvironment`, and the view models
-`Dashboard`, `BenchmarkDetail`, `Watchlist` (+ `SymbolSearch`), `Research`,
-`Screener` and `SecurityDetail` (1,214 Swift lines, ported 1:1 per `PLAN.md
-§7`), plus `DeveloperOptions` and `SelfTest`. Test suites ported:
-`BenchmarkDetailViewModelTests`, `DetailAndWatchlistTests`, `SortOptionTests`,
-`AnnualPeriodKeyingTests` and `HydrationTests` (both of its suites).
+Phase 7 is done: `AppEnvironment`, all six view models (`Dashboard`,
+`BenchmarkDetail`, `Watchlist` + `SymbolSearch`, `SecurityDetail`, `Research`,
+`Screener`), `DeveloperOptions` and `SelfTest`, with every Swift test suite
+ported. Nothing from Phases 1–7 is outstanding.
 
-**What is left in Phase 7 — three test suites, no production code:**
+### Notes for whoever picks up Phase 8
 
-1. `WatchlistIntelligenceTests` (`LibraTests/WatchlistIntelligenceTests.swift`,
-   162 lines).
-2. The `Dashboard request budget` suite
-   (`LibraTests/RequestBudgetTests.swift:43`).
-3. The two view-model suites in `LibraTests/AlpacaProviderTests.swift` —
-   `Intraday stays out of the calculations` (line 225) and `The chart does not
-   disappear` (line 354). The provider half of that file is already ported.
-
-Then append anything further to `KNOWN_ISSUES.md` (the Phase 7 section is
-already written) and move to Phase 8.
-
-### Notes for whoever picks these up
-
-- `SecurityDetailViewModel.awaitLoad()` joins the spawned load, replacing
-  Swift's `Task.sleep(600ms)`. `WatchlistViewModel.refresh(...)` already joins.
-- `HydrationTest.kt` has the stub providers (`StubMarketProvider`,
-  `StubFundamentalsProvider`, `StubSECProvider`) and a `CallLog` the request-
-  budget suite will want; they are `private` to that file and should be lifted
-  into a shared `ProviderTestSupport`-style file rather than copied.
-- Derived figures are extension vals on the UiState, so assertions read
-  `model.state.value.annualRevenue`, not `model.annualRevenue`.
+- Derived figures are extension vals on the UiState, so a composable reads
+  `state.chartBars`, not `viewModel.chartBars`.
+- `SecurityDetailViewModel.awaitLoad()` joins both the load and the job a range
+  change spawns. `WatchlistViewModel.refresh(...)` and
+  `DashboardViewModel.refresh(...)` already suspend until done.
+- View-model test stubs are shared in
+  `core/src/commonTest/.../viewmodels/ViewModelTestSupport.kt`.
+- `DeveloperOptions` and `SelfTest` take a `LaunchEnvironment`; Phase 9 wires
+  the two shells to it.
 
 ## Phase 8 — UI (~18 h)
 
@@ -81,13 +67,10 @@ deprecations in `app/build.gradle.kts`.
 
 ## Deferred work, by the phase that owns it
 
-(`SortOptionTests`, `AnnualPeriodKeyingTests`, `DetailAndWatchlistTests` and
-`HydrationTests` are done; the rows below are what remains.)
+(Every suite Phase 7 owed is ported. One row remains.)
 
 | Owed in | What |
 |---|---|
-| Phase 7 | `WatchlistIntelligenceTests` and the `Dashboard request budget` suite (both need view models) |
-| Phase 7 | The two view-model suites in `AlpacaProviderTests.swift` — `Intraday stays out of the calculations` and `The chart does not disappear` |
 | Phase 8 | The `compose.runtime` / `foundation` / `material3` accessor deprecations in `app/build.gradle.kts` |
 
 ## Standing rules for whoever picks this up

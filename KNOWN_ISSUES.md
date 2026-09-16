@@ -544,3 +544,45 @@ unchanged from before and not a limit this app can reach.
 
 This was invisible until `HydrationTests` ran, which is the argument for
 porting the tests alongside the code rather than after it.
+
+### Phase 7, second pass — the deferred suites
+
+**The view-model stubs are shared, not copied.** `CallLog`,
+`StubMarketProvider`, `StubFundamentalsProvider`, `StubSECProvider` and
+`RecordingMacroProvider` live in `viewmodels/ViewModelTestSupport.kt`. Swift
+redeclared a near-identical `CallLog` actor and counting provider in each of
+`HydrationTests`, `WatchlistIntelligenceTests` and `RequestBudgetTests`, which
+is how they drifted: one counted symbols, one counted calls, one did both.
+Kotlin's package-level visibility would make three copies a redeclaration
+error, so the merge was forced and the drift is gone.
+
+**`CallLog` is a CAS loop, not an actor.** Swift's counters are `actor`s read
+with `await`. The assertions are made from a non-suspending accessor after the
+work is done, so `AtomicReference<List<String>>` with a compare-and-set append
+is the equivalent — the same choice `InMemorySecretsStore` made in Phase 5.
+
+**`SecurityDetailViewModel.select` now records its job.** The two Alpaca view-
+model suites switch ranges and immediately assert what the chart holds; Swift
+slept 400–600 ms between each. `select` assigns its spawned fetch to a
+`selectJob` that `awaitLoad()` joins alongside `loadJob`, so the suites are
+exact rather than timing-dependent. Eleven tests that took about six seconds of
+sleeping in Swift now run in well under one.
+
+**`RateLimiter back-pressure` is not in the Phase 7 port.** It shares
+`RequestBudgetTests.swift` with the dashboard budget suite, but it tests the
+limiter rather than a view model and went over in Phase 3, as
+`networking/RateLimiterTest.kt`. Only the `Dashboard request budget` half was
+owed here.
+
+**Swift's `lastRegularClose` helper hung off a test stub; here it is a
+top-level function** in `IntradayBoundaryTest.kt`, shared by the three
+intraday stubs that need it. It answers "the most recent 15:55 in New York",
+which is what lets the chart suites run outside market hours — most of the
+time.
+
+**475 tests across both targets against Swift's 416.** The surplus is the nine
+provider-level tests logged in Phase 6 plus the split of Swift's larger suites
+into separate Kotlin classes; no Swift case was dropped. `ProviderDecodingTests`
+went over as the per-provider decoding tests, `PersistenceTests` as
+`SnapshotStoreTest` + `SchemaTest`, and `SyntheticDataTests` as
+`SyntheticRowEvictionTest`.

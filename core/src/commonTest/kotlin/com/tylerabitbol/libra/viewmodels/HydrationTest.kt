@@ -57,56 +57,8 @@ import kotlin.time.Instant
  * copy costs no request, and a failed fetch degrades to the last good copy
  * instead of to an empty page.
  */
-@OptIn(ExperimentalAtomicApi::class)
-private class CallLog {
-    private val quoteCount = AtomicInt(0)
-    private val barCount = AtomicInt(0)
-    val quotes: Int get() = quoteCount.load()
-    val bars: Int get() = barCount.load()
-    fun recordQuote() { quoteCount.fetchAndIncrement() }
-    fun recordBars() { barCount.fetchAndIncrement() }
-}
-
-/** Counts what it is asked for, and can be told to fail — the offline case. */
-private class StubMarketProvider(
-    val log: CallLog,
-    val isOffline: Boolean = false,
-) : MarketDataProvider {
-    override val id: DataProviderID = DataProviderID.Finnhub
-
-    override suspend fun isConfigured(): Boolean = true
-
-    override suspend fun quote(symbol: String): QuoteDTO {
-        log.recordQuote()
-        if (isOffline) throw APIError.Transport(DataProviderID.Finnhub, "offline")
-        return QuoteDTO(
-            symbol = symbol, last = 200.0, open = null, high = null, low = null,
-            previousClose = 190.0, volume = null, quoteTime = Clock.System.now(),
-        )
-    }
-
-    override suspend fun bars(
-        symbol: String,
-        resolution: BarResolution,
-        from: Instant,
-        to: Instant,
-    ): List<PriceBarDTO> {
-        log.recordBars()
-        if (isOffline) throw APIError.Transport(DataProviderID.Tiingo, "offline")
-        return SampleData.bars(symbol, resolution, from, to)
-    }
-
-    override suspend fun profile(symbol: String): CompanyProfileDTO =
-        throw APIError.NotFound(DataProviderID.Finnhub, "profile")
-
-    override suspend fun search(query: String): List<CompanyProfileDTO> = emptyList()
-}
-
-private fun registry(log: CallLog, offline: Boolean = false) = ProviderRegistry(
-    marketData = StubMarketProvider(log, offline),
-    fundamentals = null, analyst = null, metrics = null, sec = null,
-    macro = null, news = null, isUsingSampleData = false,
-)
+private fun registry(log: CallLog, offline: Boolean = false) =
+    stubRegistry(log, offline)
 
 private fun bar(day: Int, close: Double) = PriceBarDTO(
     date = Instant.fromEpochSeconds(1_700_000_000 + day * 86_400L),
@@ -290,33 +242,6 @@ class HydrationTest {
 }
 
 // MARK: - Fundamental detection through the page
-
-private class StubFundamentalsProvider(val facts: List<FinancialFactDTO>) : FundamentalsProvider {
-    override val id: DataProviderID = DataProviderID.SEC
-    override suspend fun isConfigured(): Boolean = true
-    override suspend fun facts(
-        symbol: String,
-        cik: String?,
-        concepts: List<FinancialConcept>,
-        since: Instant?,
-    ): List<FinancialFactDTO> = facts
-}
-
-private class StubSECProvider : SECDataProvider {
-    override val id: DataProviderID = DataProviderID.SEC
-    override suspend fun isConfigured(): Boolean = true
-    override suspend fun resolveCIK(symbol: String): String = "0000000320"
-    override suspend fun filings(
-        cik: String,
-        formTypes: List<String>,
-        limit: Int,
-    ): List<FilingDTO> = emptyList()
-
-    override suspend fun insiderTransactions(
-        cik: String,
-        since: Instant?,
-    ): List<InsiderTransactionDTO> = emptyList()
-}
 
 /** The detectors reaching the screen, not just passing in isolation. */
 class FundamentalEventWiringTest {

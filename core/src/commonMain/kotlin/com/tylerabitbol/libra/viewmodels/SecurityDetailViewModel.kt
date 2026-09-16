@@ -95,6 +95,12 @@ class SecurityDetailViewModel(
     private var loadJob: Job? = null
 
     /**
+     * The fetch a range change spawned, kept for the same reason [loadJob] is:
+     * so a caller — in practice a test — can wait for it rather than guess.
+     */
+    private var selectJob: Job? = null
+
+    /**
      * Set for the duration of a forced refresh, so pull-to-refresh reaches the
      * network even where the held copy would otherwise be considered fresh.
      */
@@ -117,14 +123,14 @@ class SecurityDetailViewModel(
         // Intraday is a different series from a different vendor, so it has
         // its own fetch rather than widening the daily window.
         if (range.usesIntraday) {
-            scope.launch { loadIntraday(registry, snapshots) }
+            selectJob = scope.launch { loadIntraday(registry, snapshots) }
             return
         }
         // Only re-fetch when the new range reaches back further than what we hold.
         val needed = range.startDate()
         val window = _state.value.loadedBarWindow
         if (window != null && window.first <= needed) return
-        scope.launch { loadHistory(registry) }
+        selectJob = scope.launch { loadHistory(registry) }
     }
 
     // MARK: - Loading
@@ -163,6 +169,7 @@ class SecurityDetailViewModel(
      */
     internal suspend fun awaitLoad() {
         loadJob?.join()
+        selectJob?.join()
     }
 
     private suspend fun perform(
