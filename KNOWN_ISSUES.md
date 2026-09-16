@@ -98,3 +98,17 @@ Room entity. Calculations take it, so the value type is written here and Phase
 4 annotates the same class rather than introducing a second one — the
 alternative was porting every calculator against a placeholder and rewriting
 the signatures later.
+
+**`FundamentalDetector.restatements` is deferred to Phase 6.** It keys revision
+groups on `SECFundamentalsProvider.periodKey(_:)`, which is part of the SEC
+provider and does not exist yet. Everything else in the file is ported. The
+four Swift tests that cover it (`restatementIsDetected`,
+`annualAndQuarterlyPeriodsAreNotConflated`, `singleFilingIsNotRestatement`,
+`trivialRevisionIsIgnored`) are deferred with it and are noted at the top of
+`FundamentalDetectionTest.kt`. Porting the key function early would have
+duplicated provider logic that Phase 6 then has to reconcile.
+
+**`EventPersistenceTests` travels with Phase 4, not Phase 2.** The Swift file
+`EventDetectionTests.swift` holds two suites; the second exercises
+`SnapshotStore`, `ModelContainer` and `Security`, none of which exist before
+persistence. The detection suite is ported in full here.
