@@ -128,6 +128,12 @@ serialization plugin into Phase 2 for one type. The deferred tests are
 `savedScreensRoundTrip`, `benchmarksAreNotScreened` and the stored-figures
 case; the last two need the store regardless.
 
+*Resolved in part, Phase 3:* kotlinx-serialization landed with Ktor, so
+`Screen`, `ScreenRule` and the three screener enums are now `@Serializable`
+and a round-trip test replaces the serialisation half of
+`savedScreensRoundTrip`. `SavedScreens` itself still waits on a settings store
+in Phase 4.
+
 **Three cross-cutting Swift test suites are split across later phases.** They
 were listed under Phase 2, but each is written against a layer that does not
 exist yet, so the parts that are pure calculation are ported now and the rest
@@ -144,3 +150,55 @@ travels with the layer it tests:
   Phase 7.
 
 Nothing is dropped; each is named against the phase that will pick it up.
+
+
+## Phase 3 — Networking
+
+**Versions added, verified against maven-metadata.xml on 2026-09-16:** Ktor
+3.5.2, kotlinx-serialization-json 1.11.0 (the stable release, not the 1.12.0-RC
+that `<latest>` reports). Engines are per target: OkHttp on Android and JVM,
+Darwin on iOS, and Ktor resolves the engine from the classpath so `commonMain`
+names none of them.
+
+**`Endpoint` returns a URL string, not a request object.** Swift's
+`makeRequest()` built a `URLRequest`; in Ktor the client owns the request, so
+the endpoint's job stops at `requestURL()` plus the header map beside it. The
+cache-key rules are unchanged and still strip `token` / `api_key` / `apikey`.
+
+**Percent-encoding is hand-rolled.** `URLComponents` did this in Swift. Ktor's
+`URLBuilder` re-encodes values it believes are already escaped, which turns a
+`%` inside a FRED series id into `%25`, so `Endpoint` encodes query components
+itself against an explicit unreserved set.
+
+**`RateLimiter` is a class with a `Mutex`, not an actor, and the wait happens
+outside the lock.** An actor serialised callers for free; a Mutex held across
+the `delay` would make every caller wait for the one in front of it *and then*
+for its own refill. There is a test for exactly this (`theWaitDoesNotHoldTheLock`),
+which has no Swift counterpart because the bug it guards against could not
+exist there.
+
+**The limiter takes an injected `TimeSource`.** Swift's tests slept against
+`ContinuousClock`. Here `runTest` drives the delay and `testTimeSource` drives
+the bucket, so a one-hour Tiingo refill is asserted in virtual time. The five
+provider presets are unchanged.
+
+**`penalize` does not raise `estimatedWait`.** Faithful to Swift: the penalty
+empties the bucket and pushes the refill clock forward, but `estimatedWait`
+reads only the token deficit, so it under-reports during a penalty. The
+behaviour a caller experiences — waiting out the full penalty — is what the
+Kotlin test asserts, rather than the number the Swift code would have returned.
+
+**`HTTPClient` has a direct test suite; Swift had none.** It was exercised only
+through the provider decoding tests. Ktor raises on non-2xx only when asked, so
+every status mapping is ours rather than inherited, and 14 tests pin the
+mapping, the retry bound, the 403 disambiguation and the header pass-through.
+`MockHttp` in `commonTest` is the `StubURLProtocol` replacement the plan asked
+for, written so Phase 6's provider tests reuse it.
+
+**Deferred from `NetworkingTests.swift`:** the keychain, fingerprint and
+secrets-store suites (three suites, 14 cases) test `SecretsStore`, which is
+Phase 5. The API-error and endpoint suites are ported.
+
+**Deferred from `RequestBudgetTests.swift`:** the `Dashboard request budget`
+suite needs `DashboardViewModel` and `ProviderRegistry` — Phase 7. The
+`Rate limiter back-pressure` suite is ported.

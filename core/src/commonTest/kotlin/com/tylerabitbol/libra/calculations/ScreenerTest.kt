@@ -1,6 +1,7 @@
 package com.tylerabitbol.libra.calculations
 
 import kotlin.test.Test
+import kotlinx.serialization.json.Json
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -13,9 +14,11 @@ import kotlin.test.assertTrue
  * could not actually test — asserting something it does not know, which is the
  * same fabrication as rendering an absent figure as zero.
  *
- * Three Swift cases are not here. `savedScreensRoundTrip` needs preference
- * storage and `benchmarksAreNotScreened` / `storedFiguresReachTheScreener` need
- * the store; all three arrive with persistence in Phase 4. See KNOWN_ISSUES.md.
+ * Two Swift cases are not here: `benchmarksAreNotScreened` and
+ * `storedFiguresReachTheScreener` both need the store, which arrives in Phase
+ * 4. `savedScreensRoundTrip` is covered in part below — the serialisation half
+ * of it, now that kotlinx-serialization is a dependency; the preference store
+ * it wrote through is still Phase 4. See KNOWN_ISSUES.md.
  */
 class ScreenerTest {
 
@@ -104,6 +107,27 @@ class ScreenerTest {
             rules = listOf(rule(ScreenField.NetCash, ScreenComparison.GreaterThan, 0.0))
         )
         assertEquals(listOf("NETCASH"), above.run(subjects).map { it.symbol })
+    }
+
+    @Test
+    fun aScreenSurvivesASerializationRoundTrip() {
+        // Stands in for the first half of Swift's `savedScreensRoundTrip`. The
+        // other half is the preference store itself, which arrives in Phase 4;
+        // this pins the part that would silently drop a rule.
+        val screen = Screen(
+            name = "Improving margins",
+            combinator = ScreenCombinator.Any,
+            rules = listOf(
+                rule(ScreenField.OperatingMargin, ScreenComparison.GreaterThan, 15.0),
+                rule(ScreenField.RevenueGrowth, ScreenComparison.GreaterThan, 5.0)
+            )
+        )
+        val restored = Json.decodeFromString<Screen>(Json.encodeToString(screen))
+
+        assertEquals("Improving margins", restored.name)
+        assertEquals(ScreenCombinator.Any, restored.combinator)
+        assertEquals(2, restored.rules.size)
+        assertEquals(screen, restored)
     }
 
     @Test

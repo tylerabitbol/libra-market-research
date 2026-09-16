@@ -2,6 +2,7 @@ package com.tylerabitbol.libra.calculations
 
 import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.support.randomId
+import kotlinx.serialization.Serializable
 
 /**
  * Section 14's screener, scoped to what is true.
@@ -46,6 +47,7 @@ data class ScreenSubject(
     }
 }
 
+@Serializable
 enum class ScreenField(val raw: String) {
     Price("price"),
     DailyChangePercent("dailyChangePercent"),
@@ -79,6 +81,7 @@ enum class ScreenField(val raw: String) {
     }
 }
 
+@Serializable
 enum class ScreenComparison(val raw: String) {
     GreaterThan("greaterThan"),
     LessThan("lessThan");
@@ -91,6 +94,7 @@ enum class ScreenComparison(val raw: String) {
         if (this == GreaterThan) value > threshold else value < threshold
 }
 
+@Serializable
 data class ScreenRule(
     val field: ScreenField = ScreenField.RevenueGrowth,
     val comparison: ScreenComparison = ScreenComparison.GreaterThan,
@@ -116,6 +120,7 @@ data class ScreenRule(
             this.field.format(threshold)
 }
 
+@Serializable
 enum class ScreenCombinator(val raw: String) {
     All("all"),
     Any("any");
@@ -129,6 +134,7 @@ enum class ScreenCombinator(val raw: String) {
  * without a schema migration — they are user preferences, not observations, and
  * do not belong in the append-only store.
  */
+@Serializable
 data class Screen(
     val name: String = "",
     val combinator: ScreenCombinator = ScreenCombinator.All,
