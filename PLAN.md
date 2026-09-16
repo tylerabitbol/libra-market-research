@@ -356,7 +356,15 @@ Order: `Theme.kt` + `Navigation.kt` → `Components/*` → `Settings` →
 - Android: `MainActivity`, `enableEdgeToEdge()`, `Application` creating
   `AppEnvironment` once.
 - Store the DB and secrets paths per platform (`expect fun appPaths()`).
-- `README.md` for this branch: how to build both, how to run tests.
+- Wire the shells to what Phases 7–8 left injectable, all defaulting to
+  in-memory/no-op today: `AppEnvironment(secrets, httpClient, preferences)`
+  with the real `KeychainSecretsStore`/`AndroidKeyStoreSecretsStore` and
+  `UserDefaultsPreferenceStore`/`SharedPreferencesStore`;
+  `LaunchEnvironment(arguments, environment, isDebugBuild)` for
+  `DeveloperOptions`/`SelfTest` (argv on iOS, `BuildConfig` on Android);
+  `LocalUrlOpener` (`UIApplication.openURL` / `Intent`).
+- `README.md` for this branch: how to build both, how to run tests, the
+  `JAVA_HOME` export, and that `:app` UI tests run on `iosSimulatorArm64`.
 - `KNOWN_ISSUES.md`: every loosened test, every parity gap.
 
 ---
@@ -384,6 +392,13 @@ isn't available, skip and say so.
 | Keychain reads return null after write on iOS | unsigned/un-entitled build | signing on in `project.yml`, same team ID; `SecretsHealth` should report it |
 | Doubles differ in 15th digit | libm / op order | tolerance 1e-9; if larger, you changed operation order — diff the Swift |
 | Numbers show `1.0E7` | someone used `toString()` | route through `Format.kt` |
+| Stored `Instant.DISTANT_FUTURE` reads back wrong; hydration returns 0 rows | nanos × 1e9 overflows `Long` in the Room converter | saturate to `Long.MAX/MIN` in `Converters.kt` (fixed; product bug, not a port artifact) |
+| `onNodeWithText` finds nothing but the unmerged tree has it | `clearAndSetSemantics` used for `.combine` | `semantics(mergeDescendants = true)` |
+| `Unresolved reference 'icons'` | material-icons not multiplatform past Compose 1.7.3 | hand-built `ImageVector`s in `Icons.kt` |
+| `Cannot access RoomDatabase` in `:app` | `LibraDatabase` leaked through `AppEnvironment` | expose a `:core` store type instead |
+| Vico `rememberLine`/`shader` unresolved | API guessed from old docs | `LineCartesianLayer.Line(...)` ctor + `Fill(brush)`; check the klib with `strings` |
+| Spurious `iosSimulatorArm64Test FAILED` | two Gradle invocations at once | rerun alone |
+| Android compile task not found | it's `compileAndroidMain`, not `compileKotlinAndroid` | — |
 | Fiscal quarter looks 3× too big | cumulative period read as discrete | `periodKind.isDiscrete` filter missing |
 | FRED decode crash | `"."` value | `LenientDoubleSerializer` |
 | Finnhub 403 shows empty chart | 403 mapped to generic error | map to `NotEntitled` in `HTTPClient` |
