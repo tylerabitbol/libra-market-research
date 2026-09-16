@@ -84,10 +84,12 @@ class SECProvider(
         // Keyed by row index ("0", "1", …) rather than by ticker, so it decodes
         // as a map of records and is inverted here.
         val rows: Map<String, TickerRow> = client.get(endpoint)
-        val map = buildMap {
+        val map = buildMap<String, String> {
             for (row in rows.values) {
-                // First wins, matching Swift's `uniquingKeysWith`.
-                putIfAbsent(row.ticker.uppercase(), padCIK(row.cikStr))
+                // First wins, matching Swift's `uniquingKeysWith`. `putIfAbsent`
+                // is JVM-only, so the check is explicit.
+                val ticker = row.ticker.uppercase()
+                if (!containsKey(ticker)) put(ticker, padCIK(row.cikStr))
             }
         }
         cache.store(map)

@@ -4,7 +4,10 @@ import com.tylerabitbol.libra.models.core.FinancialConcept
 import com.tylerabitbol.libra.models.provenance.ClaimKind
 import com.tylerabitbol.libra.services.providers.FilingDTO
 import com.tylerabitbol.libra.services.providers.FinancialFactDTO
+import com.tylerabitbol.libra.fixtures.Fixture
+import com.tylerabitbol.libra.services.providers.CompanyFactsResponse
 import com.tylerabitbol.libra.services.providers.FiscalPeriodKind
+import com.tylerabitbol.libra.services.providers.SECFundamentalsProvider
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -26,11 +29,6 @@ import kotlinx.datetime.toLocalDateTime
  * accession in the same dashed format. If those formats ever diverge this
  * returns nothing at all rather than failing loudly.
  *
- * The two fixture-backed tests from the Swift suite (`realAccessionJoins`,
- * `annualFormsUseAnnualFigures`) need the `sec_companyfacts_AAPL` payload and
- * `SECFundamentalsProvider.extract`, neither of which exists before Phase 6.
- * They are deferred with the provider. See KNOWN_ISSUES.md.
- *
  * UTC, because that is how EDGAR's dates are parsed. A local-timezone
  * calendar here builds a date hours off the fixture's and makes an exact
  * comparison fail for reasons that have nothing to do with the code.
@@ -50,6 +48,69 @@ class FilingAnalysisTest {
     ): FilingDTO = FilingDTO(
         accessionNumber = accession, formType = form, filedAt = filed, periodOfReport = period
     )
+
+    // MARK: - The join, against a real payload
+
+    private fun appleFacts(): List<FinancialFactDTO> {
+        val response: CompanyFactsResponse = Fixture.decode("sec_companyfacts_AAPL")
+        return listOf(
+            FinancialConcept.Revenue,
+            FinancialConcept.NetIncome,
+            FinancialConcept.GrossProfit,
+            FinancialConcept.OperatingIncome,
+            FinancialConcept.OperatingCashFlow,
+            FinancialConcept.CapitalExpenditures,
+            FinancialConcept.CashAndEquivalents,
+            FinancialConcept.TotalDebt,
+            FinancialConcept.StockholdersEquity,
+        ).flatMap { SECFundamentalsProvider.extract(it, response, since = null) }
+    }
+
+    @Test
+    fun aRealAccessionResolvesToTheFiguresThatFilingReported() {
+        // Apple's FY2025 10-K. It reports FY2025 and restates FY2024 alongside
+        // it, so this also pins that the period being reported is the latest of
+        // the filing's rows rather than an arbitrary one.
+        val result = assertNotNull(
+            FilingAnalysis.analyse(
+                filing = filing(
+                    "10-K",
+                    accession = "0000320193-25-000079",
+                    filed = date(2025, 10, 31),
+                ),
+                facts = appleFacts(),
+            ),
+        )
+
+        assertFalse(result.isAwaitingFacts)
+        assertEquals(date(2025, 9, 27), result.periodEnd)
+
+        val revenue = assertNotNull(result.lines.firstOrNull { it.label == "Revenue" })
+        assertTrue(revenue.formatted.contains("416"), "FY2025 revenue, $416.161B")
+        // Against FY2024's $391.035B — a +6.4% year.
+        assertTrue(revenue.comparison?.contains("6.4") == true, "${revenue.comparison}")
+        assertEquals(ClaimKind.Calculation, revenue.claim.kind)
+        assertNotNull(revenue.claim.derivation)
+    }
+
+    @Test
+    fun aTenKIsReadFromTheAnnualSeriesNotTheQuarterlyOne() {
+        // Read as quarterly this returns nothing at all: a 10-K's revenue fact
+        // has an annual duration and would not appear in the quarterly series.
+        val result = assertNotNull(
+            FilingAnalysis.analyse(
+                filing = filing(
+                    "10-K",
+                    accession = "0000320193-25-000079",
+                    filed = date(2025, 10, 31),
+                ),
+                facts = appleFacts(),
+            ),
+        )
+        assertTrue(result.lines.any { it.label == "Revenue" })
+        assertTrue(result.isAnnual)
+        assertEquals("year", result.periodLabel)
+    }
 
     private fun fact(
         concept: FinancialConcept,

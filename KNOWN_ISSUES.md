@@ -370,3 +370,110 @@ explanation rather than a code.
 **The `project.yml` signing note needed no work.** Phase 0 already carried the
 `CODE_SIGN_STYLE: Automatic` / `DEVELOPMENT_TEAM` block and the -34018
 explanation into `iosApp/project.yml` verbatim.
+
+
+## Phase 6 — Services / providers
+
+**Fixtures reach the test binary as generated Kotlin, not as resources.**
+Every file in `LibraTests/Fixtures` is copied to
+`core/src/commonTest/resources/fixtures` unchanged, and a `generateFixtures`
+Gradle task turns the directory into a Kotlin source file on the `commonTest`
+source set. Kotlin Multiplatform has no common way to read a resource from a
+test binary: the JVM wants the classpath, and a Kotlin/Native test binary has
+no bundle the test runner builds. Generating the payloads as source sidesteps
+it, and the fixtures stay on disk as ordinary readable JSON rather than being
+pasted into a test. Literals are chunked at 20 KB because a JVM string constant
+cannot exceed 64 KB in the class file and `sec_companyfacts_AAPL.json` is
+140 KB.
+
+**One lenient serializer per shape, in `networking/serializers/`.** Swift's
+`Decodable` absorbed vendor sloppiness quietly; kotlinx.serialization does not.
+`LenientDoubleSerializer` and its Long and String siblings read a number a
+vendor may have sent as a string, and `libraJson` gained `coerceInputValues`.
+`VendorDate` collects the four date shapes — ISO-8601 with and without
+fractional seconds, bare `yyyy-MM-dd`, and Finnhub's epoch seconds — so a
+formatter configured slightly differently in one provider can no longer shift a
+chart by a day.
+
+**Finnhub's metric object is read more strictly than everything else.** It
+mixes ratios with date strings under one schema, so values are decoded as raw
+`JsonElement` and only entries that *arrived as JSON numbers* are kept. Using
+the lenient parser here would read `52WeekHighDate` as a year and put it where
+a multiple belongs. Swift's `JSONValue.doubleValue` had the same rule.
+
+**`MockHttp` gained a path router.** Swift's `StubURLProtocol.stub(path:)`
+matched by path, and a provider test usually drives several endpoints in one
+call — Finnhub's metrics page needs `/stock/metric` *and* `/stock/profile2`.
+Matching is by suffix on the path, since the base URL differs per vendor and
+the query string carries credentials that must not be part of the match.
+
+**Provider tests run with the rate limiters removed.** A suite driving eight
+endpoints would otherwise wait out Tiingo's one-hour refill. Back-pressure has
+its own tests against virtual time in `RateLimiterTest`; here it would only be
+a delay. The helper builds a generous limiter rather than adding an
+`unlimited()` preset to production code.
+
+**The XML parser is hand-rolled, not `xmlutil`.** `PLAN.md §6` allowed this as
+a fallback; it is the better default here. The only XML this app reads is an
+SEC ownership form — a few kilobytes of plain elements, no namespaces to
+resolve, no DTD to honour, no schema to validate — so a parser dependency would
+be carried for one file. `XMLTree` in `support/` is a direct port of Swift's,
+with the `XMLParser` delegate replaced by a small scanner. It drops namespace
+prefixes, so a filing agent that adds one cannot change which elements are
+found, and it returns null on an unclosed element rather than reading half a
+truncated filing as a complete one. That last case has no Swift counterpart —
+`XMLParser` reported it itself — and has its own test.
+
+**`Form4Parser` takes a `String`, not bytes.** Swift took `Data` and handed it
+to `XMLParser`. Nothing in the parse needs the bytes, and `SECProvider` already
+has to decode them, so the seam moved one step up.
+
+**`SECProvider.ownershipXMLURL` rebuilds the path by hand.** Swift used
+`URLComponents`. The rule is unchanged: drop the first path segment beginning
+`xsl`, because that directory serves the XSL-rendered HTML and the
+machine-readable document is the same filename one level up.
+
+**`TickerMapCache` is a class with a `Mutex`, not an actor** — the same
+substitution `RateLimiter` made in Phase 3.
+
+**`putIfAbsent` is JVM-only.** The ticker map's first-wins rule is spelled out
+with an explicit `containsKey` check. Caught by the iOS compilation, not the
+JVM one, which is the argument for running both.
+
+**`CompanyMetricsProvider` was missing.** Phase 1 ported the other provider
+protocols and skipped this one; it is added here, where
+`FinnhubMetricsProvider` needed something to conform to.
+
+**`FactPeriods` already existed.** Phase 4 pulled `periodKey`, `groupKey` and
+`deduplicated` forward because `SnapshotStore.facts()` needed them. The Swift
+tests calling `SECFundamentalsProvider.deduplicated` call `FactPeriods` here;
+the behaviour is identical.
+
+**`SeededGenerator` is ported exactly; the uniform draw is not.** The FNV-1a
+seed and the xorshift64\* step are reproduced bit for bit, so a symbol produces
+the same series across launches and platforms — the property the tests depend
+on. Swift's `Double.random(in:using:)` is not specified precisely enough to
+reproduce, so `nextDouble` maps the top 53 bits itself. Sample *values*
+therefore differ from the Swift app's; nothing asserts a specific one.
+
+**`HydrationTests` moves from Phase 6 to Phase 7.** `PLAN.md` did not assign it
+explicitly, and Phase 1's deferral notes put it here. The file is entirely
+`SecurityDetailViewModel` and `WatchlistViewModel`: every case loads a view
+model and asserts what reached the page. Its stubs are Phase 6 shapes, but
+there is nothing to assert against until the view models exist. Same correction
+as `DetailAndWatchlistTests` in Phase 4.
+
+**The two fixture-backed `FilingAnalysisTests` are un-deferred.** Phase 2
+parked `realAccessionJoins` and `annualFormsUseAnnualFigures` against the
+`companyfacts` payload and `SECFundamentalsProvider.extract`. Both now run,
+against Apple's real FY2025 10-K.
+
+**Nine tests beyond the Swift suites**, each pinning something the Kotlin port
+newly made possible to get wrong: that Alpaca's `adjustment=split` is actually
+requested (the "no adjusted series is claimed" assertion is false without it),
+that the next-page token is followed, that both Alpaca halves stay out of the
+URL, that FRED omits the date window when not asked for one, that Finnhub's
+date strings are dropped from the metric map, that the SEC User-Agent falls
+back to the app name, that a Finnhub failure which is not a miss does not
+quietly switch vendors, that sample filings carry the evictable accession
+prefix, and that no mock answers to a real vendor's identity.

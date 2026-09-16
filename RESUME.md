@@ -1,6 +1,6 @@
 # Where the port stands
 
-**Last checkpoint: Phase 5 (Secrets) complete.** 322 tests green on both
+**Last checkpoint: Phase 6 (Providers) complete.** 421 tests green on both
 JVM and the iOS simulator; `:androidApp:assembleDebug` and
 `:app:linkDebugFrameworkIosSimulatorArm64` green. Every commit is on this branch; nothing is stashed.
 
@@ -32,27 +32,31 @@ listed again below so it is not lost.
   `SecretsStore` interface in `commonMain`, with a Keychain implementation on
   iOS, an AndroidKeyStore + SharedPreferences one on Android, and the
   in-memory store the tests and previews use.
+- **Phase 6 — Providers.** `Finnhub`, `Tiingo`, `Alpaca`, `FRED`, `SEC`,
+  `SECFundamentals`, `Form4Parser` + `XMLTree`, `CompositeMarketDataProvider`
+  and the three Finnhub adapters, `ProviderRegistry`, `ConnectionTest` and the
+  `Mock*Provider` family. Plus the vendor serializers and the fixture harness:
+  all 19 fixtures are in, reached through a generated Kotlin source file.
 
-## Next: Phase 6 — Services / providers (~10 h)
+## Next: Phase 7 — App environment + ViewModels (~12 h)
 
-Per `PLAN.md §6`. `FinnhubProvider`, `TiingoProvider`, `AlpacaProvider`,
-`FREDProvider`, `SECProvider`, `SECFundamentalsProvider`, `Form4Parser`,
-`CompositeMarketDataProvider`, `ProviderRegistry`, `ConnectionTest` and the
-`Mock*Provider` family.
+Per `PLAN.md §7`. `AppEnvironment`, `DeveloperOptions`, `SelfTest`, and the six
+view models: `Dashboard`, `BenchmarkDetail`, `Watchlist`, `SecurityDetail`
+(1214 LOC — the largest file in the app), `Research`, `Screener`.
 
-- `MockHttp` in `commonTest` (Phase 3) is the harness the decoding tests use.
-- `FactPeriods` is already ported — Phase 4 needed it for `SnapshotStore.facts`.
-- Each provider reads its credential through `SecretsStore.require`, which
-  throws `APIError.MissingCredentials` the UI already knows how to render.
-  **Tyler enters the keys himself: implement the integration and stop at the
-  credential.** No key belongs in source, in a fixture, or in a cache key.
+- `ProviderRegistry` is the seam the view models depend on. None of them names
+  a concrete provider, so the mocks substitute without ceremony.
+- `SnapshotStore` (Phase 4) supplies the hydration path: read the held copy
+  first, fetch only what is stale, and fall back to the stored copy rather
+  than to an empty page when a request fails.
+- This phase clears the largest deferred block — five suites listed below.
 
 ## Deferred work, by the phase that owns it
 
 | Owed in | What |
 |---|---|
-| Phase 6 | 2 fixture-backed `FilingAnalysisTests`; `CIKTests`; `HydrationTests`; `SampleDataTests` (all need the `Mock*Provider` family) |
-| Phase 7 | `SortOptionTests`, `AnnualPeriodKeyingTests`, `WatchlistIntelligenceTests`, `DetailAndWatchlistTests`, and the `Dashboard request budget` suite (all need view models) |
+| Phase 7 | `SortOptionTests`, `AnnualPeriodKeyingTests`, `WatchlistIntelligenceTests`, `DetailAndWatchlistTests`, `HydrationTests`, and the `Dashboard request budget` suite (all need view models) |
+| Phase 7 | The 11 view-model suites in `AlpacaProviderTests.swift` — `Intraday stays out of the calculations` and `The chart does not disappear` |
 | Phase 8 | The `compose.runtime` / `foundation` / `material3` accessor deprecations in `app/build.gradle.kts` |
 
 ## Standing rules for whoever picks this up
