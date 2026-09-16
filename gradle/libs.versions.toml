@@ -21,6 +21,12 @@ room = "2.8.5"
 sqlite = "2.7.1"
 # KSP decoupled from the Kotlin version; this is its own release line.
 ksp = "2.3.12"
+# Phase 8 additions, verified against maven-metadata.xml on 2026-09-16.
+# Navigation's own latest is 2.10.0-beta01; this is the newest stable.
+navigation = "2.9.2"
+# Vico's multiplatform artifact, which publishes android, iosArm64 and
+# iosSimulatorArm64. It asks for Compose 1.11.1 and resolves up to ours.
+vico = "2.5.2"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -44,6 +50,8 @@ room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 # version the OS happens to carry.
 sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "navigation" }
+vico-multiplatform = { module = "com.patrykandpatrick.vico:multiplatform", version.ref = "vico" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

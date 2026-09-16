@@ -3,6 +3,9 @@ plugins {
     alias(libs.plugins.androidKmpLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    // Navigation routes are serializable types rather than format strings, so
+    // a destination's arguments are checked by the compiler.
+    alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
@@ -29,6 +32,13 @@ kotlin {
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
+            implementation(libs.navigation.compose)
+            // Charts. Vico draws the continuous series; the segmented intraday
+            // line is drawn on a `Canvas` because a one-position break between
+            // sessions is not something a cartesian chart library expresses.
+            implementation(libs.vico.multiplatform)
+            implementation(libs.kotlinx.datetime)
+            implementation(libs.kotlinx.serialization.json)
         }
     }
 }
