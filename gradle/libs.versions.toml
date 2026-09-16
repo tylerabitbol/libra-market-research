@@ -1,5 +1,5 @@
 # Versions verified against maven-metadata.xml on 2026-09-15;
-# the Ktor and serialization entries on 2026-09-16.
+# the Ktor, serialization, Room and KSP entries on 2026-09-16.
 # Rule for later phases: query the artifact's maven-metadata.xml before adding
 # a version here. Do not guess — the ecosystem moves faster than memory.
 [versions]
@@ -17,6 +17,10 @@ kermit = "2.2.0"
 activityCompose = "1.13.0"
 ktor = "3.5.2"
 serialization = "1.11.0"
+room = "2.8.5"
+sqlite = "2.7.1"
+# KSP decoupled from the Kotlin version; this is its own release line.
+ksp = "2.3.12"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -33,6 +37,12 @@ ktor-client-encoding = { module = "io.ktor:ktor-client-encoding", version.ref = 
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+# The bundled SQLite ships its own library, so iOS does not depend on whatever
+# version the OS happens to carry.
+sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 
 [plugins]
@@ -43,3 +53,5 @@ kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+room = { id = "androidx.room", version.ref = "room" }

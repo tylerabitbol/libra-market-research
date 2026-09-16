@@ -1,19 +1,30 @@
 package com.tylerabitbol.libra.models.core
 
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.PrimaryKey
 import com.tylerabitbol.libra.models.provenance.DataProviderID
 import kotlin.time.Instant
 
 /**
  * One OHLCV bar.
  *
- * The value-type half of Swift's `@Model final class PriceBar`. Phase 4
- * annotates this same class as a Room entity rather than introducing a second
- * type, so calculation signatures never change.
+ * Swift's `@Model final class PriceBar`, and also the plain value the
+ * calculators take. One type rather than two: every calculation signature
+ * already named this, and a second "record" class would mean converting at
+ * every call site for no gain.
+ *
+ * A bar built in memory by a view model has [id] 0 and no [provider]; only a
+ * row that came from, or is going to, the store carries either.
  *
  * Bars are immutable once written for a given (symbol, date, resolution); a
  * re-fetch that disagrees indicates a provider restatement and is recorded as
  * a new row with a later [observedAt].
  */
+@Entity(
+    tableName = "price_bars",
+    indices = [Index("symbol"), Index("symbol", "resolution"), Index("symbol", "date")]
+)
 data class PriceBar(
     /** The session or interval this bar describes. */
     val date: Instant,
@@ -40,7 +51,8 @@ data class PriceBar(
      * as a plain in-memory carrier by the view models, where there is no
      * provider to name and nothing is ever inserted.
      */
-    val provider: DataProviderID? = null
+    val provider: DataProviderID? = null,
+    @PrimaryKey(autoGenerate = true) val id: Long = 0
 ) {
     /**
      * Prefers the adjusted series when available, since that is what any

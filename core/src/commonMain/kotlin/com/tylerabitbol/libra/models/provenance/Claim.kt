@@ -84,6 +84,14 @@ enum class DataProviderID(val raw: String) {
      * writes to the store checks this.
      */
     val isSynthetic: Boolean get() = this == Sample
+
+    companion object {
+        /**
+         * Null for a raw value this build does not know, which is how a stored
+         * row written by an older version reads: unattributed, not mislabelled.
+         */
+        fun fromRaw(raw: String?): DataProviderID? = entries.firstOrNull { it.raw == raw }
+    }
 }
 
 /**
