@@ -1,6 +1,7 @@
 package com.tylerabitbol.libra.calculations
 
 import kotlin.test.Test
+import com.tylerabitbol.libra.support.InMemoryPreferenceStore
 import kotlinx.serialization.json.Json
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,11 +15,8 @@ import kotlin.test.assertTrue
  * could not actually test — asserting something it does not know, which is the
  * same fabrication as rendering an absent figure as zero.
  *
- * Two Swift cases are not here: `benchmarksAreNotScreened` and
- * `storedFiguresReachTheScreener` both need the store, which arrives in Phase
- * 4. `savedScreensRoundTrip` is covered in part below — the serialisation half
- * of it, now that kotlinx-serialization is a dependency; the preference store
- * it wrote through is still Phase 4. See KNOWN_ISSUES.md.
+ * The two store-backed cases live in `ScreenerStoreTest`, beside the rest of
+ * the persistence suite.
  */
 class ScreenerTest {
 
@@ -128,6 +126,37 @@ class ScreenerTest {
         assertEquals(ScreenCombinator.Any, restored.combinator)
         assertEquals(2, restored.rules.size)
         assertEquals(screen, restored)
+    }
+
+    @Test
+    fun savedScreensRoundTripThroughPreferences() {
+        val preferences = InMemoryPreferenceStore()
+        val screen = Screen(
+            name = "Improving margins",
+            combinator = ScreenCombinator.Any,
+            rules = listOf(
+                rule(ScreenField.OperatingMargin, ScreenComparison.GreaterThan, 15.0),
+                rule(ScreenField.RevenueGrowth, ScreenComparison.GreaterThan, 5.0)
+            )
+        )
+        SavedScreens.save(listOf(screen), preferences)
+
+        val loaded = SavedScreens.load(preferences)
+        assertEquals(1, loaded.size)
+        assertEquals("Improving margins", loaded.first().name)
+        assertEquals(ScreenCombinator.Any, loaded.first().combinator)
+        assertEquals(2, loaded.first().rules.size)
+    }
+
+    @Test
+    fun anUnreadablePreferenceYieldsNoScreensRatherThanAFailure() {
+        // No Swift counterpart: `JSONDecoder` there returned nil and the call
+        // site already coped. Worth pinning here because a preference written
+        // by a newer build must not stop the screener opening.
+        val preferences = InMemoryPreferenceStore(
+            mapOf("com.tylerabitbol.libra.savedScreens" to "{not json")
+        )
+        assertTrue(SavedScreens.load(preferences).isEmpty())
     }
 
     @Test

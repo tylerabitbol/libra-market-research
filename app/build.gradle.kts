@@ -8,7 +8,7 @@ plugins {
 kotlin {
     jvmToolchain(libs.versions.jvmToolchain.get().toInt())
 
-    androidLibrary {
+    android {
         namespace = "com.tylerabitbol.libra.ui"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()

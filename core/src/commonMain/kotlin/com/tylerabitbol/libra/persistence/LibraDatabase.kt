@@ -48,7 +48,7 @@ abstract class LibraDatabase : RoomDatabase() {
  * Generated per target by Room's compiler. The `expect` has no body by design —
  * KSP writes each `actual`.
  */
-@Suppress("NO_ACTUAL_FOR_EXPECT", "KotlinNoActualForExpect", "EXPECT_ACTUAL_CLASSIFIERS_ARE_IN_BETA")
+@Suppress("NO_ACTUAL_FOR_EXPECT", "KotlinNoActualForExpect")
 expect object LibraDatabaseConstructor : RoomDatabaseConstructor<LibraDatabase> {
     override fun initialize(): LibraDatabase
 }

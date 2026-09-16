@@ -202,3 +202,92 @@ Phase 5. The API-error and endpoint suites are ported.
 **Deferred from `RequestBudgetTests.swift`:** the `Dashboard request budget`
 suite needs `DashboardViewModel` and `ProviderRegistry` — Phase 7. The
 `Rate limiter back-pressure` suite is ported.
+
+
+## Phase 4 — Persistence
+
+**Versions added, verified against maven-metadata.xml on 2026-09-16:** Room
+2.8.5, androidx.sqlite 2.7.1, KSP 2.3.12. KSP is wired per target
+(`kspAndroid`, `kspJvm`, `kspIosArm64`, `kspIosSimulatorArm64`); there is no
+single `ksp(...)` configuration that covers a multiplatform module. The
+`room { }` and `dependencies { }` blocks sit at the *end* of
+`core/build.gradle.kts`: a top-level `add("kspJvm", ...)` evaluated before
+`kotlin { }` declares its targets fails with
+`Configuration with name 'kspJvm' not found`.
+
+**`-lsqlite3` is not needed.** `PLAN.md §4` predicted a linker option on the
+iOS framework. `BundledSQLiteDriver` ships its own SQLite, and
+`:app:linkDebugFrameworkIosSimulatorArm64` links clean without it.
+
+**Instants are stored as epoch nanoseconds, not ISO-8601 text.** Text sorts
+wrongly: `…:20.5Z` compares *below* `…:20Z` because `.` precedes `Z`, which
+would make every `ORDER BY` on a timestamp subtly incorrect. Milliseconds
+would truncate a `Clock.System.now()` round-trip. Both hazards are pinned by
+tests in `SchemaTest.kt`. The converter uses Kotlin's `Long.floorDiv` /
+`Long.mod` rather than `Math.floorDiv`, which is JVM-only.
+
+**Enums are converted by raw value, never by ordinal.** `BarResolution` and
+`DataProviderID` round-trip through their `raw` strings, so reordering a
+declaration cannot silently reinterpret stored rows. `DataProviderID` gained a
+`companion object { fun fromRaw(...) }` for the reverse lookup.
+
+**`PriceBar` is annotated in place** as the ninth entity, per the plan. Its
+`@PrimaryKey(autoGenerate = true) val id: Long = 0` is declared *last* so the
+positional constructor calls written in Phase 1 still compile.
+
+**Six `record` overloads were renamed.** Swift distinguished
+`record(_:for:from:)` by argument label; on the JVM the four
+`record(List<X>, String, DataProviderID)` forms erase to one signature
+("platform declaration clash"). They are now `recordQuote`, `recordBars`,
+`recordFacts`, `recordFilings`, `recordInsiders` and `recordEvents`, and the
+mapping is documented in the `SnapshotStore` KDoc.
+
+**`EventDao.insertAll` uses `OnConflictStrategy.IGNORE`.** REPLACE would
+delete and reinsert the row, losing the user's acknowledgement of an event
+that is merely re-detected. The unique index on `(symbol, naturalKey)` makes
+IGNORE the correct upsert here.
+
+**`inMemoryLibraDatabase()` is expect/actual in `commonTest`.** Room's
+in-memory builder exists only per platform — the native one is in `nativeMain`
+and Android's requires a `Context`; there is no common overload. Actuals live
+in `jvmTest` and `iosTest`. `:core` has no Android test compilation, so no
+third actual is required.
+
+**iOS uses `Dispatchers.Default` for the query context**, not
+`Dispatchers.IO`, which is `internal` on Kotlin/Native in coroutines 1.11.
+Both are multi-threaded pools there, so the behaviour matches.
+
+**`-Xexpect-actual-classes` is on for `:core`.** Room generates
+`LibraDatabaseConstructor` as an `actual object`. The pattern is Room's and
+has no alternative spelling, so the flag replaces a file-level `@Suppress`.
+
+**The plan's `isSample` column does not exist.** Swift marks synthetic data
+two ways: a nullable `providerRaw` on `PriceBar`, and the impossible-CIK
+accession prefix `0000000000-` on filings. `evictSyntheticRows()` preserves
+that actual mechanism rather than inventing a flag.
+
+**`FactPeriods` was pulled forward from Phase 6.** `SnapshotStore.facts()`
+needs `periodKey`/`groupKey`/`deduplicated` to fold fact revisions, so the
+helpers could not wait for `SECFundamentalsProvider`. `Month.number` is not
+available in kotlinx-datetime 0.8.0; the key uses `month.ordinal + 1`.
+
+**That un-defers `FundamentalDetector.restatements`** and its four tests,
+which Phase 2 had parked against Phase 6. Both are now in.
+
+**`SavedScreens` takes an injected `PreferenceStore`** rather than an
+expect/actual class. The interface is two methods (`getString`, `setString`);
+`UserDefaultsPreferenceStore`, `SharedPreferencesStore` and
+`InMemoryPreferenceStore` implement it, and the last is what the tests use,
+which an expect/actual would not have allowed.
+
+**`DetailAndWatchlistTests.swift` moves from Phase 4 to Phase 7.** The plan
+tagged it "(store half)", but the file has no `SnapshotStore` usage at all —
+it is entirely view models. `HydrationTests` and `SampleDataTests` stay in
+Phase 6 as planned, since both need the `Mock*Provider` family.
+
+**Two Gradle deprecations remain, both from Phase 0 and both owned by Phase 8.**
+The `androidLibrary { }` block is renamed to `android { }` in `core` and `app`,
+which clears that one. Still open: `compose.runtime` / `compose.foundation` /
+`compose.material3` accessors in `app/build.gradle.kts` are deprecated in
+favour of naming the artifacts directly. Phase 8 rewrites those dependencies
+anyway, so they move with the UI work rather than churning the catalog twice.

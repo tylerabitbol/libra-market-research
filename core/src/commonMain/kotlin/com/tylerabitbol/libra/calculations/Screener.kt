@@ -1,7 +1,10 @@
 package com.tylerabitbol.libra.calculations
 
 import com.tylerabitbol.libra.support.Format
+import com.tylerabitbol.libra.support.PreferenceStore
 import com.tylerabitbol.libra.support.randomId
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.Serializable
 
 /**
@@ -159,5 +162,32 @@ data class Screen(
      */
     fun untestable(subjects: List<ScreenSubject>): Int = subjects.count { subject ->
         rules.any { subject.value(it.field) == null }
+    }
+}
+
+/**
+ * Saved screens, in preferences rather than in the store.
+ *
+ * They are user settings, not observations: nothing about a saved screen is a
+ * record of what a security did, so putting it in the append-only store would
+ * mean migrating a schema every time the screener grows a field.
+ */
+object SavedScreens {
+    private const val KEY = "com.tylerabitbol.libra.savedScreens"
+    private val json = Json { ignoreUnknownKeys = true }
+    private val serializer = ListSerializer(Screen.serializer())
+
+    /**
+     * Returns nothing rather than throwing when the stored value cannot be
+     * read. A preference written by a newer build, or a half-written one, is
+     * not worth refusing to open the screener over.
+     */
+    fun load(from: PreferenceStore): List<Screen> {
+        val raw = from.getString(KEY) ?: return emptyList()
+        return runCatching { json.decodeFromString(serializer, raw) }.getOrDefault(emptyList())
+    }
+
+    fun save(screens: List<Screen>, to: PreferenceStore) {
+        to.setString(KEY, json.encodeToString(serializer, screens))
     }
 }

@@ -7,9 +7,16 @@ plugins {
 }
 
 kotlin {
+    // Room's generated `LibraDatabaseConstructor` is an `actual object`, which
+    // the compiler still reports as beta. The pattern is Room's, not ours, and
+    // there is no alternative spelling.
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     jvmToolchain(libs.versions.jvmToolchain.get().toInt())
 
-    androidLibrary {
+    android {
         namespace = "com.tylerabitbol.libra.core"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
