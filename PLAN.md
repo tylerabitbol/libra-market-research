@@ -10,7 +10,7 @@ Decisions already made by the owner (do not re-litigate):
   The Swift app stays on `main` as the reference; read it, never edit it.
 - **Providers**: port the current five (Finnhub, Tiingo, Alpaca, FRED, SEC) 1:1,
   BYOK unchanged. No vendor changes, no licensing work, no new adapters.
-- **Android floor**: API 26. **iOS floor**: 17.
+- **Android floor**: API 26. **iOS floor**: 26 (matches the Swift app; no back-deployment work).
 - **Charts**: a library is fine. Use Vico (Compose Multiplatform build).
 - **Parity**: reasonable, not pixel-perfect. Numbers must match; layout may differ.
 
@@ -135,9 +135,9 @@ Order is dependency order. Each phase lists files, the Swift tests to port,
 acceptance, and an hour estimate for Opus. Total ≈ **75 h**.
 
 ### Phase 0 — Scaffold (3 h)
-- Gradle wrapper, version catalog, `:core` + `:app`, iOS framework export
-  (`XCFramework` named `LibraKit`), `iosApp/project.yml` (XcodeGen, team
-  `3RSPVBC57V`, bundle `com.tylerabitbol.libra`, iOS 17, portrait+landscape,
+- Gradle wrapper, version catalog, `:core` + `:app`, iOS framework export from `:app`
+  (static framework `LibraKit`, built from `:app`, exporting `:core`), `iosApp/project.yml` (XcodeGen, team
+  `3RSPVBC57V`, bundle `com.tylerabitbol.libra`, iOS 26, portrait+landscape,
   iPhone+iPad — mirror `../project.yml`).
 - Kermit, coroutines, datetime wired. One `HelloTest` in `commonTest` that
   passes on `jvmTest` and `iosSimulatorArm64Test`. Android app launches to an
@@ -385,7 +385,7 @@ Also:
   green (target: 33 test files → 33 Kotlin test files, same test names).
 - `./gradlew :app:assembleDebug` installs and runs on an API 26 emulator and
   on a current device.
-- `iosApp` builds and runs on an iOS 17 simulator; Keychain probe passes on
+- `iosApp` builds and runs on an iOS 26 simulator; Keychain probe passes on
   a signed build.
 - Manual pass on both platforms: enter keys → Test connection → add a
   symbol → Dashboard, Security Detail (all ranges incl. 1D/5D), Research,
