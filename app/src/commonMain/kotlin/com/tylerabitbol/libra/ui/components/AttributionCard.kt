@@ -102,15 +102,6 @@ fun AttributionCard(attribution: MoveAttribution, modifier: Modifier = Modifier)
     }
 }
 
-@Composable
-private fun Footnote(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelSmall,
-        color = LibraTheme.colors.tertiaryText,
-    )
-}
-
 /**
  * Bars on a shared scale.
  *

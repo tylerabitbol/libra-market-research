@@ -586,3 +586,58 @@ into separate Kotlin classes; no Swift case was dropped. `ProviderDecodingTests`
 went over as the per-provider decoding tests, `PersistenceTests` as
 `SnapshotStoreTest` + `SchemaTest`, and `SyntheticDataTests` as
 `SyntheticRowEvictionTest`.
+
+## Phase 8 — UI
+
+**Vico draws both charts; the Canvas fallback was not needed.** `PLAN.md §8`
+allowed hand-drawing the chart if Vico could not express the gap between
+sessions. It can: `LineCartesianLayer.LineStroke.Dashed` and one series per
+`ChartSegment` give a full-weight traded run and a thinner dashed overnight
+link, with the same area fill under both so no notch of bare background reads
+as missing data. Vico's multiplatform artifact (2.5.2) publishes android,
+iosArm64 and iosSimulatorArm64.
+
+**The daily chart plots against the session index, not the date.** Swift plots
+against `Date` and lets Charts pick four labels; Vico's x-axis is numeric, so
+the dates travel in a lookup the value formatter reads. This incidentally
+removes the workaround Swift needed — it anchors x labels trailing so the last
+one does not overflow the y-axis gutter — because a positional axis cannot
+overflow it.
+
+**SF Symbols has no multiplatform counterpart.** Three consequences. The five
+tab glyphs are drawn as `ImageVector`s in `ui/Icons.kt`, because a bottom bar
+without icons is not a tab bar. The decorative glyphs that lead a card header —
+`arrow.triangle.branch` on the attribution card, `doc.text.magnifyingglass` on
+the filing card, and `event.kind.systemImage` on every event card — are
+dropped: each sits beside a text label saying the same thing, so nothing is
+lost but decoration. Eighteen event-kind glyphs redrawn by hand would be
+decoration with a maintenance cost. The expand/collapse chevrons are `▾`/`▴`
+characters.
+
+**`Link` becomes `LocalUrlOpener`.** SwiftUI opens a URL with no ceremony;
+Compose has no multiplatform equivalent, and the two shells differ — an
+`Intent` on Android, `UIApplication.openURL` on iOS. The capability is provided
+at the root and defaults to doing nothing, which is correct in a test and in a
+preview. Phase 9 wires the shells.
+
+**Semantic colours are named rather than inherited.** SwiftUI's `.secondary`,
+`.tertiary` and `.orange` account for nearly every colour in the Swift views.
+Material 3 has the first two and nothing for the third, so `LibraColors` names
+`secondaryText`, `tertiaryText`, `caution`, `positive` and `negative`. Dynamic
+colour is off on purpose: a caution is orange because it is a caution, and
+letting the wallpaper choose would make "is this a warning?" a question about
+the device.
+
+**The `compose.runtime`/`foundation`/`material3` accessor deprecations stay.**
+`RESUME.md` assigned them to this phase. The deprecation asks for explicit
+coordinates, but `org.jetbrains.compose.material3:material3` has published no
+stable 1.12.0 — only `1.12.0-alpha03` — so pinning explicitly would mean
+choosing an alpha over what the plugin resolves. The plugin knows the right
+mapping; the warning is cosmetic and stays until material3's own line catches
+up.
+
+**Type-safe navigation routes.** `@Serializable` route types rather than
+`"security/{symbol}"` format strings, so a destination's arguments are checked
+by the compiler and the `SavedState` argument API never appears. Switching tabs
+saves and restores each section's stack, which is what Swift gets from one
+`NavigationStack` per tab.

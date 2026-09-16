@@ -209,3 +209,13 @@ internal fun ProportionBar(fraction: Float, fromEnd: Boolean) {
         }
     }
 }
+
+/** A dimmed aside: a caveat, a basis, a note about what is missing. */
+@Composable
+internal fun Footnote(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelSmall,
+        color = LibraTheme.colors.tertiaryText,
+    )
+}
