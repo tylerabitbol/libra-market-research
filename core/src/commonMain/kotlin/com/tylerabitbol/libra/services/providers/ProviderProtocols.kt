@@ -306,6 +306,16 @@ interface MacroDataProvider : DataProvider {
     ): List<MacroObservationDTO>
 }
 
+/**
+ * Current metrics plus their history.
+ *
+ * Missed when Phase 1 ported the other protocols; added in Phase 6 when
+ * `FinnhubMetricsProvider` needed something to conform to.
+ */
+interface CompanyMetricsProvider : DataProvider {
+    suspend fun metrics(symbol: String): CompanyMetricsDTO
+}
+
 interface NewsProvider : DataProvider {
     suspend fun companyNews(symbol: String, from: Instant, to: Instant): List<NewsItemDTO>
 }
