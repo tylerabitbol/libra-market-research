@@ -112,3 +112,9 @@ duplicated provider logic that Phase 6 then has to reconcile.
 `EventDetectionTests.swift` holds two suites; the second exercises
 `SnapshotStore`, `ModelContainer` and `Security`, none of which exist before
 persistence. The detection suite is ported in full here.
+
+**Two `FilingAnalysisTests` cases are deferred to Phase 6.**
+`realAccessionJoins` and `annualFormsUseAnnualFigures` decode the
+`sec_companyfacts_AAPL` fixture through `SECFundamentalsProvider.extract`.
+Both arrive with the SEC provider. The other nine cases are ported and green;
+the deferral is noted at the top of `FilingAnalysisTest.kt`.
