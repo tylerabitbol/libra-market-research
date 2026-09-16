@@ -31,6 +31,7 @@ import com.tylerabitbol.libra.models.core.PriceBar
 import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.viewmodels.ChartValueFormat
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * The price line, shared by the security page and the benchmark page.
@@ -83,6 +84,9 @@ private fun DailyChart(
     }
 
     val dates = remember(bars) { bars.map { Format.shortDate(it.date) } }
+    // Swift let Charts choose four labels out of however many sessions the
+    // range holds; a positional axis has to be told which four.
+    val labelled = remember(bars) { spreadAcross(dates.indices, count = 4) }
     CartesianChartHost(
         chart = rememberCartesianChart(
             rememberLineCartesianLayer(
@@ -93,9 +97,8 @@ private fun DailyChart(
                 valueFormatter = { _, value, _ -> valueFormat.string(value) },
             ),
             bottomAxis = HorizontalAxis.rememberBottom(
-                valueFormatter = CartesianValueFormatter { _, x, _ ->
-                    dates.getOrElse(x.toInt()) { "" }
-                },
+                valueFormatter = CartesianValueFormatter { _, x, _ -> dates.at(x) },
+                itemPlacer = TickItemPlacer(labelled),
             ),
         ),
         modelProducer = producer,
@@ -161,7 +164,10 @@ private fun IntradayChart(
                 valueFormatter = { _, value, _ -> valueFormat.string(value) },
             ),
             bottomAxis = HorizontalAxis.rememberBottom(
-                valueFormatter = CartesianValueFormatter { _, x, _ -> labels[x] ?: "" },
+                valueFormatter = CartesianValueFormatter { _, x, _ ->
+                    labels[x] ?: labels.entries.minByOrNull { abs(it.key - x) }?.value ?: "—"
+                },
+                itemPlacer = TickItemPlacer(ticks.map { it.position }),
             ),
         ),
         modelProducer = producer,
@@ -235,11 +241,34 @@ internal fun chartBounds(values: List<Double>): Pair<Double, Double> {
 
 private val chartHeight = 190.dp
 
+/**
+ * [count] positions spread evenly across [indices], ends included.
+ *
+ * Fewer when there are fewer to give: a range of three sessions gets three
+ * labels rather than three labels and a repeat.
+ */
+internal fun spreadAcross(indices: IntRange, count: Int): List<Double> {
+    val size = indices.last - indices.first + 1
+    if (size <= 0) return emptyList()
+    if (size <= count) return indices.map { it.toDouble() }
+    val step = (size - 1).toDouble() / (count - 1)
+    return (0 until count).map { indices.first + (it * step).roundToInt().toDouble() }.distinct()
+}
+
+/**
+ * The label at a position, never empty: Vico treats an empty axis label as a
+ * programming error and refuses to draw the chart.
+ */
+private fun List<String>.at(x: Double): String =
+    getOrNull(x.toInt()) ?: lastOrNull() ?: "—"
+
 /** What the window opened and closed at, and the move between them. */
 internal fun windowDescription(closes: List<Double>, valueFormat: ChartValueFormat): String {
     val first = closes.firstOrNull() ?: return "No bars"
     val last = closes.lastOrNull() ?: return "No bars"
-    val move = if (first == 0.0) 0.0 else (last - first) / first
+    // `signedPercent` takes percent units, not a fraction: a tenth is 10.0,
+    // and passing 0.1 said "+0.10%" of a move that was ten percent.
+    val move = if (first == 0.0) 0.0 else (last - first) / first * 100.0
     return "${valueFormat.string(first)} to ${valueFormat.string(last)}, " +
         "${Format.signedPercent(move)} across the window"
 }

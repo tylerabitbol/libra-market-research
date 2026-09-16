@@ -44,9 +44,9 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(libs.navigation.compose)
-            // Charts. Vico draws the continuous series; the segmented intraday
-            // line is drawn on a `Canvas` because a one-position break between
-            // sessions is not something a cartesian chart library expresses.
+            // Charts. Vico draws both: one series per `ChartSegment` gives the
+            // intraday line its overnight break, so the `Canvas` fallback
+            // `PLAN.md §8` allowed for was never needed.
             implementation(libs.vico.multiplatform)
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)

@@ -709,3 +709,30 @@ been a model state the UI could never reach.
 item. `DropdownMenu` has neither, so the kind filter draws its category
 headers as plain text rows and marks the current selection with a leading
 `✓ ` (and three spaces when unselected, so the labels stay aligned).
+
+**The chart's spoken move was a hundredth of the real one (fixed; a bug in the
+Swift app, not a port artifact).** `PriceChartView.dailyChartValue` and
+`intradayChartValue` compute `(last - first) / first` — a fraction — and pass it
+to `Format.signedPercent`, which only appends a `%` to whatever number it is
+given. Everywhere else in both apps a percentage travels in percent units
+(`ReturnCalculator.simpleReturn` ends in `* 100`), so VoiceOver announces a ten
+percent move as "+0.10% across the window" while the figure beside the chart
+says "+10.00%". The Kotlin `windowDescription` multiplies by 100 and the UI test
+pins the sentence. This is a divergence from Swift on purpose: reproducing it
+would mean the only reader who cannot see the line is also the only one told the
+wrong number.
+
+**An axis label Vico will not draw: `TickItemPlacer`.** Both charts' x-axis
+formatters returned `""` for a position with no tick — the daily chart for an
+out-of-range index, the intraday chart for every bar that is not the start of a
+session. Vico raises `CartesianValueFormatter.format returned an empty string`
+and the chart fails to draw, so the 1D and 5D ranges crashed the security page
+as soon as a UI test rendered one. Vico's own item placers space labels evenly
+(`aligned`, `segmented`) and neither chart's labels are evenly spaced, so
+`ui/components/TickItemPlacer.kt` implements `HorizontalAxis.ItemPlacer` over the
+exact positions the model chose: the `ChartAxisTick` positions on the intraday
+chart, and four dates spread across the range on the daily one, which is what
+Swift got from `AxisMarks(values: .automatic(desiredCount: 4))`. The formatters
+are total now as well, so a position the placer did not choose can never yield an
+empty string. Nothing caught this before the UI test because the crash needs the
+chart to actually measure itself.
