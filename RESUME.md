@@ -1,12 +1,12 @@
 # Where the port stands
 
-**Last checkpoint: Phase 8 (UI) — five of nine screens ported.**
+**Last checkpoint: Phase 8 (UI) — every screen but `SecurityDetail` ported.**
 Phases 0–7 complete: 475 `:core` tests green on both JVM and the iOS
-simulator. Phase 8 so far: theme, navigation, the component set, and the
-Settings, SecretEntry, Watchlist, Dashboard and BenchmarkDetail screens,
-all compiling on both `iosSimulatorArm64` and `android`, plus two Compose
-UI tests green (`app/src/commonTest/.../ui/BannerTest.kt`, run on
-`iosSimulatorArm64` — the first run costs ~21 min, later ones ~40 s).
+simulator. Phase 8 so far: theme, navigation, the component set, and the Settings,
+SecretEntry, Watchlist, Dashboard, BenchmarkDetail, Research and Screener
+screens, all compiling on both `iosSimulatorArm64` and `android`, with
+`:app:iosSimulatorArm64Test` green (`app/src/commonTest/.../ui/BannerTest.kt`
+— the first run costs ~21 min, later ones ~15-40 s).
 Every commit is on this branch; nothing is stashed.
 
 Read `PLAN.md` for the phase outline and `KNOWN_ISSUES.md` for every deviation
@@ -68,20 +68,20 @@ Done, in `PLAN.md §8`'s order: `Theme.kt`, `Icons.kt`, `Navigation.kt`,
 `App.kt`, `Screens.kt`; `Components/*` (banners, claim badge, data cells,
 attribution card, event card, research profile card, filing analysis card,
 `PriceChart`); `Settings` + `SecretEntry`; `Watchlist` + `AddSymbolSheet`;
-`Dashboard`; `BenchmarkDetail`.
+`Dashboard`; `BenchmarkDetail`; `Research`; `Screener`.
 
-Remaining, in order — each is a `Screen` + a `Host`, then its
-`UnportedScreen` placeholder in `Screens.kt` is replaced:
+Remaining:
 
-1. **Research** — `Libra/Views/Research/ResearchView.swift`, 125 Swift lines.
-2. **Screener** — `Libra/Views/Screener/ScreenerView.swift`, 193 lines.
-3. **SecurityDetail** — 841 lines, last, because it uses every component.
-
-Then: more Compose UI tests for the risky bits (a provenance label on every
-figure, the chart's content description), a Phase 8 pass over
-`KNOWN_ISSUES.md` (the section still needs the
-`clearAndSetSemantics`-versus-`mergeDescendants` finding and the
-`WatchlistStore` decision written up), and this file updated again.
+1. **SecurityDetail** — `Libra/Views/Security/SecurityDetailView.swift`, 841
+   Swift lines, deliberately last because it uses every component. A `Screen` +
+   a `Host`, then the `UnportedScreen` placeholder in `Screens.kt` is replaced.
+   `SecurityDetailViewModel` is already ported and carries ~30 derived values as
+   extension vals; `SecurityDetailViewModel.awaitLoad()` joins both the load and
+   the job a range change spawns.
+2. More Compose UI tests for the risky bits — a provenance label on every
+   figure, the chart's content description.
+3. This file updated again. `KNOWN_ISSUES.md`'s Phase 8 section is current
+   through the screener.
 
 Phase 8 also still owns the `compose.runtime` / `foundation` / `material3`
 accessor deprecations in `app/build.gradle.kts`.
