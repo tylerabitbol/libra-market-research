@@ -76,7 +76,9 @@ Everything that can be checked without a key has been, on Android: five tabs,
 both mandatory banners, symbol search finding AAPL, adding it, the row
 persisting through Room, the security page, all seven chart ranges including
 1D and 5D, the provenance badges and "Show the arithmetic", insider activity,
-filings, and Settings with no secure-storage warning. `-LibraSelfTest` logs
+filings, the Screener matching its one held security, the Benchmark page with
+its "price history unavailable" empty state, Research's empty state, and
+Settings with no secure-storage warning. `-LibraSelfTest` logs
 `keychain=PASS` on both platforms.
 
 - **Android** now runs on an emulator: `medium_phone` (API 36, Google APIs,
