@@ -12,6 +12,7 @@ import com.tylerabitbol.libra.models.core.ChartPoint
 import com.tylerabitbol.libra.models.core.ChartSegment
 import com.tylerabitbol.libra.models.core.PriceBar
 import com.tylerabitbol.libra.ui.components.PriceChart
+import com.tylerabitbol.libra.ui.components.axisDateLabels
 import com.tylerabitbol.libra.ui.components.chartBounds
 import com.tylerabitbol.libra.ui.components.spreadAcross
 import com.tylerabitbol.libra.ui.components.string
@@ -167,5 +168,21 @@ class PriceChartTest {
         assertEquals(listOf(0.0, 40.0, 79.0, 119.0), spreadAcross(0..119, count = 4))
         assertEquals(listOf(0.0, 1.0, 2.0), spreadAcross(0..2, count = 4))
         assertEquals(emptyList(), spreadAcross(IntRange.EMPTY, count = 4))
+    }
+
+    @Test
+    fun theDailyAxisDropsTheYearWithinOneAndTheDayBeyondOne() {
+        // Four full dates do not fit side by side: each one is ellipsised to
+        // "Sep 18, …", which is worse than either half on its own.
+        val start = Instant.parse("2025-09-18T20:00:00Z")
+
+        val withinAYear = axisDateLabels(listOf(start, start + 300.days))
+        assertEquals(listOf("Sep 18", "Jul 15"), withinAYear)
+
+        val beyondAYear = axisDateLabels(listOf(start, start + (5 * 365).days))
+        assertEquals(listOf("Sep 2025", "Sep 2030"), beyondAYear)
+
+        assertEquals(listOf("Sep 18"), axisDateLabels(listOf(start)))
+        assertEquals(emptyList(), axisDateLabels(emptyList()))
     }
 }

@@ -22,28 +22,43 @@ import com.patrykandpatrick.vico.multiplatform.cartesian.layer.CartesianLayerDim
  */
 internal class TickItemPlacer(positions: List<Double>) : HorizontalAxis.ItemPlacer {
 
-    private val positions = positions.sorted()
+    private val sorted = positions.sorted()
 
     override fun getLabelValues(
         context: CartesianDrawingContext,
         visibleXRange: ClosedFloatingPointRange<Double>,
         fullXRange: ClosedFloatingPointRange<Double>,
         maxLabelWidth: Float,
-    ): List<Double> = positions.filter { it in visibleXRange }
+    ): List<Double> = sorted
 
     /** Every label, so the axis reserves room for the widest one. */
     override fun getWidthMeasurementLabelValues(
         context: CartesianMeasuringContext,
         layerDimensions: CartesianLayerDimensions,
         fullXRange: ClosedFloatingPointRange<Double>,
-    ): List<Double> = positions
+    ): List<Double> = sorted
 
     override fun getHeightMeasurementLabelValues(
         context: CartesianMeasuringContext,
         layerDimensions: CartesianLayerDimensions,
         fullXRange: ClosedFloatingPointRange<Double>,
         maxLabelWidth: Float,
-    ): List<Double> = positions
+    ): List<Double> = sorted
+
+    /**
+     * The extremes, named. Vico measures the first and last labels separately
+     * to decide how much room each end needs; the interface's defaults return
+     * null, which reads as "no label there" and drops both.
+     */
+    override fun getFirstLabelValue(
+        context: CartesianMeasuringContext,
+        maxLabelWidth: Float,
+    ): Double? = sorted.firstOrNull()
+
+    override fun getLastLabelValue(
+        context: CartesianMeasuringContext,
+        maxLabelWidth: Float,
+    ): Double? = sorted.lastOrNull()
 
     /**
      * A label is centred on its position, so one sitting at either end of the

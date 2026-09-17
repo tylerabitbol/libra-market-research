@@ -14,6 +14,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.patrykandpatrick.vico.multiplatform.cartesian.CartesianChartHost
+import com.patrykandpatrick.vico.multiplatform.cartesian.Zoom
+import com.patrykandpatrick.vico.multiplatform.cartesian.rememberVicoScrollState
+import com.patrykandpatrick.vico.multiplatform.cartesian.rememberVicoZoomState
 import com.patrykandpatrick.vico.multiplatform.cartesian.axis.HorizontalAxis
 import com.patrykandpatrick.vico.multiplatform.cartesian.axis.VerticalAxis
 import com.patrykandpatrick.vico.multiplatform.cartesian.data.CartesianChartModelProducer
@@ -29,6 +32,8 @@ import com.tylerabitbol.libra.models.core.ChartPoint
 import com.tylerabitbol.libra.models.core.ChartSegment
 import com.tylerabitbol.libra.models.core.PriceBar
 import com.tylerabitbol.libra.support.Format
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Instant
 import com.tylerabitbol.libra.viewmodels.ChartValueFormat
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -83,7 +88,7 @@ private fun DailyChart(
         }
     }
 
-    val dates = remember(bars) { bars.map { Format.shortDate(it.date) } }
+    val dates = remember(bars) { axisDateLabels(bars.map { it.date }) }
     // Swift let Charts choose four labels out of however many sessions the
     // range holds; a positional axis has to be told which four.
     val labelled = remember(bars) { spreadAcross(dates.indices, count = 4) }
@@ -102,6 +107,13 @@ private fun DailyChart(
             ),
         ),
         modelProducer = producer,
+        // Vico charts scroll by default: a layer is laid out at a fixed
+        // spacing per point, so a year of sessions is far wider than the
+        // viewport and only the first few days are on screen. Swift's chart
+        // fits its whole range, so the content is zoomed to fit and both
+        // gestures are off — this is a figure in a page that itself scrolls.
+        scrollState = rememberVicoScrollState(scrollEnabled = false),
+        zoomState = rememberVicoZoomState(zoomEnabled = false, initialZoom = Zoom.Content),
         modifier = modifier
             .fillMaxWidth()
             .height(chartHeight)
@@ -171,6 +183,13 @@ private fun IntradayChart(
             ),
         ),
         modelProducer = producer,
+        // Vico charts scroll by default: a layer is laid out at a fixed
+        // spacing per point, so a year of sessions is far wider than the
+        // viewport and only the first few days are on screen. Swift's chart
+        // fits its whole range, so the content is zoomed to fit and both
+        // gestures are off — this is a figure in a page that itself scrolls.
+        scrollState = rememberVicoScrollState(scrollEnabled = false),
+        zoomState = rememberVicoZoomState(zoomEnabled = false, initialZoom = Zoom.Content),
         modifier = modifier
             .fillMaxWidth()
             .height(chartHeight)
@@ -253,6 +272,20 @@ internal fun spreadAcross(indices: IntRange, count: Int): List<Double> {
     if (size <= count) return indices.map { it.toDouble() }
     val step = (size - 1).toDouble() / (count - 1)
     return (0 until count).map { indices.first + (it * step).roundToInt().toDouble() }.distinct()
+}
+
+/**
+ * The x-axis label for every bar, at the length the range can afford.
+ *
+ * Four dates have to fit side by side, and a full "Sep 18, 2025" in each slot
+ * is ellipsised to "Sep 18, …", which says less than either half of it would.
+ * So the day is dropped once the range runs past a year and the year is
+ * dropped below one. Swift gets the same narrowing for nothing from Charts'
+ * automatic axis labels.
+ */
+internal fun axisDateLabels(dates: List<Instant>): List<String> {
+    val spansYears = dates.size > 1 && (dates.last() - dates.first()) > 370.days
+    return dates.map { if (spansYears) Format.monthAndYear(it) else Format.dayAndMonth(it) }
 }
 
 /**

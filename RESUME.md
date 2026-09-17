@@ -11,9 +11,15 @@ SecurityDetail screens, all compiling on both `iosSimulatorArm64` and `android`,
 later ones ~15-40 s).
 Every commit is on this branch; nothing is stashed.
 
-Read `PLAN.md` for the phase outline and `KNOWN_ISSUES.md` for every deviation
-taken so far — including work deliberately deferred to a later phase, which is
-listed again below so it is not lost.
+A cleanup pass has since removed the declarations that had no references
+anywhere — four unwired vendor serializers, the `UnportedScreen` placeholder,
+an unused DAO query and test stub, and 39 unused imports. Both platforms still
+compile and the 475 JVM tests are green. The list, and the three dead-looking
+things deliberately kept, are under "Deliberately absent" in `KNOWN_ISSUES.md`.
+
+Read `PLAN.md` for the phase outline. `KNOWN_ISSUES.md` holds every deviation,
+now organised by the part of the codebase it constrains rather than by phase —
+its table at the top maps a directory to the section to read before touching it.
 
 ## Done
 
@@ -55,56 +61,57 @@ where the launch arguments come from, which secrets store to build, which
 database file to open, and how a link is opened. `App()` takes `openSymbol` and
 `openUrl`, and the `Scaffold` takes `WindowInsets.safeDrawing`. Both shells now
 carry the launcher icon, and `README.md` covers building, testing and running
-both. Every deviation is in `KNOWN_ISSUES.md` under "Phase 9".
+both. The launch, icon and plist deviations are in `KNOWN_ISSUES.md` under
+"Platform shells".
 
 Verified on the iPhone 17 Pro simulator: the app launches, and
 `-LibraSelfTest` logs **`keychain=PASS round-trip succeeded`** — secure storage
 works, so credentials can be entered on iOS.
 
-Remaining:
+Remaining: **the owner's half of the manual pass** (`PLAN.md §7`) — entering
+real API keys in Settings → Data Sources, testing each connection, and
+watching a screen carry live figures. Keys are never handled here.
 
-1. **The manual pass on both platforms**, per `PLAN.md §7`. This is the last
-   item in the phase and it is the owner's: it needs real API keys, which are
-   entered in Settings → Data Sources and never handled here.
-   - iOS is ready to run now. `README.md` has the exact commands; the short
-     version is `cd iosApp && xcodegen generate`, then open `Libra.xcodeproj`
-     and press Run.
-   - Android **has never been run.** It builds and installs, but there is no
-     emulator on this machine — no `emulator` binary, no system images, no AVDs
-     under `~/Library/Android/sdk` or `~/.android/avd`; only `build-tools`,
-     `platform-tools`, `platforms` and `cmdline-tools`. Running it means either
-     a physical device over `adb`, or `sdkmanager` downloading a system image
-     into the owner's SDK — **ask before downloading one.**
+Everything that can be checked without a key has been, on Android: five tabs,
+both mandatory banners, symbol search finding AAPL, adding it, the row
+persisting through Room, the security page, all seven chart ranges including
+1D and 5D, the provenance badges and "Show the arithmetic", insider activity,
+filings, and Settings with no secure-storage warning. `-LibraSelfTest` logs
+`keychain=PASS` on both platforms.
 
-### What the iOS run established
+- **Android** now runs on an emulator: `medium_phone` (API 36, Google APIs,
+  arm64) created with `android emulator create medium_phone` and started with
+  `android emulator start medium_phone`. Note that `avdmanager`/`sdkmanager`
+  cannot see an API "37.0" image — the newer `android` CLI can, and it
+  downloads its own image.
+- **iOS** builds, installs, launches and self-tests, but **cannot be looked at
+  from here**: this Xcode 27 install ships no `Simulator.app` (not under
+  `Contents/Developer/Applications`, not anywhere), and a headless device does
+  not drive the display link, so every screenshot is a stale frame. Judge iOS
+  from Xcode — open `iosApp/Libra.xcodeproj` and press Run.
 
-- **Compose on iOS aborts at launch without a plist key**, and this is now
-  fixed in `project.yml`. Worth knowing if it ever recurs: Compose's
-  `PlistSanityCheck` throws unless `Info.plist` carries
-  `CADisableMinimumFrameDurationOnPhone`, the process dies with `SIGABRT` on a
-  blank white screen, and *nothing* is written to the device log — the only
-  evidence is the `.ips` crash report in `~/Library/Logs/DiagnosticReports`.
-- **The Keychain -50 is fixed**, and the cause was not where it looked. The
-  `kSec…` names are `CFStringRef` *pointers*, so bridging a Kotlin `Map`
-  containing them produced a dictionary whose keys the Security framework did
-  not recognise, and *every* call failed with `errSecParam`; only `SecItemAdd`
-  reported it, because the read and the delete treat any non-success as "not
-  there". `withCFDictionary` now builds a real `CFMutableDictionary` and no
-  bridging happens at all. A `core/src/iosTest` suite still cannot verify this —
-  the test bundle has no host app and so no entitlements, and every Keychain
-  call in one fails with `-25291` first — which is exactly why `SelfTest` exists:
-  run the signed app with `-LibraSelfTest` and read the log.
-- **Phase 8's screens are real.** All five tabs render, both mandatory banners
-  appear, symbol search finds AAPL (after a debounce — do not judge it on the
-  first frame), adding it persists through Room and survives navigation, and the
-  1D intraday chart draws, which is the exact path `TickItemPlacer` was written
-  for.
-- **Run the simulator with its window open.** A device booted headlessly by
-  `simctl` still runs and still screenshots, but it does not drive the display
-  link, so Compose produces frames only when poked and a screenshot can show a
-  stale frame. Note that `open -a Simulator` fails, and on this machine's Xcode
-  27 there is no `Simulator.app` under `Contents/Developer/Applications` either —
-  launching the simulator UI means opening the project in Xcode and pressing Run.
+### What running it established
+
+Three traps, all fixed, all written up in full in `KNOWN_ISSUES.md` — so only
+the one-line version is here:
+
+- **Compose on iOS aborts at launch without `CADisableMinimumFrameDurationOnPhone`
+  in `Info.plist`**, with a `SIGABRT` on a blank screen and nothing in the
+  device log ("Platform shells").
+- **The Keychain `-50` was the `kSec…` constants being bridged through a Kotlin
+  `Map`, not anything about the write** ("Secrets"). A `core/src/iosTest` suite
+  cannot verify secure storage at all, which is why `SelfTest` exists.
+- **Every chart showed only its first eight bars.** A Vico host scrolls unless
+  it is told to fit, so a year of sessions was several screens wide, and the
+  x-axis labels were missing with it ("UI"). The line still looked plausible,
+  which is the lesson: the UI tests read semantics computed from the data, so a
+  chart drawing the wrong window passes them all. Looking at it is the only
+  test there is.
+
+Phase 8's screens are otherwise real, on sample data with no keys: five tabs,
+both banners, search (after a debounce — do not judge it on the first frame),
+Room persistence across navigation, the security page with all seven ranges,
+provenance badges and their arithmetic.
 
 Phases 7 and 8 are done: `AppEnvironment`, all six view models (`Dashboard`,
 `BenchmarkDetail`, `Watchlist` + `SymbolSearch`, `SecurityDetail`, `Research`,
@@ -129,8 +136,8 @@ In `PLAN.md §8`'s order: `Theme.kt`, `Icons.kt`, `Navigation.kt`, `App.kt`,
 `Screens.kt`; `Components/*` (banners, claim badge, data cells, attribution
 card, event card, research profile card, filing analysis card, `PriceChart`);
 `Settings` + `SecretEntry`; `Watchlist` + `AddSymbolSheet`; `Dashboard`;
-`BenchmarkDetail`; `Research`; `Screener`; `SecurityDetail`. No
-`UnportedScreen` placeholders remain.
+`BenchmarkDetail`; `Research`; `Screener`; `SecurityDetail`. Every route is
+ported, and the `UnportedScreen` placeholder has been deleted.
 
 The UI tests `PLAN.md §8` asked for are in: banners (`BannerTest`), a
 provenance label on every figure (`ProvenanceTest`) and the chart's description
@@ -143,7 +150,7 @@ for the second.
 
 Still owed by this phase: the `compose.runtime` / `foundation` / `material3`
 accessor deprecations in `app/build.gradle.kts`, which stay until material3
-publishes a stable 1.12.0 — see `KNOWN_ISSUES.md`.
+publishes a stable 1.12.0 — see `KNOWN_ISSUES.md` under "Build and toolchain".
 
 Then **Phase 9** (4 h) — see `PLAN.md §4`. Its wiring list is the payoff for
 everything Phases 7–8 left injectable with safe defaults.

@@ -1,6 +1,28 @@
 # Known issues and deviations from PLAN.md
 
-## Phase 0 — toolchain
+Every place this port diverges from `PLAN.md` or from the Swift app, and why.
+Organised by the part of the codebase it constrains, so touching one area means
+reading one section. `RESUME.md` says where the work stands; this file says what
+the code does that you would not predict.
+
+Resolved items are not kept. Entries that record a *decision* stay even when the
+work is done, because reversing the decision is the thing that would go wrong.
+
+| If you are touching | Read |
+|---|---|
+| Gradle, versions, module layout, Xcode project | [Build and toolchain](#build-and-toolchain) |
+| `support/`, `models/` | [Support and value types](#support-and-value-types) |
+| `networking/` | [Networking](#networking) |
+| `persistence/` | [Persistence](#persistence) |
+| `services/secrets/` | [Secrets](#secrets) |
+| `services/providers/` | [Providers](#providers) |
+| `viewmodels/`, `app/` | [View models and app environment](#view-models-and-app-environment) |
+| `:app` (Compose UI) | [UI](#ui) |
+| `:androidApp`, `iosApp/`, launch | [Platform shells](#platform-shells) |
+| tests, fixtures, harnesses | [Testing](#testing) |
+| anything — check first | [Open issues](#open-issues) · [Deliberately absent](#deliberately-absent) |
+
+## Build and toolchain
 
 The plan's assumed versions were stale by four months. Corrected against
 `maven-metadata.xml` on 2026-09-15 and verified by a real build:
@@ -32,26 +54,40 @@ an Intel Mac ever needs to build this.
 `iosApp/project.yml` resolves a JDK itself, falling back to the Homebrew path.
 On a machine without `openjdk@21` there, edit that script.
 
-## Deferred
+**Persistence versions, verified against maven-metadata.xml on 2026-09-16:**
+Room 2.8.5, androidx.sqlite 2.7.1, KSP 2.3.12. KSP is wired per target
+(`kspAndroid`, `kspJvm`, `kspIosArm64`, `kspIosSimulatorArm64`); there is no
+single `ksp(...)` configuration that covers a multiplatform module. The
+`room { }` and `dependencies { }` blocks sit at the *end* of
+`core/build.gradle.kts`: a top-level `add("kspJvm", ...)` evaluated before
+`kotlin { }` declares its targets fails with
+`Configuration with name 'kspJvm' not found`.
 
-- Gradle emits "incompatible with Gradle 10" deprecation warnings from the
-  plugins, not from our scripts. Nothing to do until the plugins update.
-- `iosApp` has no app icon or launch screen yet (Phase 9).
+**Networking versions, verified against maven-metadata.xml on 2026-09-16:**
+Ktor 3.5.2, kotlinx-serialization-json 1.11.0 (the stable release, not the 1.12.0-RC
+that `<latest>` reports). Engines are per target: OkHttp on Android and JVM,
+Darwin on iOS, and Ktor resolves the engine from the classpath so `commonMain`
+names none of them.
 
-## Phase 1 — support and models
+**The `project.yml` signing note needed no work.** Phase 0 already carried the
+`CODE_SIGN_STYLE: Automatic` / `DEVELOPMENT_TEAM` block and the -34018
+explanation into `iosApp/project.yml` verbatim.
 
-Ported: `APIError`, `Claim`/provenance, `Format`, `Freshness`,
-`RelativeTimeText`, and the value types and enums from `Models/Core` plus the
-provider DTOs and interfaces. 38 tests green on JVM and iOS.
+**Two Gradle deprecation warnings are open and both are out of our hands.**
+Gradle reports the build "incompatible with Gradle 10" from the plugins, not
+from our scripts. Separately, the `compose.runtime` / `compose.foundation` /
+`compose.material3` accessors in `app/build.gradle.kts` are deprecated in favour
+of explicit coordinates — but `org.jetbrains.compose.material3:material3` has
+published no stable 1.12.0, only `1.12.0-alpha03`, so naming them explicitly
+would mean choosing an alpha over what the plugin resolves. The plugin knows the
+right mapping. Both warnings are cosmetic and stay until the plugins update.
+(The `androidLibrary { }` → `android { }` rename that accompanied them is
+done.)
 
-**Deferred out of Phase 1, by design:**
 
-- `ChartSeriesBuilder` (`Models/Core/ChartSeries.swift`) takes `PriceBar`, a
-  stored row, so it moves to Phase 2 with the other pure calculations.
-- Every `@Model` class is Phase 4. `FilingRecord`'s `isPeriodicReport` and
-  friends go with the entity; only the form-type set is here so far.
+## Support and value types
 
-**Deviations:**
+Foundation types with no multiplatform counterpart, and what replaced them:
 
 - `Format` is hand-rolled. Foundation's `FormatStyle` has no multiplatform
   equal, so fixed-point rendering, grouping separators and **half-to-even**
@@ -76,89 +112,19 @@ provider DTOs and interfaces. 38 tests green on JVM and iOS.
 - `EventKind.systemImage` keeps the SF Symbol names verbatim. Phase 8 maps
   them onto Material icons in one place.
 
-## Phase 2 — calculations
-
-**Deviation from PLAN.md §5: the Swift-side parity fixture step was skipped.**
-Xcode is available, so the plan's own escape clause does not apply — this was
-a judgement call, not a blocker. The step would have dumped calculator outputs
-from Swift to JSON and replayed them in Kotlin at 1e-9. It was skipped because
-its value overlaps almost entirely with the 14 ported Swift test files (~2,700
-lines of expectations), while costing a dump harness on the Swift side plus
-JSON plumbing on the Kotlin side — building every calculator's inputs twice.
-
-If any ported figure is ever in doubt, run it then: the step is still valid and
-nothing about the port prevents it.
-
-Mitigation in its place: every Swift test file is ported, and targeted Kotlin
-tests are added wherever the Swift coverage of a calculator is thin. Those
-additions are marked in the test files as having no Swift counterpart.
-
 **`PriceBar` exists now, in `models/core`.** The plan put it in Phase 4 as a
 Room entity. Calculations take it, so the value type is written here and Phase
 4 annotates the same class rather than introducing a second one — the
 alternative was porting every calculator against a placeholder and rewriting
 the signatures later.
 
-**`FundamentalDetector.restatements` is deferred to Phase 6.** It keys revision
-groups on `SECFundamentalsProvider.periodKey(_:)`, which is part of the SEC
-provider and does not exist yet. Everything else in the file is ported. The
-four Swift tests that cover it (`restatementIsDetected`,
-`annualAndQuarterlyPeriodsAreNotConflated`, `singleFilingIsNotRestatement`,
-`trivialRevisionIsIgnored`) are deferred with it and are noted at the top of
-`FundamentalDetectionTest.kt`. Porting the key function early would have
-duplicated provider logic that Phase 6 then has to reconcile.
-
-**`EventPersistenceTests` travels with Phase 4, not Phase 2.** The Swift file
-`EventDetectionTests.swift` holds two suites; the second exercises
-`SnapshotStore`, `ModelContainer` and `Security`, none of which exist before
-persistence. The detection suite is ported in full here.
-
-**Two `FilingAnalysisTests` cases are deferred to Phase 6.**
-`realAccessionJoins` and `annualFormsUseAnnualFigures` decode the
-`sec_companyfacts_AAPL` fixture through `SECFundamentalsProvider.extract`.
-Both arrive with the SEC provider. The other nine cases are ported and green;
-the deferral is noted at the top of `FilingAnalysisTest.kt`.
-
-**`SavedScreens` and three `ScreenerTests` cases are deferred.** `SavedScreens`
-is `UserDefaults` plus `Codable`; the multiplatform equivalent needs both a
-settings store (Phase 4) and kotlinx-serialization (added in Phase 3 with
-Ktor). `Screen` and its rules are ported now as plain data classes and will be
-annotated `@Serializable` when the dependency lands, rather than pulling a
-serialization plugin into Phase 2 for one type. The deferred tests are
-`savedScreensRoundTrip`, `benchmarksAreNotScreened` and the stored-figures
-case; the last two need the store regardless.
-
-*Resolved in part, Phase 3:* kotlinx-serialization landed with Ktor, so
-`Screen`, `ScreenRule` and the three screener enums are now `@Serializable`
-and a round-trip test replaces the serialisation half of
-`savedScreensRoundTrip`. `SavedScreens` itself still waits on a settings store
-in Phase 4.
-
-**Three cross-cutting Swift test suites are split across later phases.** They
-were listed under Phase 2, but each is written against a layer that does not
-exist yet, so the parts that are pure calculation are ported now and the rest
-travels with the layer it tests:
-
-- `CorrectnessRegressionTests.swift` — the four valuation suites (metric key
-  mapping, unrankable multiples, percentile self-exclusion, scale validation,
-  13 cases) are ported. `CIKTests` needs `SECProvider` (Phase 6);
-  `SortOptionTests` needs `WatchlistViewModel` and `AnnualPeriodKeyingTests`
-  needs `SecurityDetailViewModel` (both Phase 7).
-- `SyntheticDataTests.swift` — entirely `SnapshotStore`, `AppModelContainer`
-  and the `Mock*Provider` family. Phase 4 for the store, Phase 6 for the mocks.
-- `WatchlistIntelligenceTests.swift` — `WatchlistRow` ordering and the store.
-  Phase 7.
-
-Nothing is dropped; each is named against the phase that will pick it up.
+**`PriceBar.closeOnly` was missed in Phase 1.** Added as
+`fun PriceBar.Companion.closeOnly(observations: List<MacroObservationDTO>)`
+next to the macro models, with an empty `companion object` on `PriceBar` for it
+to hang off.
 
 
-## Phase 3 — Networking
-
-**Versions added, verified against maven-metadata.xml on 2026-09-16:** Ktor
-3.5.2, kotlinx-serialization-json 1.11.0 (the stable release, not the 1.12.0-RC
-that `<latest>` reports). Engines are per target: OkHttp on Android and JVM,
-Darwin on iOS, and Ktor resolves the engine from the classpath so `commonMain`
-names none of them.
+## Networking
 
 **`Endpoint` returns a URL string, not a request object.** Swift's
 `makeRequest()` built a `URLRequest`; in Ktor the client owns the request, so
@@ -195,25 +161,8 @@ mapping, the retry bound, the 403 disambiguation and the header pass-through.
 `MockHttp` in `commonTest` is the `StubURLProtocol` replacement the plan asked
 for, written so Phase 6's provider tests reuse it.
 
-**Deferred from `NetworkingTests.swift`:** the keychain, fingerprint and
-secrets-store suites (three suites, 14 cases) test `SecretsStore`, which is
-Phase 5. The API-error and endpoint suites are ported.
 
-**Deferred from `RequestBudgetTests.swift`:** the `Dashboard request budget`
-suite needs `DashboardViewModel` and `ProviderRegistry` — Phase 7. The
-`Rate limiter back-pressure` suite is ported.
-
-
-## Phase 4 — Persistence
-
-**Versions added, verified against maven-metadata.xml on 2026-09-16:** Room
-2.8.5, androidx.sqlite 2.7.1, KSP 2.3.12. KSP is wired per target
-(`kspAndroid`, `kspJvm`, `kspIosArm64`, `kspIosSimulatorArm64`); there is no
-single `ksp(...)` configuration that covers a multiplatform module. The
-`room { }` and `dependencies { }` blocks sit at the *end* of
-`core/build.gradle.kts`: a top-level `add("kspJvm", ...)` evaluated before
-`kotlin { }` declares its targets fails with
-`Configuration with name 'kspJvm' not found`.
+## Persistence
 
 **`-lsqlite3` is not needed.** `PLAN.md §4` predicted a linker option on the
 iOS framework. `BundledSQLiteDriver` ships its own SQLite, and
@@ -247,12 +196,6 @@ delete and reinsert the row, losing the user's acknowledgement of an event
 that is merely re-detected. The unique index on `(symbol, naturalKey)` makes
 IGNORE the correct upsert here.
 
-**`inMemoryLibraDatabase()` is expect/actual in `commonTest`.** Room's
-in-memory builder exists only per platform — the native one is in `nativeMain`
-and Android's requires a `Context`; there is no common overload. Actuals live
-in `jvmTest` and `iosTest`. `:core` has no Android test compilation, so no
-third actual is required.
-
 **iOS uses `Dispatchers.Default` for the query context**, not
 `Dispatchers.IO`, which is `internal` on Kotlin/Native in coroutines 1.11.
 Both are multi-threaded pools there, so the behaviour matches.
@@ -266,13 +209,13 @@ two ways: a nullable `providerRaw` on `PriceBar`, and the impossible-CIK
 accession prefix `0000000000-` on filings. `evictSyntheticRows()` preserves
 that actual mechanism rather than inventing a flag.
 
-**`FactPeriods` was pulled forward from Phase 6.** `SnapshotStore.facts()`
-needs `periodKey`/`groupKey`/`deduplicated` to fold fact revisions, so the
-helpers could not wait for `SECFundamentalsProvider`. `Month.number` is not
-available in kotlinx-datetime 0.8.0; the key uses `month.ordinal + 1`.
-
-**That un-defers `FundamentalDetector.restatements`** and its four tests,
-which Phase 2 had parked against Phase 6. Both are now in.
+**`FactPeriods` lives in `services/providers/`, and `SnapshotStore` uses it.**
+`periodKey`, `groupKey` and `deduplicated` fold fact revisions, which
+`SnapshotStore.facts()` needs, so they are not private to
+`SECFundamentalsProvider` the way Swift had them. The Swift tests that call
+`SECFundamentalsProvider.deduplicated` call `FactPeriods` here; the behaviour is
+identical. `Month.number` is not available in kotlinx-datetime 0.8.0, so the key
+uses `month.ordinal + 1`.
 
 **`SavedScreens` takes an injected `PreferenceStore`** rather than an
 expect/actual class. The interface is two methods (`getString`, `setString`);
@@ -280,20 +223,27 @@ expect/actual class. The interface is two methods (`getString`, `setString`);
 `InMemoryPreferenceStore` implement it, and the last is what the tests use,
 which an expect/actual would not have allowed.
 
-**`DetailAndWatchlistTests.swift` moves from Phase 4 to Phase 7.** The plan
-tagged it "(store half)", but the file has no `SnapshotStore` usage at all —
-it is entirely view models. `HydrationTests` and `SampleDataTests` stay in
-Phase 6 as planned, since both need the `Mock*Provider` family.
+**`:app` reaches storage through `WatchlistStore`, never `LibraDatabase`.**
+See [UI](#ui) — the module boundary is enforced by `:core`'s dependency
+configuration, so widening it fails the `:app` build rather than degrading
+quietly.
 
-**Two Gradle deprecations remain, both from Phase 0 and both owned by Phase 8.**
-The `androidLibrary { }` block is renamed to `android { }` in `core` and `app`,
-which clears that one. Still open: `compose.runtime` / `compose.foundation` /
-`compose.material3` accessors in `app/build.gradle.kts` are deprecated in
-favour of naming the artifacts directly. Phase 8 rewrites those dependencies
-anyway, so they move with the UI work rather than churning the catalog twice.
+**`Instant` overflowed the Room converter, and every bounded range query
+returned nothing.** Instants are stored as nanoseconds in a `Long`.
+`Instant.DISTANT_FUTURE` is about 3×10²¹ nanoseconds, which wraps to a negative
+number, so `SnapshotStore.bars(symbol, from = …)` — which passes
+`DISTANT_FUTURE` as its open upper bound — matched no rows at all. The store
+looked permanently empty: nothing hydrated, and every page re-fetched five
+years of history it already held, against the scarcest budget in the app. The
+converter now saturates at `Long.MAX_VALUE`/`MIN_VALUE` and maps those back to
+the distant sentinels. Nanosecond precision caps real dates at 2262, which is
+unchanged from before and not a limit this app can reach.
+
+This was invisible until `HydrationTests` ran, which is the argument for
+porting the tests alongside the code rather than after it.
 
 
-## Phase 5 — Secrets
+## Secrets
 
 **`SecretsStore` is an interface, not an `expect class`.** `PLAN.md §5` asked
 for `expect class SecretsStore`. Swift's shape is a `protocol SecretsStoring`
@@ -335,11 +285,28 @@ String` works for a `CFStringRef`, but `NSString.create(data:encoding:) as
 String?` is a cast the compiler proves can never succeed. The keychain store
 converts through raw bytes (`usePinned` + `memcpy`) in both directions instead.
 
-**Keychain dictionaries are retained and released explicitly.** Swift's
-`query as CFDictionary` was an ARC-managed bridge. Kotlin/Native has none, so
-every query goes through a `withCFDictionary` helper that releases in a
-`finally`; writing `CFBridgingRetain(...)` inline would leak one dictionary per
-keychain access.
+**Keychain dictionaries are built as real `CFMutableDictionary`s, never bridged
+from a Kotlin `Map`.** This is the one that cost the most to find. The `kSec…`
+names are `CFStringRef` *pointers*, not objects, so bridging a map containing
+them yields a dictionary whose keys are opaque Kotlin wrappers that the Security
+framework does not recognise — and **every** call fails with `errSecParam`
+(-50). Only `SecItemAdd` surfaced it, because the read and the delete treat any
+non-success as "not there", which made it look like a bug in the write for a
+long time. `withCFDictionary` now creates the dictionary, fills it and releases
+it in a `finally`; Swift got the retain/release from ARC on `query as
+CFDictionary`, and writing `CFBridgingRetain(...)` inline would leak one
+dictionary per keychain access.
+
+Two corollaries. `CFBridgingRelease(CFRetain(x))` *does* yield the right
+`NSString` for a `kSec…` constant — `kSecClass` becomes `"class"` — so verifying
+the bridging in isolation proves nothing and sent one debugging session down the
+wrong path. And a `core/src/iosTest` suite cannot catch any of this: the test
+bundle has no host app and so no entitlements, so every Keychain call in one
+fails with `-25291` (`errSecNotAvailable`) before anything else is evaluated,
+and the test passes whether the bug is present or not. That is the limit
+`SelfTest`'s own comment describes and the reason `SelfTest` exists — verifying
+secure storage means running the signed app with `-LibraSelfTest` and reading
+its log.
 
 **`InMemorySecretsStore` uses an atomic reference, not a mutable map.** Swift
 guarded its dictionary with an `NSLock`. `SecretsStore` is not a suspending
@@ -355,63 +322,33 @@ key metadata, the fingerprint masking, the `require` contract and the status
 explanations — is covered by the 24 common tests, which run on both JVM and
 the iOS simulator.
 
-**Eleven tests beyond the Swift suites.** Swift had 13 cases across
-`Keychain error reporting`, `Key fingerprints` and `Secrets store`; all 13 are
-ported. The additions pin things the Kotlin port newly made possible to get
-wrong: the storage account names (renaming a `SecretKey` case would orphan a
-credential the user already entered), the round trip through `fromRaw`, that
-every key has help text, that a trailing newline in a paste does not inflate
-the fingerprint length, and that `SecretsError.message` carries the
-explanation rather than a code.
-
-**`displayName` and `helpText` stay as constants.** Per the plan — they move to
-`composeResources` in Phase 8.
-
-**The `project.yml` signing note needed no work.** Phase 0 already carried the
-`CODE_SIGN_STYLE: Automatic` / `DEVELOPMENT_TEAM` block and the -34018
-explanation into `iosApp/project.yml` verbatim.
+**`SecretKey.displayName` and `helpText` are plain constants.** Phase 5 parked
+them against a move to `composeResources`; that move was later dropped outright
+(see [Deliberately absent](#deliberately-absent)), so constants are where they
+stay.
 
 
-## Phase 6 — Services / providers
-
-**Fixtures reach the test binary as generated Kotlin, not as resources.**
-Every file in `LibraTests/Fixtures` is copied to
-`core/src/commonTest/resources/fixtures` unchanged, and a `generateFixtures`
-Gradle task turns the directory into a Kotlin source file on the `commonTest`
-source set. Kotlin Multiplatform has no common way to read a resource from a
-test binary: the JVM wants the classpath, and a Kotlin/Native test binary has
-no bundle the test runner builds. Generating the payloads as source sidesteps
-it, and the fixtures stay on disk as ordinary readable JSON rather than being
-pasted into a test. Literals are chunked at 20 KB because a JVM string constant
-cannot exceed 64 KB in the class file and `sec_companyfacts_AAPL.json` is
-140 KB.
+## Providers
 
 **One lenient serializer per shape, in `networking/serializers/`.** Swift's
 `Decodable` absorbed vendor sloppiness quietly; kotlinx.serialization does not.
-`LenientDoubleSerializer` and its Long and String siblings read a number a
-vendor may have sent as a string, and `libraJson` gained `coerceInputValues`.
-`VendorDate` collects the four date shapes — ISO-8601 with and without
-fractional seconds, bare `yyyy-MM-dd`, and Finnhub's epoch seconds — so a
-formatter configured slightly differently in one provider can no longer shift a
-chart by a day.
+`LenientDoubleSerializer` reads a number a vendor may have sent as a string, and
+`libraJson` gained `coerceInputValues`. `VendorDate` collects the date shapes —
+ISO-8601 with and without fractional seconds, bare `yyyy-MM-dd`, and Finnhub's
+epoch seconds — so a formatter configured slightly differently in one provider
+can no longer shift a chart by a day.
+
+`PLAN.md §3` asked for one serializer per shape, and Long, String, ISO-instant
+and day-instant siblings were written to match. Every provider turned out to
+reach `VendorDate` directly and to need leniency only on doubles, so all four
+sat unreferenced from the day they were written through the end of Phase 9 and
+have been deleted. Write the next one when a payload asks for it.
 
 **Finnhub's metric object is read more strictly than everything else.** It
 mixes ratios with date strings under one schema, so values are decoded as raw
 `JsonElement` and only entries that *arrived as JSON numbers* are kept. Using
 the lenient parser here would read `52WeekHighDate` as a year and put it where
 a multiple belongs. Swift's `JSONValue.doubleValue` had the same rule.
-
-**`MockHttp` gained a path router.** Swift's `StubURLProtocol.stub(path:)`
-matched by path, and a provider test usually drives several endpoints in one
-call — Finnhub's metrics page needs `/stock/metric` *and* `/stock/profile2`.
-Matching is by suffix on the path, since the base URL differs per vendor and
-the query string carries credentials that must not be part of the match.
-
-**Provider tests run with the rate limiters removed.** A suite driving eight
-endpoints would otherwise wait out Tiingo's one-hour refill. Back-pressure has
-its own tests against virtual time in `RateLimiterTest`; here it would only be
-a delay. The helper builds a generous limiter rather than adding an
-`unlimited()` preset to production code.
 
 **The XML parser is hand-rolled, not `xmlutil`.** `PLAN.md §6` allowed this as
 a fallback; it is the better default here. The only XML this app reads is an
@@ -444,11 +381,6 @@ JVM one, which is the argument for running both.
 protocols and skipped this one; it is added here, where
 `FinnhubMetricsProvider` needed something to conform to.
 
-**`FactPeriods` already existed.** Phase 4 pulled `periodKey`, `groupKey` and
-`deduplicated` forward because `SnapshotStore.facts()` needed them. The Swift
-tests calling `SECFundamentalsProvider.deduplicated` call `FactPeriods` here;
-the behaviour is identical.
-
 **`SeededGenerator` is ported exactly; the uniform draw is not.** The FNV-1a
 seed and the xorshift64\* step are reproduced bit for bit, so a symbol produces
 the same series across launches and platforms — the property the tests depend
@@ -456,29 +388,8 @@ on. Swift's `Double.random(in:using:)` is not specified precisely enough to
 reproduce, so `nextDouble` maps the top 53 bits itself. Sample *values*
 therefore differ from the Swift app's; nothing asserts a specific one.
 
-**`HydrationTests` moves from Phase 6 to Phase 7.** `PLAN.md` did not assign it
-explicitly, and Phase 1's deferral notes put it here. The file is entirely
-`SecurityDetailViewModel` and `WatchlistViewModel`: every case loads a view
-model and asserts what reached the page. Its stubs are Phase 6 shapes, but
-there is nothing to assert against until the view models exist. Same correction
-as `DetailAndWatchlistTests` in Phase 4.
 
-**The two fixture-backed `FilingAnalysisTests` are un-deferred.** Phase 2
-parked `realAccessionJoins` and `annualFormsUseAnnualFigures` against the
-`companyfacts` payload and `SECFundamentalsProvider.extract`. Both now run,
-against Apple's real FY2025 10-K.
-
-**Nine tests beyond the Swift suites**, each pinning something the Kotlin port
-newly made possible to get wrong: that Alpaca's `adjustment=split` is actually
-requested (the "no adjusted series is claimed" assertion is false without it),
-that the next-page token is followed, that both Alpaca halves stay out of the
-URL, that FRED omits the date window when not asked for one, that Finnhub's
-date strings are dropped from the metric map, that the SEC User-Agent falls
-back to the app name, that a Finnhub failure which is not a miss does not
-quietly switch vendors, that sample filings carry the evictable accession
-prefix, and that no mock answers to a real vendor's identity.
-
-## Phase 7 — App environment and view models
+## View models and app environment
 
 **View models are plain Kotlin in `:core`, not `androidx.lifecycle.ViewModel`
 in `:app`.** Swift's `@Observable @MainActor final class` has no direct
@@ -495,11 +406,6 @@ view model an object graph; Room entities carry plain foreign-key columns. A
 `WatchlistDao.members()` query returns a `WatchlistMember(symbol, name, sector,
 priority)` row instead, and the view model builds its rows from that.
 
-**`PriceBar.closeOnly` was missed in Phase 1.** Added as
-`fun PriceBar.Companion.closeOnly(observations: List<MacroObservationDTO>)`
-next to the macro models, with an empty `companion object` on `PriceBar` for it
-to hang off.
-
 **`ChartValueFormat` moves out of the SwiftUI chart view** into
 `BenchmarkDetailViewModel.kt`, where the view model that decides the format
 lives. `SecurityDetailViewModel` reuses it rather than declaring a second copy.
@@ -512,7 +418,7 @@ on both targets: an Android process has no argv, and common source has no
 build-configuration flag. So arguments, environment and `isDebugBuild` are
 passed in, with release defaults — a shell that supplies nothing gets a
 `DeveloperOptions` that does nothing, which is what the Swift compiler gave.
-Phase 9 wires the two shells to it.
+Both shells supply one; see [Platform shells](#platform-shells).
 
 **Fixture capture returns JSON instead of writing a file.** Swift's
 `SelfTest.captureFixtures` wrote into the app container for `simctl
@@ -529,65 +435,8 @@ the only test affordance the file needed beyond the
 Swift wraps the `DETECT …` line in `#if DEBUG`; Kotlin has no equivalent, so
 the sink drops it in release instead of the compiler.
 
-### A bug the port surfaced
 
-**`Instant` overflowed the Room converter, and every bounded range query
-returned nothing.** Instants are stored as nanoseconds in a `Long`.
-`Instant.DISTANT_FUTURE` is about 3×10²¹ nanoseconds, which wraps to a negative
-number, so `SnapshotStore.bars(symbol, from = …)` — which passes
-`DISTANT_FUTURE` as its open upper bound — matched no rows at all. The store
-looked permanently empty: nothing hydrated, and every page re-fetched five
-years of history it already held, against the scarcest budget in the app. The
-converter now saturates at `Long.MAX_VALUE`/`MIN_VALUE` and maps those back to
-the distant sentinels. Nanosecond precision caps real dates at 2262, which is
-unchanged from before and not a limit this app can reach.
-
-This was invisible until `HydrationTests` ran, which is the argument for
-porting the tests alongside the code rather than after it.
-
-### Phase 7, second pass — the deferred suites
-
-**The view-model stubs are shared, not copied.** `CallLog`,
-`StubMarketProvider`, `StubFundamentalsProvider`, `StubSECProvider` and
-`RecordingMacroProvider` live in `viewmodels/ViewModelTestSupport.kt`. Swift
-redeclared a near-identical `CallLog` actor and counting provider in each of
-`HydrationTests`, `WatchlistIntelligenceTests` and `RequestBudgetTests`, which
-is how they drifted: one counted symbols, one counted calls, one did both.
-Kotlin's package-level visibility would make three copies a redeclaration
-error, so the merge was forced and the drift is gone.
-
-**`CallLog` is a CAS loop, not an actor.** Swift's counters are `actor`s read
-with `await`. The assertions are made from a non-suspending accessor after the
-work is done, so `AtomicReference<List<String>>` with a compare-and-set append
-is the equivalent — the same choice `InMemorySecretsStore` made in Phase 5.
-
-**`SecurityDetailViewModel.select` now records its job.** The two Alpaca view-
-model suites switch ranges and immediately assert what the chart holds; Swift
-slept 400–600 ms between each. `select` assigns its spawned fetch to a
-`selectJob` that `awaitLoad()` joins alongside `loadJob`, so the suites are
-exact rather than timing-dependent. Eleven tests that took about six seconds of
-sleeping in Swift now run in well under one.
-
-**`RateLimiter back-pressure` is not in the Phase 7 port.** It shares
-`RequestBudgetTests.swift` with the dashboard budget suite, but it tests the
-limiter rather than a view model and went over in Phase 3, as
-`networking/RateLimiterTest.kt`. Only the `Dashboard request budget` half was
-owed here.
-
-**Swift's `lastRegularClose` helper hung off a test stub; here it is a
-top-level function** in `IntradayBoundaryTest.kt`, shared by the three
-intraday stubs that need it. It answers "the most recent 15:55 in New York",
-which is what lets the chart suites run outside market hours — most of the
-time.
-
-**475 tests across both targets against Swift's 416.** The surplus is the nine
-provider-level tests logged in Phase 6 plus the split of Swift's larger suites
-into separate Kotlin classes; no Swift case was dropped. `ProviderDecodingTests`
-went over as the per-provider decoding tests, `PersistenceTests` as
-`SnapshotStoreTest` + `SchemaTest`, and `SyntheticDataTests` as
-`SyntheticRowEvictionTest`.
-
-## Phase 8 — UI
+## UI
 
 **Vico draws both charts; the Canvas fallback was not needed.** `PLAN.md §8`
 allowed hand-drawing the chart if Vico could not express the gap between
@@ -618,7 +467,7 @@ characters.
 Compose has no multiplatform equivalent, and the two shells differ — an
 `Intent` on Android, `UIApplication.openURL` on iOS. The capability is provided
 at the root and defaults to doing nothing, which is correct in a test and in a
-preview. Phase 9 wires the shells.
+preview. Each shell provides the real opener.
 
 **Semantic colours are named rather than inherited.** SwiftUI's `.secondary`,
 `.tertiary` and `.orange` account for nearly every colour in the Swift views.
@@ -627,14 +476,6 @@ Material 3 has the first two and nothing for the third, so `LibraColors` names
 colour is off on purpose: a caution is orange because it is a caution, and
 letting the wallpaper choose would make "is this a warning?" a question about
 the device.
-
-**The `compose.runtime`/`foundation`/`material3` accessor deprecations stay.**
-`RESUME.md` assigned them to this phase. The deprecation asks for explicit
-coordinates, but `org.jetbrains.compose.material3:material3` has published no
-stable 1.12.0 — only `1.12.0-alpha03` — so pinning explicitly would mean
-choosing an alpha over what the plugin resolves. The plugin knows the right
-mapping; the warning is cosmetic and stays until material3's own line catches
-up.
 
 **Type-safe navigation routes.** `@Serializable` route types rather than
 `"security/{symbol}"` format strings, so a destination's arguments are checked
@@ -690,8 +531,7 @@ while a partial number is being typed.
 has a `NSUserDefaults` implementation on iOS and a `SharedPreferences` one on
 Android, but neither is reachable from common code, so the composition root now
 injects it exactly as it injects `secrets` — defaulting to the in-memory store,
-which is what a test and a preview should get. Phase 9 passes the real one from
-each shell.
+which is what a test and a preview should get. Each shell passes the real one.
 
 **`PriceChartView`'s value format is the security page's default.** The
 benchmark page passes `state.valueFormat` because an index level is not a
@@ -737,7 +577,30 @@ are total now as well, so a position the placer did not choose can never yield a
 empty string. Nothing caught this before the UI test because the crash needs the
 chart to actually measure itself.
 
-## Phase 9 — Platform shells, assets, release hygiene
+**A Vico chart scrolls unless told to fit, and three things followed from
+that.** A `CartesianChartHost` lays its layer out at a fixed spacing per point
+and lets the user scroll, so a year of sessions was many screens wide and only
+the first eight days were ever visible — the line looked plausible, which is
+why neither the UI tests nor a glance caught it. Swift's chart fits its range,
+so both charts now pass `rememberVicoScrollState(scrollEnabled = false)` and
+`rememberVicoZoomState(zoomEnabled = false, initialZoom = Zoom.Content)`; this
+is a figure inside a page that itself scrolls, and a gesture that fights the
+page is worse than no gesture. Two consequences fell out of fixing it:
+
+- `TickItemPlacer` must override `getFirstLabelValue` and `getLastLabelValue`.
+  The interface's defaults return null, which Vico reads as "no label at the
+  extreme" and drops — the first and last of four dates simply never drew.
+- The axis label narrows to fit: `axisDateLabels` gives "Sep 18" within a year
+  and "Sep 2025" beyond one, because four "Sep 18, 2025" labels side by side
+  are each ellipsised to "Sep 18, …". Swift gets the same narrowing for nothing
+  from Charts' automatic axis. `Format.monthAndYear` is new for it.
+
+All of this was found by running the app, not by a test: a chart that draws the
+wrong window still draws, and the semantics the UI tests read are computed from
+the data rather than from the picture.
+
+
+## Platform shells
 
 **Launch wiring lives in `:core`, not in each shell.** Swift splits it between
 `LibraApp.init` (self-test, key seeding) and `RootView.task` (watchlist seed,
@@ -797,6 +660,122 @@ beyond the OS is needed. `minSdk` is 26, so the adaptive icon covers every
 supported version and the square `ic_launcher.png` fallbacks are only for a
 launcher that ignores `anydpi-v26`.
 
+
+## Testing
+
+**Deviation from PLAN.md §5: the Swift-side parity fixture step was skipped.**
+Xcode is available, so the plan's own escape clause does not apply — this was
+a judgement call, not a blocker. The step would have dumped calculator outputs
+from Swift to JSON and replayed them in Kotlin at 1e-9. It was skipped because
+its value overlaps almost entirely with the 14 ported Swift test files (~2,700
+lines of expectations), while costing a dump harness on the Swift side plus
+JSON plumbing on the Kotlin side — building every calculator's inputs twice.
+
+If any ported figure is ever in doubt, run it then: the step is still valid and
+nothing about the port prevents it.
+
+Mitigation in its place: every Swift test file is ported, and targeted Kotlin
+tests are added wherever the Swift coverage of a calculator is thin. Those
+additions are marked in the test files as having no Swift counterpart.
+
+**Fixtures reach the test binary as generated Kotlin, not as resources.**
+Every file in `LibraTests/Fixtures` is copied to
+`core/src/commonTest/resources/fixtures` unchanged, and a `generateFixtures`
+Gradle task turns the directory into a Kotlin source file on the `commonTest`
+source set. Kotlin Multiplatform has no common way to read a resource from a
+test binary: the JVM wants the classpath, and a Kotlin/Native test binary has
+no bundle the test runner builds. Generating the payloads as source sidesteps
+it, and the fixtures stay on disk as ordinary readable JSON rather than being
+pasted into a test. Literals are chunked at 20 KB because a JVM string constant
+cannot exceed 64 KB in the class file and `sec_companyfacts_AAPL.json` is
+140 KB.
+
+**`MockHttp` gained a path router.** Swift's `StubURLProtocol.stub(path:)`
+matched by path, and a provider test usually drives several endpoints in one
+call — Finnhub's metrics page needs `/stock/metric` *and* `/stock/profile2`.
+Matching is by suffix on the path, since the base URL differs per vendor and
+the query string carries credentials that must not be part of the match.
+
+**Provider tests run with the rate limiters removed.** A suite driving eight
+endpoints would otherwise wait out Tiingo's one-hour refill. Back-pressure has
+its own tests against virtual time in `RateLimiterTest`; here it would only be
+a delay. The helper builds a generous limiter rather than adding an
+`unlimited()` preset to production code.
+
+**`inMemoryLibraDatabase()` is expect/actual in `commonTest`.** Room's
+in-memory builder exists only per platform — the native one is in `nativeMain`
+and Android's requires a `Context`; there is no common overload. Actuals live
+in `jvmTest` and `iosTest`. `:core` has no Android test compilation, so no
+third actual is required.
+
+**The view-model stubs are shared, not copied.** `CallLog`,
+`StubMarketProvider`, `StubFundamentalsProvider` and `StubSECProvider` live in
+`viewmodels/ViewModelTestSupport.kt`. (A `RecordingMacroProvider` was written
+here too and never used — `BenchmarkDetailViewModelTest` needs a stub that
+records the *window* it was asked for and generates a series, which is a
+different job, so it declares its own `CountingMacroProvider`. The unused one
+has been deleted.) Swift
+redeclared a near-identical `CallLog` actor and counting provider in each of
+`HydrationTests`, `WatchlistIntelligenceTests` and `RequestBudgetTests`, which
+is how they drifted: one counted symbols, one counted calls, one did both.
+Kotlin's package-level visibility would make three copies a redeclaration
+error, so the merge was forced and the drift is gone.
+
+**`CallLog` is a CAS loop, not an actor.** Swift's counters are `actor`s read
+with `await`. The assertions are made from a non-suspending accessor after the
+work is done, so `AtomicReference<List<String>>` with a compare-and-set append
+is the equivalent — the same choice `InMemorySecretsStore` made in Phase 5.
+
+**`SecurityDetailViewModel.select` now records its job.** The two Alpaca view-
+model suites switch ranges and immediately assert what the chart holds; Swift
+slept 400–600 ms between each. `select` assigns its spawned fetch to a
+`selectJob` that `awaitLoad()` joins alongside `loadJob`, so the suites are
+exact rather than timing-dependent. Eleven tests that took about six seconds of
+sleeping in Swift now run in well under one.
+
+**Swift's `lastRegularClose` helper hung off a test stub; here it is a
+top-level function** in `IntradayBoundaryTest.kt`, shared by the three
+intraday stubs that need it. It answers "the most recent 15:55 in New York",
+which is what lets the chart suites run outside market hours — most of the
+time.
+
+**475 tests across both targets against Swift's 416.** The surplus is the nine
+provider-level tests logged in Phase 6 plus the split of Swift's larger suites
+into separate Kotlin classes; no Swift case was dropped. `ProviderDecodingTests`
+went over as the per-provider decoding tests, `PersistenceTests` as
+`SnapshotStoreTest` + `SchemaTest`, and `SyntheticDataTests` as
+`SyntheticRowEvictionTest`.
+
+**Eleven tests beyond the Swift suites.** Swift had 13 cases across
+`Keychain error reporting`, `Key fingerprints` and `Secrets store`; all 13 are
+ported. The additions pin things the Kotlin port newly made possible to get
+wrong: the storage account names (renaming a `SecretKey` case would orphan a
+credential the user already entered), the round trip through `fromRaw`, that
+every key has help text, that a trailing newline in a paste does not inflate
+the fingerprint length, and that `SecretsError.message` carries the
+explanation rather than a code.
+
+**Nine tests beyond the Swift suites**, each pinning something the Kotlin port
+newly made possible to get wrong: that Alpaca's `adjustment=split` is actually
+requested (the "no adjusted series is claimed" assertion is false without it),
+that the next-page token is followed, that both Alpaca halves stay out of the
+URL, that FRED omits the date window when not asked for one, that Finnhub's
+date strings are dropped from the metric map, that the SEC User-Agent falls
+back to the app name, that a Finnhub failure which is not a miss does not
+quietly switch vendors, that sample filings carry the evictable accession
+prefix, and that no mock answers to a real vendor's identity.
+
+
+## Open issues
+
+**Two Gradle deprecation warnings**, both waiting on upstream plugin releases —
+see [Build and toolchain](#build-and-toolchain). Nothing else is open: the iOS
+Keychain `-50` that blocked credential entry is fixed, and the cause is written
+up under [Secrets](#secrets) because it is a trap worth not re-entering.
+
+
+## Deliberately absent
+
 **`expect fun appPaths()` and Compose string resources: both dropped.**
 `PLAN.md §9` lists them; neither is worth doing as written, and the owner
 agreed. The per-platform `openLibraDatabase` already puts the file where each
@@ -808,20 +787,27 @@ payoff is localisation, which `PLAN.md §8` rules out for the port ("English
 only, don't localise during the port"). Both are cheap to add later if a second
 language is ever wanted.
 
-**Open: the iOS Keychain returns -50 in the signed app.**
-`KeychainSecretsStore.diagnose()` reports "Secure storage unavailable — Keychain
-error -50" (`errSecParam`), so Settings shows the warning banner and no
-credential can be entered on iOS. It fails at the **write**: `diagnose()`
-returns on the first failed step and that step is `SecItemAdd`, so the suspects
-are what that call carries and the delete and read do not — the `NSData` built
-by `String.toNSData()`, and the `kSecAttrAccessible` /
-`kSecAttrAccessibleAfterFirstUnlock` pair. Ruled out: the CF-constant bridging
-alone (`CFBridgingRelease(CFRetain(x))` does yield the right `NSString`,
-`kSecClass` → `"class"`, and changing it did not clear the error), and the
-choice between a Kotlin `Map` and an `NSMutableDictionary` (both are accepted).
-A `core/src/iosTest` suite cannot verify any of this: the test bundle has no
-host app and so no entitlements, and every Keychain call in it fails with
-`-25291` (`errSecNotAvailable`) before anything else is evaluated — it would
-pass whether the bug is present or not. That is the limit `SelfTest`'s own
-comment describes and the reason `SelfTest` exists: verifying secure storage
-means running the signed app with `-LibraSelfTest` and reading its log.
+The cleanup pass after Phase 9's first attempt deleted every declaration that
+had **zero** references outside itself, in every source set including tests:
+`LenientLongSerializer`, `LenientStringSerializer`, `IsoInstantSerializer` and
+`DayInstantSerializer` plus the two `asDoubleOrNull` extensions (see
+[Providers](#providers)); `UnportedScreen`, which Phase 8 left nothing to stand
+in for; `periodicReportForms`, since `FilingSignificance` makes the same
+distinction from the form type directly; `FinancialFactDao.forConcept`, never
+wired because callers read through `all` and filter in Kotlin;
+`RecordingMacroProvider` and `CallLog.barSymbolsRequested`;
+`MockHttp.Router.stubAll` and the `fallback` reply it set, since no test ever
+registered a catch-all and the 404 naming the missing stub is the more useful
+failure; and 39 unused imports.
+
+Three things look dead and are **kept** — do not re-flag them:
+
+- `WatchlistRecord.addedAt` and `SecurityRecord.profileUpdatedAt` are unread,
+  but they are Room columns. Dropping them is a schema migration, not a cleanup.
+- `AnalystEstimateDTO.analystCount` is never set or read. It is part of a DTO
+  shape mirroring the Swift model, and Finnhub's estimate endpoints are a tier
+  gap the app reports rather than calls.
+- `OSStatusCode.DUPLICATE_ITEM` (`-25299`) is in the constant table but
+  `SecretsError.explain` has no case for it. That is a gap in `explain` rather
+  than redundancy — `SecItemAdd` is precisely the call that returns it — and it
+  is left in place for the open Keychain work above.

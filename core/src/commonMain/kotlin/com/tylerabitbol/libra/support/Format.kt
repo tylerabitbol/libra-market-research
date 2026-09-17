@@ -174,6 +174,17 @@ object Format {
         return "${monthAbbreviations[parts.month.ordinal]} ${parts.day}"
     }
 
+    /**
+     * "Sep 2025" — a month without a day, for an axis whose range is long
+     * enough that the day is noise and the year is not. Swift gets this shape
+     * from Charts' automatic axis labels, which have no Kotlin equivalent.
+     */
+    fun monthAndYear(date: Instant?, zone: TimeZone = TimeZone.currentSystemDefault()): String {
+        if (date == null) return notAvailable
+        val parts = date.toLocalDateTime(zone)
+        return "${monthAbbreviations[parts.month.ordinal]} ${parts.year}"
+    }
+
     // MARK: - The arithmetic
 
     /**
