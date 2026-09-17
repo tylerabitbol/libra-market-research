@@ -80,7 +80,91 @@ Remaining, in order:
 `appPaths()` would be an abstraction over one call site, and extracting every
 English string into a resource bundle is churn that `PLAN.md §8`'s "English
 only, don't localise during the port" rules out the benefit of. Make the call
-and write it down either way.
+and write it down either way. **Decided: drop both.** The reasoning above
+stands and the owner agreed; `KNOWN_ISSUES.md` should carry the entry when the
+rest of the phase lands.
+
+### What a first attempt at items 1, 2 and 4 established
+
+An attempt at the Android shell, the icon and the manual pass was made and its
+code was **thrown away** — it drifted into debugging the environment rather
+than the port, and the tree was reset to this commit. The findings are kept
+because they are the expensive part; none of the code below exists.
+
+**Compose on iOS aborts at launch without a plist key.** This is the first
+thing to fix on the next attempt, before anything else is judged. Compose's
+`PlistSanityCheck` throws unless `Info.plist` carries
+`CADisableMinimumFrameDurationOnPhone = true`; the process dies with `SIGABRT`
+on a blank white screen, and *nothing* is written to the device log — the only
+evidence is the `.ips` crash report in `~/Library/Logs/DiagnosticReports`, whose
+top Kotlin frame names `PlistSanityCheck`. The key exists for ProMotion: a
+Compose app without it is capped to 60Hz on a 120Hz phone. `project.yml` cannot
+express it through `GENERATE_INFOPLIST_FILE` + `INFOPLIST_KEY_*`, which only
+understand a fixed set of keys and silently drop the rest; XcodeGen's `info:`
+block writes a real plist and does. Moving to `info:` means restating the four
+`INFOPLIST_KEY_*` settings the target has today, or they are lost.
+
+**The app runs, and Phase 8's screens are real.** Once past that abort, and
+against sample data with no keys: all five tabs render, both mandatory banners
+appear, symbol search finds AAPL (after a debounce — do not judge it on the
+first frame), adding it persists through Room and survives navigation, the
+security page renders, and **the 1D intraday chart draws** — the exact path
+`TickItemPlacer` was written for. That is the strongest evidence so far that
+Phase 8 is sound.
+
+**Unresolved: the iOS Keychain returns -50.** `KeychainSecretsStore.diagnose()`
+reports "Secure storage unavailable — Keychain error -50" in the real signed
+app, so Settings shows the warning banner and **no credential can be entered on
+iOS at all**. This blocks the owner's half of `PLAN.md §7`, and it is the
+highest-value thing left in the phase. What is already ruled out:
+
+- It is not the CF-constant bridging, or not only that. The `kSec…` constants
+  are `CFStringRef` pointers rather than Kotlin objects, and bridging them with
+  `CFBridgingRelease(CFRetain(x))` does yield the right `NSString` —
+  `kSecClass` becomes `"class"` — but making that change did not clear the -50.
+- It is not the choice between a Kotlin `Map` and an `NSMutableDictionary`.
+  Both are accepted; neither returns a parameter error where the comparison can
+  be made.
+- `diagnose()` fails at the **write**, not the read: it returns on the first
+  failed step, and that step is `SecItemAdd`. The next thing to look at is
+  therefore what that call carries and the delete/read do not — the `NSData`
+  value built by `String.toNSData()`, and the
+  `kSecAttrAccessible`/`kSecAttrAccessibleAfterFirstUnlock` pair.
+
+**A `core/src/iosTest` suite cannot verify the Keychain.** This is worth knowing
+before writing one, which the attempt did before discovering it. The test bundle
+has no host app and so no entitlements, and **every** Keychain call in it fails
+with `-25291` (`errSecNotAvailable`) before anything else is evaluated. A test
+there cannot reach the app's `-50`, cannot distinguish a malformed query from an
+unavailable keychain, and will pass whether the bug is present or not. This is
+the same limit `SelfTest`'s own comment describes, and it is why `SelfTest`
+exists: verifying secure storage means running the signed app, via
+`-LibraSelfTest`, and reading its log.
+
+**Run the simulator with its window open.** `open -a Simulator` fails — the app
+lives inside Xcode, at `"$(xcode-select -p)/Applications/Simulator.app"`. A
+device booted headlessly by `simctl` still runs and still screenshots, but it
+does not drive the display link, so Compose produces frames only when poked:
+screens come back blank, transitions freeze half-drawn, and a screenshot can
+show the previous frame. The attempt lost most of its time reading those
+artefacts as app bugs. Boot the device, open that Simulator.app, confirm a
+window is on screen, and only then believe a screenshot.
+
+**There is no Android emulator on this machine.** No `emulator` binary, no
+system images and no AVDs under `~/Library/Android/sdk` or `~/.android/avd`;
+only `build-tools`, `platform-tools`, `platforms` and `cmdline-tools` are
+installed. `:androidApp:assembleDebug` builds clean, but the Android shell has
+never been run. Running it means `sdkmanager` downloading a system image into
+the owner's SDK — ask first.
+
+**The icon needs an adaptive icon on Android.** The 1024 source is line art that
+runs to all four edges of its square, so a round or squircle launcher mask clips
+the top-right loop and the base stroke. A plain square mipmap is not enough: the
+foreground has to be inset into the 66% safe zone over a background layer.
+`sips -z` to resample and `sips -p … --padColor FFFFFF` to pad produces a
+correct foreground with no other tooling, and the artwork sits on white anyway.
+`minSdk` is 26, so `mipmap-anydpi-v26` covers every supported version and the
+legacy square PNGs are only a fallback.
 
 Phases 7 and 8 are done: `AppEnvironment`, all six view models (`Dashboard`,
 `BenchmarkDetail`, `Watchlist` + `SymbolSearch`, `SecurityDetail`, `Research`,
