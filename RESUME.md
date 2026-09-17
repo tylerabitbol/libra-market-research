@@ -1,8 +1,9 @@
 # Where the port stands
 
-**Last checkpoint: Phase 8 complete; Phase 9 started — the iOS shell is wired.**
+**Last checkpoint: Phase 9's code is complete on both shells; only the owner's
+manual pass is left.**
 Phases 0–7 complete: 475 `:core` tests green on both JVM and the iOS
-simulator. Phase 8 so far: theme, navigation, the component set, and the Settings,
+simulator. Phase 8: theme, navigation, the component set, and the Settings,
 SecretEntry, Watchlist, Dashboard, BenchmarkDetail, Research, Screener and
 SecurityDetail screens, all compiling on both `iosSimulatorArm64` and `android`, with
 16 `:app:iosSimulatorArm64Test` tests green — `BannerTest`, `ProvenanceTest` and
@@ -46,125 +47,64 @@ listed again below so it is not lost.
 
 ## Next: finish Phase 9
 
-Phase 9 so far: `core/.../app/AppLaunch.kt` holds the launch sequence both
-shells share (self-test, key seeding, watchlist seeding, visit backdating,
-attaching the database), and `app/src/iosMain/.../MainViewController.kt` uses it
-— `KeychainSecretsStore`, `UserDefaultsPreferenceStore`, `openLibraDatabase()`,
-`UIApplication.openURL` for `LocalUrlOpener`, argv and the process environment
-for `LaunchEnvironment`, and `-LibraOpenSymbol` opening a security page. `App()`
-now takes `openSymbol` and `openUrl`, and the `Scaffold` takes
-`WindowInsets.safeDrawing` so the first row of a screen clears the status bar
-and the notch.
+Phase 9 is wired on both platforms. `core/.../app/AppLaunch.kt` holds the launch
+sequence both shells share (self-test, key seeding, watchlist seeding, visit
+backdating, attaching the database); `app/src/iosMain/.../MainViewController.kt`
+and `androidApp/.../LibraApplication.kt` supply only what is per-platform —
+where the launch arguments come from, which secrets store to build, which
+database file to open, and how a link is opened. `App()` takes `openSymbol` and
+`openUrl`, and the `Scaffold` takes `WindowInsets.safeDrawing`. Both shells now
+carry the launcher icon, and `README.md` covers building, testing and running
+both. Every deviation is in `KNOWN_ISSUES.md` under "Phase 9".
 
-Remaining, in order:
+Verified on the iPhone 17 Pro simulator: the app launches, and
+`-LibraSelfTest` logs **`keychain=PASS round-trip succeeded`** — secure storage
+works, so credentials can be entered on iOS.
 
-1. **The Android shell.** An `Application` subclass building `AppLaunch` and
-   `AppEnvironment` once for the process, `MainActivity` reading them, the real
-   `KeystoreSecretsStore` and `SharedPreferencesStore`, `openLibraDatabase(context)`,
-   an `Intent(ACTION_VIEW)` for `LocalUrlOpener`, and `BuildConfig.DEBUG` for
-   `LaunchEnvironment.isDebugBuild` (which needs `buildFeatures { buildConfig = true }`).
-   Decide where Android's launch *arguments* come from — iOS has argv and
-   Android has none, so the intent's extras are the obvious stand-in; log
-   whatever you choose in `KNOWN_ISSUES.md`.
-2. **The app icon.** One 1024×1024 PNG at
-   `../Libra/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png`. It
-   needs an `iosApp` asset catalog (`project.yml` has none yet) and Android
-   mipmaps; `sips -z` resamples it without another tool.
-3. **`README.md` for this branch** — how to build both, how to run the tests,
-   the `JAVA_HOME` export, and that `:app` UI tests run on `iosSimulatorArm64`.
-4. **A manual pass on both platforms**, per `PLAN.md §7`.
+Remaining:
 
-`PLAN.md §9` also lists "Compose resources for strings" and an
-`expect fun appPaths()`. Neither looks worth doing as written: the per-platform
-`openLibraDatabase` already puts the file where each platform wants it, so
-`appPaths()` would be an abstraction over one call site, and extracting every
-English string into a resource bundle is churn that `PLAN.md §8`'s "English
-only, don't localise during the port" rules out the benefit of. Make the call
-and write it down either way. **Decided: drop both.** The reasoning above
-stands and the owner agreed; `KNOWN_ISSUES.md` should carry the entry when the
-rest of the phase lands.
+1. **The manual pass on both platforms**, per `PLAN.md §7`. This is the last
+   item in the phase and it is the owner's: it needs real API keys, which are
+   entered in Settings → Data Sources and never handled here.
+   - iOS is ready to run now. `README.md` has the exact commands; the short
+     version is `cd iosApp && xcodegen generate`, then open `Libra.xcodeproj`
+     and press Run.
+   - Android **has never been run.** It builds and installs, but there is no
+     emulator on this machine — no `emulator` binary, no system images, no AVDs
+     under `~/Library/Android/sdk` or `~/.android/avd`; only `build-tools`,
+     `platform-tools`, `platforms` and `cmdline-tools`. Running it means either
+     a physical device over `adb`, or `sdkmanager` downloading a system image
+     into the owner's SDK — **ask before downloading one.**
 
-### What a first attempt at items 1, 2 and 4 established
+### What the iOS run established
 
-An attempt at the Android shell, the icon and the manual pass was made and its
-code was **thrown away** — it drifted into debugging the environment rather
-than the port, and the tree was reset to this commit. The findings are kept
-because they are the expensive part; none of the code below exists.
-
-**Compose on iOS aborts at launch without a plist key.** This is the first
-thing to fix on the next attempt, before anything else is judged. Compose's
-`PlistSanityCheck` throws unless `Info.plist` carries
-`CADisableMinimumFrameDurationOnPhone = true`; the process dies with `SIGABRT`
-on a blank white screen, and *nothing* is written to the device log — the only
-evidence is the `.ips` crash report in `~/Library/Logs/DiagnosticReports`, whose
-top Kotlin frame names `PlistSanityCheck`. The key exists for ProMotion: a
-Compose app without it is capped to 60Hz on a 120Hz phone. `project.yml` cannot
-express it through `GENERATE_INFOPLIST_FILE` + `INFOPLIST_KEY_*`, which only
-understand a fixed set of keys and silently drop the rest; XcodeGen's `info:`
-block writes a real plist and does. Moving to `info:` means restating the four
-`INFOPLIST_KEY_*` settings the target has today, or they are lost.
-
-**The app runs, and Phase 8's screens are real.** Once past that abort, and
-against sample data with no keys: all five tabs render, both mandatory banners
-appear, symbol search finds AAPL (after a debounce — do not judge it on the
-first frame), adding it persists through Room and survives navigation, the
-security page renders, and **the 1D intraday chart draws** — the exact path
-`TickItemPlacer` was written for. That is the strongest evidence so far that
-Phase 8 is sound.
-
-**Unresolved: the iOS Keychain returns -50.** `KeychainSecretsStore.diagnose()`
-reports "Secure storage unavailable — Keychain error -50" in the real signed
-app, so Settings shows the warning banner and **no credential can be entered on
-iOS at all**. This blocks the owner's half of `PLAN.md §7`, and it is the
-highest-value thing left in the phase. What is already ruled out:
-
-- It is not the CF-constant bridging, or not only that. The `kSec…` constants
-  are `CFStringRef` pointers rather than Kotlin objects, and bridging them with
-  `CFBridgingRelease(CFRetain(x))` does yield the right `NSString` —
-  `kSecClass` becomes `"class"` — but making that change did not clear the -50.
-- It is not the choice between a Kotlin `Map` and an `NSMutableDictionary`.
-  Both are accepted; neither returns a parameter error where the comparison can
-  be made.
-- `diagnose()` fails at the **write**, not the read: it returns on the first
-  failed step, and that step is `SecItemAdd`. The next thing to look at is
-  therefore what that call carries and the delete/read do not — the `NSData`
-  value built by `String.toNSData()`, and the
-  `kSecAttrAccessible`/`kSecAttrAccessibleAfterFirstUnlock` pair.
-
-**A `core/src/iosTest` suite cannot verify the Keychain.** This is worth knowing
-before writing one, which the attempt did before discovering it. The test bundle
-has no host app and so no entitlements, and **every** Keychain call in it fails
-with `-25291` (`errSecNotAvailable`) before anything else is evaluated. A test
-there cannot reach the app's `-50`, cannot distinguish a malformed query from an
-unavailable keychain, and will pass whether the bug is present or not. This is
-the same limit `SelfTest`'s own comment describes, and it is why `SelfTest`
-exists: verifying secure storage means running the signed app, via
-`-LibraSelfTest`, and reading its log.
-
-**Run the simulator with its window open.** `open -a Simulator` fails — the app
-lives inside Xcode, at `"$(xcode-select -p)/Applications/Simulator.app"`. A
-device booted headlessly by `simctl` still runs and still screenshots, but it
-does not drive the display link, so Compose produces frames only when poked:
-screens come back blank, transitions freeze half-drawn, and a screenshot can
-show the previous frame. The attempt lost most of its time reading those
-artefacts as app bugs. Boot the device, open that Simulator.app, confirm a
-window is on screen, and only then believe a screenshot.
-
-**There is no Android emulator on this machine.** No `emulator` binary, no
-system images and no AVDs under `~/Library/Android/sdk` or `~/.android/avd`;
-only `build-tools`, `platform-tools`, `platforms` and `cmdline-tools` are
-installed. `:androidApp:assembleDebug` builds clean, but the Android shell has
-never been run. Running it means `sdkmanager` downloading a system image into
-the owner's SDK — ask first.
-
-**The icon needs an adaptive icon on Android.** The 1024 source is line art that
-runs to all four edges of its square, so a round or squircle launcher mask clips
-the top-right loop and the base stroke. A plain square mipmap is not enough: the
-foreground has to be inset into the 66% safe zone over a background layer.
-`sips -z` to resample and `sips -p … --padColor FFFFFF` to pad produces a
-correct foreground with no other tooling, and the artwork sits on white anyway.
-`minSdk` is 26, so `mipmap-anydpi-v26` covers every supported version and the
-legacy square PNGs are only a fallback.
+- **Compose on iOS aborts at launch without a plist key**, and this is now
+  fixed in `project.yml`. Worth knowing if it ever recurs: Compose's
+  `PlistSanityCheck` throws unless `Info.plist` carries
+  `CADisableMinimumFrameDurationOnPhone`, the process dies with `SIGABRT` on a
+  blank white screen, and *nothing* is written to the device log — the only
+  evidence is the `.ips` crash report in `~/Library/Logs/DiagnosticReports`.
+- **The Keychain -50 is fixed**, and the cause was not where it looked. The
+  `kSec…` names are `CFStringRef` *pointers*, so bridging a Kotlin `Map`
+  containing them produced a dictionary whose keys the Security framework did
+  not recognise, and *every* call failed with `errSecParam`; only `SecItemAdd`
+  reported it, because the read and the delete treat any non-success as "not
+  there". `withCFDictionary` now builds a real `CFMutableDictionary` and no
+  bridging happens at all. A `core/src/iosTest` suite still cannot verify this —
+  the test bundle has no host app and so no entitlements, and every Keychain
+  call in one fails with `-25291` first — which is exactly why `SelfTest` exists:
+  run the signed app with `-LibraSelfTest` and read the log.
+- **Phase 8's screens are real.** All five tabs render, both mandatory banners
+  appear, symbol search finds AAPL (after a debounce — do not judge it on the
+  first frame), adding it persists through Room and survives navigation, and the
+  1D intraday chart draws, which is the exact path `TickItemPlacer` was written
+  for.
+- **Run the simulator with its window open.** A device booted headlessly by
+  `simctl` still runs and still screenshots, but it does not drive the display
+  link, so Compose produces frames only when poked and a screenshot can show a
+  stale frame. Note that `open -a Simulator` fails, and on this machine's Xcode
+  27 there is no `Simulator.app` under `Contents/Developer/Applications` either —
+  launching the simulator UI means opening the project in Xcode and pressing Run.
 
 Phases 7 and 8 are done: `AppEnvironment`, all six view models (`Dashboard`,
 `BenchmarkDetail`, `Watchlist` + `SymbolSearch`, `SecurityDetail`, `Research`,

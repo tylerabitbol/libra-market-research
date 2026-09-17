@@ -24,15 +24,37 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: Resources
+    # A real Info.plist, written by XcodeGen, rather than the one Xcode
+    # synthesises from `GENERATE_INFOPLIST_FILE`. Compose's `PlistSanityCheck`
+    # aborts the process at launch — SIGABRT on a blank screen, nothing in the
+    # device log, the crash report the only evidence — unless
+    # `CADisableMinimumFrameDurationOnPhone` is set, and the synthesised plist
+    # understands only a fixed set of `INFOPLIST_KEY_*` settings and silently
+    # drops everything else. The key is a ProMotion one: without it a Compose
+    # app is capped to 60Hz on a 120Hz phone.
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Libra
+        CADisableMinimumFrameDurationOnPhone: true
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.tylerabitbol.libra
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Libra
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         FRAMEWORK_SEARCH_PATHS:
           - $(inherited)
           - $(SRCROOT)/../app/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)

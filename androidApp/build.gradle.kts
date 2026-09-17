@@ -18,6 +18,9 @@ android {
 
     buildFeatures {
         compose = true
+        // `LibraApplication` reads `BuildConfig.DEBUG` to gate every developer
+        // option; AGP 9 does not generate the class unless asked.
+        buildConfig = true
     }
 
     buildTypes {
@@ -30,4 +33,5 @@ android {
 dependencies {
     implementation(project(":app"))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.kermit)
 }

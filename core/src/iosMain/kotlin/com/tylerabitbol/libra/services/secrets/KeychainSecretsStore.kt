@@ -2,17 +2,24 @@ package com.tylerabitbol.libra.services.secrets
 
 import kotlinx.cinterop.BetaInteropApi
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.COpaquePointer
+import kotlinx.cinterop.CPointer
 import kotlinx.cinterop.alloc
+import kotlinx.cinterop.convert
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.addressOf
-import kotlinx.cinterop.reinterpret
 import kotlinx.cinterop.usePinned
 import kotlinx.cinterop.value
+import platform.CoreFoundation.CFDictionaryCreateMutable
 import platform.CoreFoundation.CFDictionaryRef
+import platform.CoreFoundation.CFDictionarySetValue
 import platform.CoreFoundation.CFRelease
+import platform.CoreFoundation.CFStringRef
 import platform.CoreFoundation.CFTypeRefVar
 import platform.CoreFoundation.kCFBooleanTrue
+import platform.CoreFoundation.kCFTypeDictionaryKeyCallBacks
+import platform.CoreFoundation.kCFTypeDictionaryValueCallBacks
 import platform.Foundation.CFBridgingRelease
 import platform.Foundation.CFBridgingRetain
 import platform.Foundation.NSData
@@ -43,8 +50,16 @@ import platform.Security.kSecValueData
  *
  * Swift's `query as CFDictionary` was an ARC-managed bridge. Kotlin/Native has
  * no such bridge, so every dictionary here is built through [withCFDictionary],
- * which retains for the duration of the call and releases afterwards. Doing it
- * inline would leak one dictionary per keychain access.
+ * which creates a real `CFMutableDictionary`, fills it, and releases it after
+ * the call. Doing it inline would leak one dictionary per keychain access.
+ *
+ * It is built that way rather than by bridging a Kotlin `Map` because the
+ * `kSec…` names are `CFStringRef` *pointers*, not objects: bridging a map that
+ * contains them produces a dictionary whose keys are opaque Kotlin wrappers,
+ * which the Security framework does not recognise, and every call fails with
+ * `errSecParam` (-50). Only `SecItemAdd` reported it — the read and the delete
+ * treat any non-success as "not there" — which is why it looked like a problem
+ * with the write.
  */
 @OptIn(ExperimentalForeignApi::class, BetaInteropApi::class)
 class KeychainSecretsStore(
@@ -52,7 +67,7 @@ class KeychainSecretsStore(
 ) : SecretsStore {
 
     override fun value(key: SecretKey): String? = memScoped {
-        val query = baseQuery(key.raw) + mapOf<Any?, Any?>(
+        val query = baseQuery(key.raw) + listOf(
             kSecReturnData to kCFBooleanTrue,
             kSecMatchLimit to kSecMatchLimitOne,
         )
@@ -75,13 +90,13 @@ class KeychainSecretsStore(
 
         val data = value.toNSData()
         val updateStatus = withCFDictionary(query) { q ->
-            withCFDictionary(mapOf<Any?, Any?>(kSecValueData to data)) { SecItemUpdate(q, it) }
+            withCFDictionary(listOf(kSecValueData to data)) { SecItemUpdate(q, it) }
         }
 
         when (updateStatus) {
             OSStatusCode.SUCCESS -> return
             OSStatusCode.ITEM_NOT_FOUND -> {
-                val insert = query + mapOf<Any?, Any?>(
+                val insert = query + listOf(
                     kSecValueData to data,
                     kSecAttrAccessible to kSecAttrAccessibleAfterFirstUnlock,
                 )
@@ -106,7 +121,7 @@ class KeychainSecretsStore(
         // Clear any residue from an interrupted earlier check.
         withCFDictionary(baseQuery(account)) { SecItemDelete(it) }
 
-        val insert = baseQuery(account) + mapOf<Any?, Any?>(
+        val insert = baseQuery(account) + listOf(
             kSecValueData to probe.toNSData(),
             kSecAttrAccessible to kSecAttrAccessibleAfterFirstUnlock,
         )
@@ -116,7 +131,7 @@ class KeychainSecretsStore(
         }
 
         try {
-            val read = baseQuery(account) + mapOf<Any?, Any?>(
+            val read = baseQuery(account) + listOf(
                 kSecReturnData to kCFBooleanTrue,
                 kSecMatchLimit to kSecMatchLimitOne,
             )
@@ -138,18 +153,45 @@ class KeychainSecretsStore(
         }
     }
 
-    private fun baseQuery(account: String): Map<Any?, Any?> = mapOf(
+    /** An entry of a keychain query: a `kSec…` key, and a CF or Kotlin value. */
+    private fun baseQuery(account: String): List<Pair<CFStringRef?, Any?>> = listOf(
         kSecClass to kSecClassGenericPassword,
         kSecAttrService to service,
         kSecAttrAccount to account,
     )
 
-    private inline fun <R> withCFDictionary(map: Map<Any?, Any?>, block: (CFDictionaryRef?) -> R): R {
-        val retained = CFBridgingRetain(map)
+    /**
+     * Builds a `CFMutableDictionary`, runs [block] against it, and releases it.
+     *
+     * A value that is already a CF pointer — every `kSec…` constant — is stored
+     * as it is. Anything else is a Kotlin object (a `String`, the `NSData` of a
+     * secret) and is bridged, which retains it; the dictionary's own `kCFType`
+     * callbacks retain it again, so the bridge's reference is given back here.
+     */
+    private fun <R> withCFDictionary(
+        entries: List<Pair<CFStringRef?, Any?>>,
+        block: (CFDictionaryRef?) -> R,
+    ): R {
+        val bridged = mutableListOf<COpaquePointer>()
+        val dictionary = CFDictionaryCreateMutable(
+            null,
+            entries.size.convert(),
+            kCFTypeDictionaryKeyCallBacks.ptr,
+            kCFTypeDictionaryValueCallBacks.ptr,
+        )
         try {
-            return block(retained?.reinterpret())
+            for ((key, value) in entries) {
+                val cfValue: COpaquePointer? = when (value) {
+                    null -> null
+                    is CPointer<*> -> value
+                    else -> CFBridgingRetain(value)?.also { bridged += it }
+                }
+                CFDictionarySetValue(dictionary, key, cfValue)
+            }
+            return block(dictionary)
         } finally {
-            if (retained != null) CFRelease(retained)
+            bridged.forEach { CFRelease(it) }
+            if (dictionary != null) CFRelease(dictionary)
         }
     }
 

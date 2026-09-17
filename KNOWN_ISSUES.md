@@ -737,6 +737,8 @@ are total now as well, so a position the placer did not choose can never yield a
 empty string. Nothing caught this before the UI test because the crash needs the
 chart to actually measure itself.
 
+## Phase 9 — Platform shells, assets, release hygiene
+
 **Launch wiring lives in `:core`, not in each shell.** Swift splits it between
 `LibraApp.init` (self-test, key seeding) and `RootView.task` (watchlist seed,
 visit backdating, attaching the container). Two Compose shells would each carry
@@ -752,3 +754,74 @@ says argv on iOS and `BuildConfig` on Android. Kotlin/Native already knows
 whether it is a debug binary, so the iOS shell reads that instead of threading a
 constant through the Xcode configuration to say the same thing. Android still
 uses `BuildConfig.DEBUG`, which is the same fact by the same name.
+
+**Android's launch arguments come from the intent's extras.** iOS reads argv,
+which exists before any UI does; an Android process has no argv at all. The
+nearest equivalent is the extras on the intent that started the app, so
+`LibraApplication.start(intent)` turns an extra named `LibraSomething` into the
+argument pair `-LibraSomething <value>` and an extra named `LIBRA_…` into an
+entry of the stand-in environment. The dash is added in code rather than typed
+into the key because `am`'s own parser takes a leading `-` for a flag of its
+own. Two consequences worth knowing: the shell is built by the *first*
+activity rather than in `Application.onCreate`, because the intent is not
+available before then — `start` is idempotent, so the first launch wins exactly
+as argv does — and `System.getenv()` is not used, since nothing can set a
+variable on an app process the way `SIMCTL_CHILD_` can on a simulator launch.
+Seeding still requires `LibraSeedKeys` as well as the values, so a leftover
+extra cannot quietly overwrite a key entered in Settings.
+
+**Compose on iOS aborts at launch unless `Info.plist` carries
+`CADisableMinimumFrameDurationOnPhone`.** Compose's `PlistSanityCheck` throws
+without it: the process dies with `SIGABRT` on a blank white screen, *nothing*
+is written to the device log, and the only evidence is the `.ips` crash report
+in `~/Library/Logs/DiagnosticReports`, whose top Kotlin frame names the check.
+The key is a ProMotion one — a Compose app without it is capped to 60Hz on a
+120Hz phone. `GENERATE_INFOPLIST_FILE` cannot express it: the synthesised plist
+understands a fixed set of `INFOPLIST_KEY_*` settings and silently drops the
+rest. So `iosApp/project.yml` now uses XcodeGen's `info:` block, which writes a
+real plist, and restates there the four settings the target used to carry —
+they are lost otherwise. This is a divergence from `../project.yml`, which
+`PLAN.md §0` said to mirror; the Swift app is SwiftUI and never needed the key.
+The generated `iosApp/Info.plist` is gitignored, like the generated project.
+
+**The Android launcher icon is adaptive; the iOS one is the Swift app's
+unchanged.** `../Libra/Resources/Assets.xcassets` is copied verbatim into
+`iosApp/Resources`, so iOS uses the same single 1024×1024 image the Swift app
+does. Android cannot: the artwork is line art that runs to all four edges of
+its square, and a round or squircle launcher mask clips the top-right loop and
+the base stroke. `mipmap-anydpi-v26/ic_launcher.xml` therefore composes a
+foreground inset to 60% of the adaptive canvas — inside the 66% safe zone —
+over a white background layer, which is the colour the artwork already sits on.
+`sips -z` resamples and `sips -p … --padColor FFFFFF` insets, so no tooling
+beyond the OS is needed. `minSdk` is 26, so the adaptive icon covers every
+supported version and the square `ic_launcher.png` fallbacks are only for a
+launcher that ignores `anydpi-v26`.
+
+**`expect fun appPaths()` and Compose string resources: both dropped.**
+`PLAN.md §9` lists them; neither is worth doing as written, and the owner
+agreed. The per-platform `openLibraDatabase` already puts the file where each
+platform wants it — `NSDocumentDirectory` on iOS, `getDatabasePath` on Android
+— so `appPaths()` would be an abstraction over one call site, and the secrets
+stores have no path at all (Keychain and AndroidKeyStore are not files).
+Extracting every English string into a resource bundle is churn whose only
+payoff is localisation, which `PLAN.md §8` rules out for the port ("English
+only, don't localise during the port"). Both are cheap to add later if a second
+language is ever wanted.
+
+**Open: the iOS Keychain returns -50 in the signed app.**
+`KeychainSecretsStore.diagnose()` reports "Secure storage unavailable — Keychain
+error -50" (`errSecParam`), so Settings shows the warning banner and no
+credential can be entered on iOS. It fails at the **write**: `diagnose()`
+returns on the first failed step and that step is `SecItemAdd`, so the suspects
+are what that call carries and the delete and read do not — the `NSData` built
+by `String.toNSData()`, and the `kSecAttrAccessible` /
+`kSecAttrAccessibleAfterFirstUnlock` pair. Ruled out: the CF-constant bridging
+alone (`CFBridgingRelease(CFRetain(x))` does yield the right `NSString`,
+`kSecClass` → `"class"`, and changing it did not clear the error), and the
+choice between a Kotlin `Map` and an `NSMutableDictionary` (both are accepted).
+A `core/src/iosTest` suite cannot verify any of this: the test bundle has no
+host app and so no entitlements, and every Keychain call in it fails with
+`-25291` (`errSecNotAvailable`) before anything else is evaluated — it would
+pass whether the bug is present or not. That is the limit `SelfTest`'s own
+comment describes and the reason `SelfTest` exists: verifying secure storage
+means running the signed app with `-LibraSelfTest` and reading its log.
