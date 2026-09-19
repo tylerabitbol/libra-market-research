@@ -2,6 +2,7 @@ package com.tylerabitbol.libra.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,12 +20,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -129,6 +131,29 @@ fun FreshnessLabel(
             RelativeTimeText.status(freshness),
             style = style,
             color = if (isProblem) LibraTheme.colors.caution else LibraTheme.colors.tertiaryText,
+        )
+    }
+}
+
+/**
+ * [FreshnessLabel] pinned over a page that scrolls under it.
+ *
+ * SwiftUI floats it on `.regularMaterial`, which separates it from whatever it
+ * covers. Compose has no material, and on a flat `surfaceVariant` the pill was
+ * the same tone as the cards beneath it — the label read as text spilled across
+ * the content behind it. So it takes an opaque surface and a shadow instead.
+ */
+@Composable
+fun PinnedFreshnessLabel(freshness: Freshness, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 3.dp,
+    ) {
+        FreshnessLabel(
+            freshness,
+            Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
         )
     }
 }

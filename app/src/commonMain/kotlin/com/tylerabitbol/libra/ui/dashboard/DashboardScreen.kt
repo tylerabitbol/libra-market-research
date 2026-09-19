@@ -10,12 +10,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +36,7 @@ import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.ui.components.DirectionalChangeText
 import com.tylerabitbol.libra.ui.components.DisclaimerBanner
-import com.tylerabitbol.libra.ui.components.FreshnessLabel
+import com.tylerabitbol.libra.ui.components.PinnedFreshnessLabel
 import com.tylerabitbol.libra.ui.components.SampleDataBanner
 import com.tylerabitbol.libra.viewmodels.BenchmarkPerformance
 import com.tylerabitbol.libra.viewmodels.DashboardUiState
@@ -112,14 +110,11 @@ fun DashboardScreen(
             }
         }
 
-        FreshnessLabel(
+        PinnedFreshnessLabel(
             state.overallFreshness,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = LibraSpacing.small)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = LibraSpacing.medium, vertical = 6.dp),
+                .padding(bottom = LibraSpacing.small),
         )
     }
 }

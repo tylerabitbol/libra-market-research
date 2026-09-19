@@ -94,9 +94,14 @@ Settings with no secure-storage warning. `-LibraSelfTest` logs
 
 ### What running it established
 
-Three traps, all fixed, all written up in full in `KNOWN_ISSUES.md` — so only
+Four traps, all fixed, all written up in full in `KNOWN_ISSUES.md` — so only
 the one-line version is here:
 
+- **The pinned "Updated just now" pill was invisible against the cards it
+  floats over**, so it read as a line of text lying across a filing card and
+  across the range selector. Swift gets separation from `.regularMaterial`;
+  Compose has no material, so the pill now takes an opaque surface and a
+  shadow ("UI"). Like the charts, this is a defect no test can see.
 - **Compose on iOS aborts at launch without `CADisableMinimumFrameDurationOnPhone`
   in `Info.plist`**, with a `SIGABRT` on a blank screen and nothing in the
   device log ("Platform shells").

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -64,7 +63,7 @@ import com.tylerabitbol.libra.ui.components.ClaimRow
 import com.tylerabitbol.libra.ui.components.DirectionalChangeText
 import com.tylerabitbol.libra.ui.components.EventCard
 import com.tylerabitbol.libra.ui.components.FilingAnalysisCard
-import com.tylerabitbol.libra.ui.components.FreshnessLabel
+import com.tylerabitbol.libra.ui.components.PinnedFreshnessLabel
 import com.tylerabitbol.libra.ui.components.MetricCell
 import com.tylerabitbol.libra.ui.components.PriceChart
 import com.tylerabitbol.libra.ui.components.ResearchProfileCard
@@ -137,14 +136,11 @@ fun SecurityDetailScreen(
 
         // Pinned rather than scrolled away: how old the page is qualifies
         // every figure on it, so it must not be something you scroll past.
-        FreshnessLabel(
+        PinnedFreshnessLabel(
             freshness = state.freshness,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 6.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(bottom = 6.dp),
         )
     }
 }

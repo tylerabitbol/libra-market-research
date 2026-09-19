@@ -453,6 +453,16 @@ removes the workaround Swift needed — it anchors x labels trailing so the last
 one does not overflow the y-axis gutter — because a positional axis cannot
 overflow it.
 
+**The pinned freshness pill needs a shadow, because Compose has no material.**
+The Dashboard and the security page both float "Updated just now" over the
+scrolling content, the way Swift does with `.background(.regularMaterial, in:
+.capsule)`. Ported as a `surfaceVariant` fill, the pill came out the same tone
+as the cards passing under it, so on a real screen it read as a stray line of
+text laid across a filing card and then across the range selector — a bug you
+cannot see in a test, only by looking. `PinnedFreshnessLabel` in
+`ui/components/DataCells.kt` is the fix: an opaque `surface` capsule with a
+3 dp shadow, which is the nearest Compose gets to a material.
+
 **SF Symbols has no multiplatform counterpart.** Three consequences. The five
 tab glyphs are drawn as `ImageVector`s in `ui/Icons.kt`, because a bottom bar
 without icons is not a tab bar. The decorative glyphs that lead a card header —
