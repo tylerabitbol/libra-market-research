@@ -328,6 +328,23 @@ them against a move to `composeResources`; that move was later dropped outright
 stay.
 
 
+**The seed path carries Alpaca's key pair, which the Swift original did not.**
+`DeveloperOptions.mapping` in Swift covers four secrets — Finnhub, Tiingo, FRED
+and the SEC contact email — and leaves Alpaca's `keyID`/`secret` pair to be
+typed into Settings. The Kotlin port matched that until the manual pass, when
+entering anything through Settings on iOS turned out to be impossible on this
+machine: there is no `Simulator.app` to type into (see
+[Platform shells](#platform-shells)). `LIBRA_ALPACA_KEY_ID` and
+`LIBRA_ALPACA_SECRET` were added so the pair can be seeded like the rest.
+
+This is a deviation from `PLAN.md §0.5` ("no new features"), taken knowingly and
+on the owner's instruction. It is debug-only — `DeveloperOptions` gates every
+argument on `isDebugBuild`, so a release build ignores the variables — and it
+adds no capability the other four secrets did not already have. If the Swift app
+is ever the reference again, this is the one row of `mapping` that has no
+counterpart there.
+
+
 ## Providers
 
 **One lenient serializer per shape, in `networking/serializers/`.** Swift's
@@ -669,6 +686,39 @@ over a white background layer, which is the colour the artwork already sits on.
 beyond the OS is needed. `minSdk` is 26, so the adaptive icon covers every
 supported version and the square `ic_launcher.png` fallbacks are only for a
 launcher that ignores `anydpi-v26`.
+
+
+**This Xcode 27 install ships no `Simulator.app`, and the capture path is
+frozen because of it.** Confirmed four ways: `Xcode.app/Contents/Developer/
+Applications` does not exist at all, there is no `/Applications/Simulator.app`,
+the LaunchServices database knows of no such bundle, and `open -a Simulator`
+answers "Unable to find application named 'Simulator'". A device booted with
+`simctl boot` therefore has no window, nothing drives its display link, and
+every capture returns the same stale frame — two `simctl io … screenshot` runs
+two seconds apart produce byte-identical PNGs whose status-bar clock is minutes
+behind. The device is rendering: the simulator panel in the Claude desktop app
+shows it live and takes taps. Only the capture is stale.
+
+`xcrun simctl pbcopy` and `simctl pbsync host` fail the same way, with
+`NSPOSIXErrorDomain code=60` (timed out), so the host pasteboard cannot be
+bridged into the device either. Together those two facts are why the keys were
+seeded from the environment rather than typed into Settings — see
+[Secrets](#secrets).
+
+The practical consequence for anyone verifying this port: **judge iOS from the
+device log, not from a screenshot.** `-LibraSelfTest` prints real values
+(`finnhub=PASS Live quote received (AAPL $338.98)`), and
+`xcrun simctl spawn <udid> log show --info --debug --predicate 'process ==
+"Libra"'` is the instrument. A screenshot may be showing you several minutes ago.
+
+**The iOS 26.5 runtime on this machine is broken; iOS 27.0 is clean.** Booting
+`iPhone 17 Pro` (26.5) — the device `RESUME.md` recorded as verified — failed
+once outright with `EINVAL`, and once booted, launching the app crashed the
+system shell (`FBSOpenApplicationServiceErrorDomain code=5`, "The system shell
+probably crashed"), taking SpringBoard and MobileCal with it. Nothing in the app
+is implicated: the same binary launches, self-tests and runs on
+**iPhone 18 Pro, iOS 27.0**, which is where the manual pass was done. Use a
+27.0 device. If 26.5 has to be used, expect to reinstall the runtime first.
 
 
 ## Testing

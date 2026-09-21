@@ -188,6 +188,12 @@ class DeveloperOptions(private val launch: LaunchEnvironment = LaunchEnvironment
             SecretKey.TiingoAPIKey to "LIBRA_TIINGO_KEY",
             SecretKey.FredAPIKey to "LIBRA_FRED_KEY",
             SecretKey.SecContactEmail to "LIBRA_SEC_EMAIL",
+            // Alpaca authenticates with a pair, so both halves seed separately.
+            // The Swift original seeds only the four above; this pair was added
+            // here because a simulator with no usable window is the only way to
+            // reach Settings on this machine. See KNOWN_ISSUES.md, "Secrets".
+            SecretKey.AlpacaKeyID to "LIBRA_ALPACA_KEY_ID",
+            SecretKey.AlpacaSecretKey to "LIBRA_ALPACA_SECRET",
         )
 
         private val watchlistSeeds = listOf(
