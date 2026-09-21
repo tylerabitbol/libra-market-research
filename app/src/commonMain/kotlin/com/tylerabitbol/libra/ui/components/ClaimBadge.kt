@@ -29,7 +29,6 @@ import com.tylerabitbol.libra.models.provenance.Claim
 import com.tylerabitbol.libra.models.provenance.ClaimKind
 import com.tylerabitbol.libra.models.provenance.Derivation
 import com.tylerabitbol.libra.models.provenance.SourceReference
-import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 

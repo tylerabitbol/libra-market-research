@@ -78,16 +78,12 @@ object MockHttp {
     class Router {
         val recorder = Recorder()
         private val routes = mutableListOf<Pair<String, Reply>>()
-        private var fallback: Reply? = null
 
         /** Registers [reply] for any request whose path ends with [path]. */
         fun stub(path: String, reply: Reply): Router = apply { routes.add(path to reply) }
 
         fun stub(path: String, body: String, status: HttpStatusCode = HttpStatusCode.OK): Router =
             stub(path, Reply(status = status, body = body))
-
-        /** Answers anything unmatched, instead of failing the test. */
-        fun stubAll(reply: Reply): Router = apply { fallback = reply }
 
         val requests: List<HttpRequestData> get() = recorder.requests
 
@@ -98,7 +94,6 @@ object MockHttp {
             recorder.requests.add(request)
             val encodedPath = request.url.encodedPath
             val reply = routes.firstOrNull { encodedPath.endsWith(it.first) }?.second
-                ?: fallback
                 ?: Reply(
                     status = HttpStatusCode.NotFound,
                     body = "No stub registered for $encodedPath",

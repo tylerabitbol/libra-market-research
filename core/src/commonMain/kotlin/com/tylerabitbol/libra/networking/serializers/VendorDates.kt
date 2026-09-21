@@ -3,16 +3,6 @@ package com.tylerabitbol.libra.networking.serializers
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.KSerializer
-import kotlinx.serialization.descriptors.PrimitiveKind
-import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import kotlinx.serialization.descriptors.SerialDescriptor
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.JsonDecoder
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlin.time.Instant
 
 /**
@@ -60,39 +50,5 @@ object VendorDate {
     fun epochSeconds(value: Long?): Instant? {
         if (value == null || value <= 0L) return null
         return Instant.fromEpochSeconds(value)
-    }
-}
-
-/** ISO-8601 with or without fractional seconds; null when unparseable. */
-object IsoInstantSerializer : KSerializer<Instant?> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("IsoInstant", PrimitiveKind.STRING)
-
-    override fun deserialize(decoder: Decoder): Instant? {
-        val input = decoder as? JsonDecoder ?: return VendorDate.instant(decoder.decodeString())
-        val primitive = input.decodeJsonElement() as? JsonPrimitive ?: return null
-        return VendorDate.instant(primitive.contentOrNull)
-    }
-
-    @OptIn(ExperimentalSerializationApi::class)
-    override fun serialize(encoder: Encoder, value: Instant?) {
-        if (value == null) encoder.encodeNull() else encoder.encodeString(value.toString())
-    }
-}
-
-/** A bare `yyyy-MM-dd`, read as midnight UTC. */
-object DayInstantSerializer : KSerializer<Instant?> {
-    override val descriptor: SerialDescriptor =
-        PrimitiveSerialDescriptor("DayInstant", PrimitiveKind.STRING)
-
-    override fun deserialize(decoder: Decoder): Instant? {
-        val input = decoder as? JsonDecoder ?: return VendorDate.day(decoder.decodeString())
-        val primitive = input.decodeJsonElement() as? JsonPrimitive ?: return null
-        return VendorDate.day(primitive.contentOrNull)
-    }
-
-    @OptIn(ExperimentalSerializationApi::class)
-    override fun serialize(encoder: Encoder, value: Instant?) {
-        if (value == null) encoder.encodeNull() else encoder.encodeString(value.toString())
     }
 }

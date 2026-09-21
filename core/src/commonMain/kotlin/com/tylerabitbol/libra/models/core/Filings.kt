@@ -57,6 +57,3 @@ enum class InsiderTransactionNature(val raw: String) {
         }
     }
 }
-
-/** Form types the app treats as periodic reports. */
-internal val periodicReportForms = setOf("10-K", "10-Q", "20-F", "40-F")

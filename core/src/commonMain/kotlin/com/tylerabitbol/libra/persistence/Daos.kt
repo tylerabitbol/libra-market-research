@@ -154,12 +154,6 @@ interface FinancialFactDao {
     @Query("SELECT * FROM financial_facts WHERE symbol = :symbol")
     suspend fun all(symbol: String): List<FinancialFactRecord>
 
-    @Query(
-        "SELECT * FROM financial_facts WHERE symbol = :symbol AND concept = :concept " +
-            "ORDER BY periodEnd"
-    )
-    suspend fun forConcept(symbol: String, concept: String): List<FinancialFactRecord>
-
     @Query("SELECT MAX(observedAt) FROM financial_facts WHERE symbol = :symbol")
     suspend fun latestObservedAt(symbol: String): Instant?
 

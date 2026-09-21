@@ -11,7 +11,6 @@ import com.tylerabitbol.libra.services.providers.FinancialFactDTO
 import com.tylerabitbol.libra.services.providers.FundamentalsProvider
 import com.tylerabitbol.libra.services.providers.InsiderTransactionDTO
 import com.tylerabitbol.libra.services.providers.MacroDataProvider
-import com.tylerabitbol.libra.services.providers.MacroObservationDTO
 import com.tylerabitbol.libra.services.providers.MarketDataProvider
 import com.tylerabitbol.libra.services.providers.PriceBarDTO
 import com.tylerabitbol.libra.services.providers.ProviderRegistry
@@ -38,7 +37,6 @@ class CallLog {
     val symbols: List<String> get() = quoteSymbols.load()
     val quotes: Int get() = quoteSymbols.load().size
     val bars: Int get() = barSymbols.load().size
-    val barSymbolsRequested: List<String> get() = barSymbols.load()
 
     fun recordQuote(symbol: String) = append(quoteSymbols, symbol)
     fun recordBars(symbol: String) = append(barSymbols, symbol)
@@ -121,32 +119,6 @@ class StubSECProvider : SECDataProvider {
         cik: String,
         since: Instant?,
     ): List<InsiderTransactionDTO> = emptyList()
-}
-
-/** Counts macro series requests, which the dashboard's budget depends on. */
-@OptIn(ExperimentalAtomicApi::class)
-class RecordingMacroProvider(
-    private val series: (String) -> List<MacroObservationDTO> = { emptyList() },
-) : MacroDataProvider {
-    override val id: DataProviderID = DataProviderID.FRED
-    private val requested = AtomicReference<List<String>>(emptyList())
-
-    val seriesRequested: List<String> get() = requested.load()
-    val count: Int get() = requested.load().size
-
-    override suspend fun isConfigured(): Boolean = true
-
-    override suspend fun observations(
-        seriesID: String,
-        from: Instant?,
-        to: Instant?,
-    ): List<MacroObservationDTO> {
-        while (true) {
-            val current = requested.load()
-            if (requested.compareAndSet(current, current + seriesID)) break
-        }
-        return series(seriesID)
-    }
 }
 
 fun stubRegistry(

@@ -8,7 +8,6 @@ import androidx.compose.ui.Modifier
 import com.tylerabitbol.libra.app.AppEnvironment
 import com.tylerabitbol.libra.ui.settings.collectAsStateValue
 import com.tylerabitbol.libra.viewmodels.ResearchViewModel
-import kotlinx.coroutines.launch
 
 /** Binds the research feed to its view model. */
 @Composable
