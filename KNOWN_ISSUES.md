@@ -79,7 +79,9 @@ from our scripts. Separately, the `compose.runtime` / `compose.foundation` /
 `compose.material3` accessors in `app/build.gradle.kts` are deprecated in favour
 of explicit coordinates — but `org.jetbrains.compose.material3:material3` has
 published no stable 1.12.0, only `1.12.0-alpha03`, so naming them explicitly
-would mean choosing an alpha over what the plugin resolves. The plugin knows the
+would mean choosing an alpha over what the plugin resolves. Re-checked against
+`maven-metadata.xml` on 2026-09-21: the 1.12.0 line still ends at alpha03 and
+the newest of any kind is `1.13.0-alpha01`. The plugin knows the
 right mapping. Both warnings are cosmetic and stay until the plugins update.
 (The `androidLibrary { }` → `android { }` rename that accompanied them is
 done.)
