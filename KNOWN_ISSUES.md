@@ -331,17 +331,20 @@ stay.
 **The seed path carries Alpaca's key pair, which the Swift original did not.**
 `DeveloperOptions.mapping` in Swift covers four secrets — Finnhub, Tiingo, FRED
 and the SEC contact email — and leaves Alpaca's `keyID`/`secret` pair to be
-typed into Settings. The Kotlin port matched that until the manual pass, when
-entering anything through Settings on iOS turned out to be impossible on this
-machine: there is no `Simulator.app` to type into (see
-[Platform shells](#platform-shells)). `LIBRA_ALPACA_KEY_ID` and
-`LIBRA_ALPACA_SECRET` were added so the pair can be seeded like the rest.
+typed into Settings. `LIBRA_ALPACA_KEY_ID` and `LIBRA_ALPACA_SECRET` were added
+during the manual pass so the pair could be seeded like the rest.
 
-This is a deviation from `PLAN.md §0.5` ("no new features"), taken knowingly and
-on the owner's instruction. It is debug-only — `DeveloperOptions` gates every
-argument on `isDebugBuild`, so a release build ignores the variables — and it
-adds no capability the other four secrets did not already have. If the Swift app
-is ever the reference again, this is the one row of `mapping` that has no
+The justification recorded here at the time was that Settings was unreachable on
+this machine. **That was wrong** — Settings was reachable throughout; see the
+retraction under [Platform shells](#platform-shells). The rows are kept because
+seeding all six from one place is genuinely easier than typing two 40-character
+halves into a simulator, not because anything forced it.
+
+So: a deviation from `PLAN.md §0.5` ("no new features"), on the owner's
+instruction and for convenience. It is debug-only — `DeveloperOptions` gates
+every argument on `isDebugBuild`, so a release build ignores the variables — and
+it adds no capability the other four secrets did not already have. If the Swift
+app is ever the reference again, these are the two rows of `mapping` with no
 counterpart there.
 
 
@@ -688,28 +691,44 @@ supported version and the square `ic_launcher.png` fallbacks are only for a
 launcher that ignores `anydpi-v26`.
 
 
-**This Xcode 27 install ships no `Simulator.app`, and the capture path is
-frozen because of it.** Confirmed four ways: `Xcode.app/Contents/Developer/
-Applications` does not exist at all, there is no `/Applications/Simulator.app`,
-the LaunchServices database knows of no such bundle, and `open -a Simulator`
-answers "Unable to find application named 'Simulator'". A device booted with
-`simctl boot` therefore has no window, nothing drives its display link, and
-every capture returns the same stale frame — two `simctl io … screenshot` runs
-two seconds apart produce byte-identical PNGs whose status-bar clock is minutes
-behind. The device is rendering: the simulator panel in the Claude desktop app
-shows it live and takes taps. Only the capture is stale.
+**Xcode 27 replaced `Simulator.app` with `DeviceHub.app`, and moved the
+developer apps.** They are no longer under
+`Xcode.app/Contents/Developer/Applications/` — that directory does not exist in
+Xcode 27 — but under `Xcode.app/Contents/Applications/`, alongside Instruments,
+Accessibility Inspector, Create ML, FileMerge and Icon Composer.
+`SimulatorKit.framework` moved to `Contents/SharedFrameworks/`. `open -a
+Simulator` fails and always will; the window you want is:
 
-`xcrun simctl pbcopy` and `simctl pbsync host` fail the same way, with
-`NSPOSIXErrorDomain code=60` (timed out), so the host pasteboard cannot be
-bridged into the device either. Together those two facts are why the keys were
-seeded from the environment rather than typed into Settings — see
-[Secrets](#secrets).
+```sh
+open "/Applications/Xcode.app/Contents/Applications/DeviceHub.app"
+```
 
-The practical consequence for anyone verifying this port: **judge iOS from the
-device log, not from a screenshot.** `-LibraSelfTest` prints real values
-(`finnhub=PASS Live quote received (AAPL $338.98)`), and
-`xcrun simctl spawn <udid> log show --info --debug --predicate 'process ==
-"Libra"'` is the instrument. A screenshot may be showing you several minutes ago.
+The Xcode 26 path is still what most tooling and most instructions reach for, so
+expect anything that looks for `Contents/Developer/Applications/Simulator.app`
+to report the install as broken. It is not.
+
+**Do not infer a frozen display from two identical screenshots.** A headless
+booted device renders perfectly well — `simctl io <udid> enumerate` shows the
+framebuffer port On with a live 1206×2622 BGRA IOSurface, and `recordVideo`
+produces valid H.264. What misleads is that Compose does not redraw a static
+screen and the simulator's status-bar clock is fixed, so an idle screen really
+does hash identically twice, and it looks exactly like a dead display link.
+Prove the path is live by changing something first:
+
+```sh
+xcrun simctl io <udid> screenshot /tmp/a.png
+xcrun simctl ui <udid> appearance dark && sleep 1
+xcrun simctl io <udid> screenshot /tmp/b.png
+md5 -q /tmp/a.png /tmp/b.png     # differing hashes = live; set appearance back
+```
+
+This cost one session an hour and produced a wrong entry in this file, which is
+why the method is written down rather than the conclusion.
+
+**`simctl pbcopy` / `pbsync` time out while the device is still coming up.**
+`NSPOSIXErrorDomain code=60` from either one means the pasteboard service is not
+up yet, not that the bridge is unavailable. It starts working on its own; once
+up, `pbsync host <udid>` returns in well under a second.
 
 **The iOS 26.5 runtime on this machine is broken; iOS 27.0 is clean.** Booting
 `iPhone 17 Pro` (26.5) — the device `RESUME.md` recorded as verified — failed
