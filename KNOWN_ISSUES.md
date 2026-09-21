@@ -456,6 +456,16 @@ Swift wraps the `DETECT …` line in `#if DEBUG`; Kotlin has no equivalent, so
 the sink drops it in release instead of the compiler.
 
 
+**`-LibraOpenSymbol` opens the security page before fundamentals have
+hydrated.** The deep link goes straight to the page, so "What changed" renders
+from whatever the database holds at that instant — on a cold start that is
+nothing, and the section reads "Nothing unusual in this window." Reaching the
+same security through the Watchlist shows "2 changes since …" from the same
+live data. Nothing is wrong with the detection; the launch argument simply
+arrives first. This looked like a cross-platform disagreement on the
+2026-09-21 pass, because iOS had been through Research and Android had not.
+
+
 ## UI
 
 **Vico draws both charts; the Canvas fallback was not needed.** `PLAN.md §8`
@@ -859,14 +869,6 @@ API 36, and on no physical device. API 26 is the manifest floor and the build
 asserts it, but nobody has watched the app run there. iOS ran on 27.0 rather
 than the 26 the plan names, because the 26.5 runtime here is broken — see
 [Platform shells](#platform-shells).
-
-**"What changed" disagreed across platforms once, and it was not chased down.**
-On the 2026-09-21 pass the security page showed "2 changes" for AAPL on iOS and
-"Nothing unusual in this window." on Android, against the same live data. The
-likely cause is hydration order — the Android page was reached by
-`-LibraOpenSymbol` deep link without the Research screen having fetched
-fundamentals first — but that was not proven. Check it before trusting an empty
-"What changed" on a freshly opened security.
 
 
 ## Deliberately absent
