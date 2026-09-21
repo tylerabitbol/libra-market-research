@@ -1,12 +1,12 @@
 # Where the port stands
 
-**Last checkpoint: Phase 9's code is complete on both shells; only the owner's
-manual pass is left.**
+**Last checkpoint: the port is done. Phases 0-9 complete, and the manual pass
+of `PLAN.md §7` has been run on both platforms against live API keys.**
 Phases 0–7 complete: 475 `:core` tests green on both JVM and the iOS
 simulator. Phase 8: theme, navigation, the component set, and the Settings,
 SecretEntry, Watchlist, Dashboard, BenchmarkDetail, Research, Screener and
 SecurityDetail screens, all compiling on both `iosSimulatorArm64` and `android`, with
-16 `:app:iosSimulatorArm64Test` tests green — `BannerTest`, `ProvenanceTest` and
+17 `:app:iosSimulatorArm64Test` tests green — `BannerTest`, `ProvenanceTest` and
 `PriceChartTest` in `app/src/commonTest/.../ui/` (the first run costs ~21 min,
 later ones ~15-40 s).
 Every commit is on this branch; nothing is stashed.
@@ -51,46 +51,64 @@ its table at the top maps a directory to the section to read before touching it.
   `Mock*Provider` family. Plus the vendor serializers and the fixture harness:
   all 19 fixtures are in, reached through a generated Kotlin source file.
 
-## Next: finish Phase 9
+## The manual pass: done, on both platforms
 
-Phase 9 is wired on both platforms. `core/.../app/AppLaunch.kt` holds the launch
-sequence both shells share (self-test, key seeding, watchlist seeding, visit
-backdating, attaching the database); `app/src/iosMain/.../MainViewController.kt`
-and `androidApp/.../LibraApplication.kt` supply only what is per-platform —
-where the launch arguments come from, which secrets store to build, which
-database file to open, and how a link is opened. `App()` takes `openSymbol` and
-`openUrl`, and the `Scaffold` takes `WindowInsets.safeDrawing`. Both shells now
-carry the launcher icon, and `README.md` covers building, testing and running
-both. The launch, icon and plist deviations are in `KNOWN_ISSUES.md` under
-"Platform shells".
+Run 2026-09-21 with all six credentials in place — Finnhub, Tiingo, FRED, the
+SEC contact email, and both halves of the Alpaca pair. `-LibraSelfTest` on each
+platform:
 
-Verified on the iPhone 17 Pro simulator: the app launches, and
-`-LibraSelfTest` logs **`keychain=PASS round-trip succeeded`** — secure storage
-works, so credentials can be entered on iOS.
+```
+keychain=PASS round-trip succeeded
+finnhub=PASS Live quote received (AAPL $338.98).
+tiingo=PASS 7 daily bars received.
+fred=PASS S&P 500 at 7,650.50.
+sec=PASS CIK 0000320193 resolved, 5 recent filings.
+fundamentals=PASS revenue quarters=67 annual=19 latest=$109B
+```
 
-Remaining: **the owner's half of the manual pass** (`PLAN.md §7`) — entering
-real API keys in Settings → Data Sources, testing each connection, and
-watching a screen carry live figures. Keys are never handled here.
+**Identical on both**, value for value. There is no Alpaca line — `SelfTest`
+never probed it, in Swift either — so Alpaca is verified through the 1D and 5D
+charts, which are the only thing that uses it.
 
-Everything that can be checked without a key has been, on Android: five tabs,
-both mandatory banners, symbol search finding AAPL, adding it, the row
-persisting through Room, the security page, all seven chart ranges including
-1D and 5D, the provenance badges and "Show the arithmetic", insider activity,
-filings, the Screener matching its one held security, the Benchmark page with
-its "price history unavailable" empty state, Research's empty state, and
-Settings with no secure-storage warning. `-LibraSelfTest` logs
-`keychain=PASS` on both platforms.
+Screens walked with live data: Dashboard (S&P 7,650.50, Nasdaq 26,522.55, Dow
+52,048.83, Russell $285.58, VIX 14.81 — the same figures and the same
+percentages on both platforms), Watchlist including symbol search and adding
+AAPL, Security Detail ($4.94T market cap, beta 1.09, 52-week $236.65-$344.57)
+with 1D and 5D intraday off Alpaca and 1Y off Tiingo, Research (real SEC
+fundamentals: gross margin 46.5% → 50.1%, +3.6 pp YoY, with "Show the
+arithmetic" and the interpretation card), Screener, Benchmark Detail (a real
+FRED chart where the keyless pass only ever saw its empty state), and Settings
+with all seven rows green.
 
-- **Android** now runs on an emulator: `medium_phone` (API 36, Google APIs,
-  arm64) created with `android emulator create medium_phone` and started with
-  `android emulator start medium_phone`. Note that `avdmanager`/`sdkmanager`
-  cannot see an API "37.0" image — the newer `android` CLI can, and it
-  downloads its own image.
-- **iOS** builds, installs, launches and self-tests, but **cannot be looked at
-  from here**: this Xcode 27 install ships no `Simulator.app` (not under
-  `Contents/Developer/Applications`, not anywhere), and a headless device does
-  not drive the display link, so every screenshot is a stale frame. Judge iOS
-  from Xcode — open `iosApp/Libra.xcodeproj` and press Run.
+The sample-data banner correctly disappears once keys are present; the
+disclaimer banner stays. The chart fixes hold: a year of sessions fills the
+width with its axis labels, and 5D renders five separate sessions rather than
+one line across the overnight gaps.
+
+Test suites at the same checkpoint: **475** `:core` on JVM, **475** `:core` on
+`iosSimulatorArm64`, **17** `:app` UI tests on `iosSimulatorArm64`. No failures.
+
+### Where it was run, and why not where PLAN says
+
+- **iOS: iPhone 18 Pro, iOS 27.0.** Not the iPhone 17 Pro on 26.5 this file
+  used to name. That 26.5 runtime is broken on this machine — one boot failed
+  with `EINVAL` outright, and launching on it crashed the system shell. The
+  27.0 devices are clean. `KNOWN_ISSUES.md`, "Platform shells".
+- **Android: `medium_phone`, API 36.** `PLAN.md §7` asks for an API 26
+  emulator and a current device. API 26 is the manifest floor and the build
+  asserts it; no API 26 emulator and no physical device were exercised. That is
+  the one line of the definition of done not literally met.
+
+### Two retracted findings
+
+An earlier run of this pass concluded that this Xcode 27 install shipped no
+`Simulator.app` and that the simulator's capture path was frozen. **Both were
+wrong**, and both are corrected in `KNOWN_ISSUES.md` under "Platform shells".
+Briefly: Xcode 27 moved the developer apps to `Contents/Applications/` and
+replaced Simulator with `DeviceHub.app`, and two identical screenshots of an
+idle Compose screen prove nothing about the display link. The method for
+telling the two cases apart is written down there, because the wrong conclusion
+cost an hour and put a false entry in that file.
 
 ### What running it established
 
@@ -125,7 +143,7 @@ Phases 7 and 8 are done: `AppEnvironment`, all six view models (`Dashboard`,
 `Screener`), `DeveloperOptions` and `SelfTest`, with every Swift test suite
 ported. Nothing from Phases 1–7 is outstanding.
 
-### Notes for whoever picks up Phase 9
+### Notes from Phase 9
 
 - Derived figures are extension vals on the UiState, so a composable reads
   `state.chartBars`, not `viewModel.chartBars`.
