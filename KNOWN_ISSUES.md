@@ -853,6 +853,22 @@ Keychain `-50` that blocked credential entry is fixed, and the cause is written
 up under [Secrets](#secrets) because it is a trap worth not re-entering.
 
 
+**`PLAN.md §7` is not met literally on two counts.** It asks for Android on an
+API 26 emulator *and* a current device; the manual pass ran on `medium_phone`,
+API 36, and on no physical device. API 26 is the manifest floor and the build
+asserts it, but nobody has watched the app run there. iOS ran on 27.0 rather
+than the 26 the plan names, because the 26.5 runtime here is broken — see
+[Platform shells](#platform-shells).
+
+**"What changed" disagreed across platforms once, and it was not chased down.**
+On the 2026-09-21 pass the security page showed "2 changes" for AAPL on iOS and
+"Nothing unusual in this window." on Android, against the same live data. The
+likely cause is hydration order — the Android page was reached by
+`-LibraOpenSymbol` deep link without the Research screen having fetched
+fundamentals first — but that was not proven. Check it before trusting an empty
+"What changed" on a freshly opened security.
+
+
 ## Deliberately absent
 
 **`expect fun appPaths()` and Compose string resources: both dropped.**
