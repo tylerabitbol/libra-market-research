@@ -45,13 +45,18 @@ arithmetic shown — then the eleven-dimension research profile with what suppor
 what challenges the picture, the Form 4 filings and the debt change, the screener
 matching 3 of 3, and finally the data sources with their connection tests.
 
-Silent screen recording; click to play.
+Silent screen recording. Click to play on Google Drive — GitHub will not play a video
+stored in a repository, only one hosted on its own CDN.
 
 <p align="center">
-  <a href="docs/libra-demo.mp4">
+  <a href="https://drive.google.com/file/d/1XYU_KElbAK32CVJYuvQknwWoU9zg_LDK/view?usp=sharing">
     <img src="docs/libra-demo-poster.jpg" width="300"
          alt="Play a 90-second walkthrough of Libra on NVDA: dashboard, security detail, change filters, market attribution, research profile, filings, screener and data sources">
   </a>
+</p>
+
+<p align="center">
+  <sub>The same recording is in the repository at <code>docs/libra-demo.mp4</code> if you would rather have it offline.</sub>
 </p>
 
 ## What problem it solves
