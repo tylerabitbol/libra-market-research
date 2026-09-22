@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.calculations.FilingAnalysis
@@ -65,10 +64,7 @@ fun FilingAnalysisCard(analysis: FilingAnalysis.Result, modifier: Modifier = Mod
             )
             Text(
                 "PRIMARY SOURCE",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                ),
+                style = LibraType.codeSmallEmphasis,
                 color = LibraTheme.colors.secondaryText,
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))

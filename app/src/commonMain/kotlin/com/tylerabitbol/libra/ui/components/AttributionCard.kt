@@ -16,7 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.calculations.MoveAttribution
@@ -58,10 +57,7 @@ fun AttributionCard(attribution: MoveAttribution, modifier: Modifier = Modifier)
             )
             Text(
                 attribution.leaning.displayName,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                ),
+                style = LibraType.codeSmallEmphasis,
                 color = LibraTheme.colors.secondaryText,
                 modifier = Modifier
                     .clip(RoundedCornerShape(4.dp))

@@ -22,7 +22,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.models.provenance.Claim
@@ -39,10 +38,7 @@ fun ClaimBadge(kind: ClaimKind, modifier: Modifier = Modifier) {
     val tint = kind.tint()
     Text(
         kind.label,
-        style = MaterialTheme.typography.labelSmall.copy(
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-        ),
+        style = LibraType.codeSmallEmphasis,
         color = tint,
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))

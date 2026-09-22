@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -35,6 +34,7 @@ import com.tylerabitbol.libra.services.providers.FilingDTO
 import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
+import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.ui.components.ClaimRow
 import com.tylerabitbol.libra.ui.components.LocalUrlOpener
 import com.tylerabitbol.libra.viewmodels.SecurityDetailUiState
@@ -104,16 +104,11 @@ private fun ValuationRow(metric: ValuationMetric, context: HistoricalContext, as
             )
             Text(
                 metric.format(context.current),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium,
-                ),
+                style = LibraType.figureEmphasis,
             )
             Text(
                 if (rankable) "${Format.ordinal(context.percentile)} pctile" else "not meaningful",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                ),
+                style = LibraType.figureSmall,
                 color = if (rankable) {
                     LibraTheme.colors.secondaryText
                 } else {
@@ -184,7 +179,7 @@ private fun DetailRow(label: String, value: String) {
         )
         Text(
             value,
-            style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+            style = LibraType.figureSmall,
         )
     }
 }
@@ -225,9 +220,7 @@ internal fun FundamentalsSection(state: SecurityDetailUiState) {
             Text("Fundamentals", style = MaterialTheme.typography.titleMedium)
             Text(
                 "SEC XBRL",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                ),
+                style = LibraType.codeSmallEmphasis,
                 color = LibraTheme.colors.tertiaryText,
             )
         }
@@ -259,23 +252,17 @@ internal fun FundamentalsSection(state: SecurityDetailUiState) {
                     ) {
                         Text(
                             entry.periodLabel,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                            ),
+                            style = LibraType.codeSmall,
                             color = LibraTheme.colors.secondaryText,
                             modifier = Modifier.weight(1f),
                         )
                         Text(
                             Format.compactCurrency(entry.fact.value),
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                            ),
+                            style = LibraType.figureEmphasis,
                         )
                         Text(
                             Format.signedPercent(entry.growth, precision = 1),
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontFamily = FontFamily.Monospace,
-                            ),
+                            style = LibraType.figureSmall,
                             // A neutral tone when growth is unknown — an absent
                             // figure must never read as flat.
                             color = when {
@@ -305,16 +292,12 @@ internal fun FundamentalsSection(state: SecurityDetailUiState) {
                         ) {
                             Text(
                                 Format.shortDate(entry.period),
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                ),
+                                style = LibraType.codeSmall,
                                 color = LibraTheme.colors.secondaryText,
                             )
                             Text(
                                 Format.compactCurrency(entry.value),
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontFamily = FontFamily.Monospace,
-                                ),
+                                style = LibraType.figureEmphasis,
                             )
                         }
                     }
@@ -375,10 +358,7 @@ private fun InsiderCount(label: String, count: Int, value: Double?) {
         )
         Text(
             "$count",
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-            ),
+            style = LibraType.figureTitle,
         )
         Text(
             value?.let { "~${Format.compactCurrency(it)}" } ?: Format.notAvailable,
@@ -392,10 +372,7 @@ private fun InsiderCount(label: String, count: Int, value: Double?) {
 private fun PrimarySourceTag() {
     Text(
         "PRIMARY SOURCE",
-        style = MaterialTheme.typography.labelSmall.copy(
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-        ),
+        style = LibraType.codeSmallEmphasis,
         color = LibraTheme.colors.secondaryText,
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))
@@ -416,9 +393,7 @@ internal fun FilingsSection(state: SecurityDetailUiState) {
             Text("Recent filings", style = MaterialTheme.typography.titleMedium)
             Text(
                 "PRIMARY SOURCE",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                ),
+                style = LibraType.codeSmallEmphasis,
                 color = LibraTheme.colors.tertiaryText,
             )
         }
@@ -454,10 +429,7 @@ private fun FilingRow(filing: FilingDTO) {
     ) {
         Text(
             filing.formType,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Medium,
-            ),
+            style = LibraType.codeSmall.copy(fontWeight = FontWeight.Medium),
             modifier = Modifier.width(46.dp),
         )
         Column(

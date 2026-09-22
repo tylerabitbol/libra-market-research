@@ -18,7 +18,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.models.core.DetectedEventDTO
@@ -89,10 +88,7 @@ private fun EventHeader(event: DetectedEventDTO, symbol: String?, isNew: Boolean
         if (symbol != null) {
             Text(
                 symbol,
-                style = MaterialTheme.typography.bodySmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                ),
+                style = LibraType.tickerSmall,
             )
         }
         Text(
@@ -125,10 +121,7 @@ private fun EventHeader(event: DetectedEventDTO, symbol: String?, isNew: Boolean
 private fun Tag(text: String, tint: Color, accessibilityLabel: String? = null) {
     Text(
         text,
-        style = MaterialTheme.typography.labelSmall.copy(
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-        ),
+        style = LibraType.codeSmallEmphasis,
         color = tint,
         modifier = Modifier
             .clip(RoundedCornerShape(4.dp))

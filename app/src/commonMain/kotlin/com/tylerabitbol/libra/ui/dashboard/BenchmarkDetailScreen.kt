@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -92,7 +91,7 @@ private fun Header(state: BenchmarkDetailUiState) {
     ) {
         Text(
             state.sourceLabel,
-            style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            style = LibraType.code,
             color = LibraTheme.colors.tertiaryText,
         )
         Row(
@@ -101,10 +100,7 @@ private fun Header(state: BenchmarkDetailUiState) {
         ) {
             Text(
                 state.formattedLevel,
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium,
-                ),
+                style = LibraType.figureLarge,
             )
             state.rangeReturn?.let { DirectionalChangeText(it.percent) }
         }

@@ -24,7 +24,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.models.core.Benchmark
@@ -202,9 +201,7 @@ private fun BenchmarkRow(performance: BenchmarkPerformance, onClick: () -> Unit)
                 }
                 Text(
                     sourceLabel(performance.benchmark),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                    ),
+                    style = LibraType.codeSmall,
                     color = LibraTheme.colors.tertiaryText,
                 )
             }

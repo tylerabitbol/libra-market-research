@@ -41,7 +41,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -182,10 +181,7 @@ private fun Overview(state: SecurityDetailUiState) {
         ) {
             Text(
                 Format.currency(state.displayPrice),
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Medium,
-                ),
+                style = LibraType.figureHero,
             )
             DirectionalChangeText(
                 state.displayChangePercent,
@@ -720,9 +716,7 @@ private fun RelativeSection(state: SecurityDetailUiState) {
             Text("Relative performance", style = MaterialTheme.typography.titleMedium)
             Text(
                 state.selectedRange.raw,
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                ),
+                style = LibraType.codeSmall,
                 color = LibraTheme.colors.tertiaryText,
             )
         }
@@ -767,10 +761,7 @@ private fun ReturnRow(label: String, percent: Double?, isSubject: Boolean) {
         Text(
             label,
             style = if (isSubject) {
-                MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                LibraType.ticker
             } else {
                 MaterialTheme.typography.bodyMedium
             },

@@ -266,14 +266,23 @@ internal val libraDarkScheme = darkColorScheme(
  * label scales are pulled in to match. Everything is in `sp`, so the type
  * scales with the reader's setting.
  */
-private val libraTypography = Typography().run {
+private fun libraTypography(text: FontFamily): Typography = Typography().run {
     copy(
-        titleLarge = titleLarge.copy(fontSize = 20.sp, lineHeight = 26.sp),
-        titleMedium = titleMedium.copy(fontSize = 16.sp, lineHeight = 22.sp),
-        bodyMedium = bodyMedium.copy(fontSize = 14.sp, lineHeight = 19.sp),
-        bodySmall = bodySmall.copy(fontSize = 12.sp, lineHeight = 16.sp),
-        labelMedium = labelMedium.copy(fontSize = 12.sp, lineHeight = 15.sp),
-        labelSmall = labelSmall.copy(fontSize = 11.sp, lineHeight = 14.sp),
+        displayLarge = displayLarge.copy(fontFamily = text),
+        displayMedium = displayMedium.copy(fontFamily = text),
+        displaySmall = displaySmall.copy(fontFamily = text),
+        headlineLarge = headlineLarge.copy(fontFamily = text),
+        headlineMedium = headlineMedium.copy(fontFamily = text),
+        headlineSmall = headlineSmall.copy(fontFamily = text),
+        titleLarge = titleLarge.copy(fontFamily = text, fontSize = 20.sp, lineHeight = 26.sp),
+        titleMedium = titleMedium.copy(fontFamily = text, fontSize = 16.sp, lineHeight = 22.sp),
+        titleSmall = titleSmall.copy(fontFamily = text),
+        bodyLarge = bodyLarge.copy(fontFamily = text),
+        bodyMedium = bodyMedium.copy(fontFamily = text, fontSize = 14.sp, lineHeight = 19.sp),
+        bodySmall = bodySmall.copy(fontFamily = text, fontSize = 12.sp, lineHeight = 16.sp),
+        labelLarge = labelLarge.copy(fontFamily = text),
+        labelMedium = labelMedium.copy(fontFamily = text, fontSize = 12.sp, lineHeight = 15.sp),
+        labelSmall = labelSmall.copy(fontFamily = text, fontSize = 11.sp, lineHeight = 14.sp),
     )
 }
 
@@ -304,19 +313,73 @@ object LibraSpacing {
     val pillClearance = 44.dp
 }
 
-/** Figures are monospaced so columns of numbers line up rather than shimmer. */
+/**
+ * The named styles, one per job Libra's fonts do.
+ *
+ * Sizes are the Material scale this app already uses, so nothing reflows; what
+ * changes is the family, the weight and the digits.
+ *
+ * `tnum` is the tabular-figures feature. Swift reaches it through
+ * `.monospacedDigit()`, applied at eight separate sites; baking it into the
+ * figure styles is the same intent and harder to forget.
+ */
 object LibraType {
+    // Displayed numbers: rounded, medium, tabular.
+    val figureSmall: TextStyle
+        @Composable @ReadOnlyComposable get() = rounded(MaterialTheme.typography.labelSmall)
+
     val figure: TextStyle
-        @Composable @ReadOnlyComposable
-        get() = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
+        @Composable @ReadOnlyComposable get() = rounded(MaterialTheme.typography.bodySmall)
 
     val figureEmphasis: TextStyle
+        @Composable @ReadOnlyComposable get() = rounded(MaterialTheme.typography.bodyMedium)
+
+    val figureTitle: TextStyle
+        @Composable @ReadOnlyComposable get() = rounded(MaterialTheme.typography.titleMedium)
+
+    val figureLarge: TextStyle
+        @Composable @ReadOnlyComposable get() = rounded(MaterialTheme.typography.titleLarge)
+
+    /** The one big number at the top of a security. Swift's `.largeTitle`. */
+    val figureHero: TextStyle
+        @Composable @ReadOnlyComposable get() = rounded(MaterialTheme.typography.headlineMedium)
+
+    // Raw data: tickers, form types, tags, formulas.
+    val codeSmall: TextStyle
+        @Composable @ReadOnlyComposable get() = mono(MaterialTheme.typography.labelSmall)
+
+    val codeSmallEmphasis: TextStyle
         @Composable @ReadOnlyComposable
-        get() = MaterialTheme.typography.bodyMedium.copy(
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.Medium,
-        )
+        get() = mono(MaterialTheme.typography.labelSmall, FontWeight.SemiBold)
+
+    val code: TextStyle
+        @Composable @ReadOnlyComposable get() = mono(MaterialTheme.typography.bodySmall)
+
+    /** A ticker at row size. */
+    val tickerSmall: TextStyle
+        @Composable @ReadOnlyComposable
+        get() = mono(MaterialTheme.typography.bodySmall, FontWeight.SemiBold)
+
+    /** A ticker where it is the subject of the row. */
+    val ticker: TextStyle
+        @Composable @ReadOnlyComposable
+        get() = mono(MaterialTheme.typography.bodyMedium, FontWeight.SemiBold)
 }
+
+@Composable
+@ReadOnlyComposable
+private fun rounded(base: TextStyle): TextStyle = base.copy(
+    fontFamily = LocalLibraFonts.current.rounded,
+    fontWeight = FontWeight.Medium,
+    fontFeatureSettings = "tnum",
+)
+
+@Composable
+@ReadOnlyComposable
+private fun mono(base: TextStyle, weight: FontWeight? = null): TextStyle = base.copy(
+    fontFamily = LocalLibraFonts.current.mono,
+    fontWeight = weight ?: base.fontWeight,
+)
 
 /** Shorthand for the semantic colours, so views read `LibraTheme.colors.caution`. */
 object LibraTheme {
@@ -330,10 +393,14 @@ fun LibraTheme(
     useDarkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    CompositionLocalProvider(LocalLibraColors provides if (useDarkTheme) darkColors else lightColors) {
+    val fonts = libraFontFamilies()
+    CompositionLocalProvider(
+        LocalLibraColors provides if (useDarkTheme) darkColors else lightColors,
+        LocalLibraFonts provides fonts,
+    ) {
         MaterialTheme(
             colorScheme = if (useDarkTheme) libraDarkScheme else libraLightScheme,
-            typography = libraTypography,
+            typography = libraTypography(fonts.text),
             content = content,
         )
     }

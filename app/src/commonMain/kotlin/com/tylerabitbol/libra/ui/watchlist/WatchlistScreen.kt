@@ -28,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -217,10 +216,7 @@ private fun WatchlistRowView(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     row.symbol,
-                    style = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
+                    style = LibraType.ticker,
                 )
                 Text(
                     row.name,
@@ -296,10 +292,7 @@ private fun WatchlistRowContext(row: WatchlistRow) {
             if (event.unusualness >= 0.9) {
                 Text(
                     "RARE",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
+                    style = LibraType.codeSmallEmphasis,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
                         .clip(RoundedCornerShape(3.dp))
@@ -314,9 +307,7 @@ private fun WatchlistRowContext(row: WatchlistRow) {
             // difference between two returns, not a return.
             Text(
                 "${Format.percentagePoints(versus)} vs S&P",
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontFamily = FontFamily.Monospace,
-                ),
+                style = LibraType.figureSmall,
                 color = LibraTheme.colors.tertiaryText,
             )
         }

@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -49,6 +48,7 @@ import com.tylerabitbol.libra.calculations.ScreenRule
 import com.tylerabitbol.libra.calculations.ScreenSubject
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
+import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.viewmodels.ScreenerUiState
 import com.tylerabitbol.libra.viewmodels.results
 import com.tylerabitbol.libra.viewmodels.untestableCount
@@ -340,10 +340,7 @@ private fun ThresholdField(rule: ScreenRule, onChange: (ScreenRule) -> Unit) {
             text.toDoubleOrNull()?.let { onChange(rule.copy(threshold = it)) }
         },
         singleLine = true,
-        textStyle = MaterialTheme.typography.bodyMedium.copy(
-            fontFamily = FontFamily.Monospace,
-            textAlign = TextAlign.End,
-        ),
+        textStyle = LibraType.figureEmphasis.copy(textAlign = TextAlign.End),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier
             .width(110.dp)
@@ -444,10 +441,7 @@ private fun ResultRow(
         ) {
             Text(
                 subject.symbol,
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.SemiBold,
-                ),
+                style = LibraType.ticker,
             )
             Text(
                 subject.name,
@@ -465,9 +459,7 @@ private fun ResultRow(
                 subject.value(field)?.let { value ->
                     Text(
                         "${field.displayName}: ${field.format(value)}",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontFamily = FontFamily.Monospace,
-                        ),
+                        style = LibraType.figureSmall,
                         color = LibraTheme.colors.tertiaryText,
                     )
                 }

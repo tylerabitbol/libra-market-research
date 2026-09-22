@@ -24,12 +24,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.services.providers.CompanyProfileDTO
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
+import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.viewmodels.SymbolSearchUiState
 
 /**
@@ -117,10 +116,7 @@ fun AddSymbolSheet(
                     ) {
                         Text(
                             profile.symbol,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
+                            style = LibraType.ticker,
                         )
                         Text(
                             profile.name,
