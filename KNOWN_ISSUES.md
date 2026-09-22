@@ -9,7 +9,7 @@ Resolved items are not kept. Entries that record a *decision* stay even when the
 work is done, because reversing the decision is the thing that would go wrong.
 
 `PORT_PLAN.md` is the completed port plan, now at `docs/PORT_PLAN.md`; its
-`§0`–`§9` are what the citations below mean. `PLAN.md` is a different
+`§0`–`§9` are what the citations below mean. `MAINTENANCE_PLAN.md` is a different
 document — the plan currently being worked. The entries under
 [Open issues](#open-issues) are the ones it re-opens; everything else here is a
 decision, and stays.
@@ -104,7 +104,7 @@ accompanied them is done.)
 
 
 **Deviation: Stage 2 fixed the Gradle 10 warning instead of moving on.**
-`PLAN.md` Stage 2.5/2.6 says the "incompatible with Gradle 10" warning "comes
+`MAINTENANCE_PLAN.md` Stage 2.5/2.6 says the "incompatible with Gradle 10" warning "comes
 from the plugins rather than our scripts — re-check it and move on". The
 re-check found the opposite: both deprecations were in our own build scripts,
 and both were one-line fixes. Correcting them rather than recording a wrong
@@ -113,7 +113,7 @@ shrink the open-issues list, but it is more than the stage asked for, so it is
 logged here.
 
 **One stale worktree could not be removed, and the root's own cleanup lands on
-merge.** `PLAN.md` Stage 1 asks for both Claude worktrees to be removed.
+merge.** `MAINTENANCE_PLAN.md` Stage 1 asks for both Claude worktrees to be removed.
 `mock-libra-website-63d82d` was clean and had no commits beyond `main`, so it is
 gone. `master-plan-known-issues-ed4a90` is the worktree the cleanup itself ran
 in — git refuses to remove a worktree from inside it, and there is no way to do
@@ -695,7 +695,7 @@ the data rather than from the picture.
 
 
 **The `-LibraOpenSymbol` gap is narrowed, not closed, and the last check of it
-was lost.** `PLAN.md` Stage 2.4 offered two fixes and both are now in.
+was lost.** `MAINTENANCE_PLAN.md` Stage 2.4 offered two fixes and both are now in.
 `SecurityDetailHost`'s `LaunchedEffect` was keyed on the symbol and the registry
 but not on `snapshots`, so a page composed before the store attached loaded once
 against a null store and never looked again — a real defect, and
@@ -956,7 +956,7 @@ it is fixed; it was our own scripts, not the plugins.
 `KeystoreSecretsStore` now has tests: `core/src/androidDeviceTest` runs five
 against a real AndroidKeyStore through `:core:connectedAndroidDeviceTest`. AGP 9
 does give a KMP library a device-test source set, so the `:androidApp` fallback
-`PLAN.md` allowed for was not needed. The one wrinkle is that
+`MAINTENANCE_PLAN.md` allowed for was not needed. The one wrinkle is that
 `withDeviceTest { }` creates the source set during configuration, so the script
 reaches it with `getByName("androidDeviceTest")` rather than the typed
 accessor — an accessor is generated from the *previous* configuration and would

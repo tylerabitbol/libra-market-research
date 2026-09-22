@@ -11,7 +11,7 @@ SecurityDetail screens, all compiling on both `iosSimulatorArm64` and `android`,
 later ones ~15-40 s).
 Every commit is on this branch; nothing is stashed.
 
-**`PLAN.md`'s five stages have been worked, and four of them are finished.**
+**`MAINTENANCE_PLAN.md`'s five stages have been worked, and four of them are finished.**
 Stage 1 (workspace and build), Stage 2 (the six open issues), Stage 3 (UI
 fidelity) and Stage 4 (per-tab navigation graphs) are done and committed.
 Stage 5 (verification) is not: iOS 27.0 was walked, but the API 26 emulator,
@@ -37,7 +37,7 @@ data again. iOS still has its own.
 The port plan is finished and archived at `docs/PORT_PLAN.md` — that is what
 `PORT_PLAN.md §N` means throughout this file and `KNOWN_ISSUES.md`. The current
 plan, covering workspace cleanup, the remaining open issues and the UI parity
-work, is `PLAN.md`.
+work, is `docs/MAINTENANCE_PLAN.md`.
 
 A cleanup pass has since removed the declarations that had no references
 anywhere — four unwired vendor serializers, the `UnportedScreen` placeholder,

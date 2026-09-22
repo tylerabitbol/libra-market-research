@@ -1,302 +1,436 @@
-# Libra KMP — cleanup, open issues, UI parity
+# Libra look: dark mode, the real palette, and the right fonts
 
-The plan being worked now. Written to be executed by another agent without
-re-deriving decisions, the same way `docs/PORT_PLAN.md` was.
+## Context
 
-The port itself is finished: Phases 0–9 complete, 475 `:core` tests green on
-JVM and the iOS simulator, 17 `:app` UI tests green, and the manual pass run on
-both platforms against live keys. `RESUME.md` records that. What is left is the
-residue — a workspace that accumulated generated files, six genuinely open
-issues in `KNOWN_ISSUES.md`, and a UI that works but navigates worse than the
-SwiftUI app it came from.
+The Compose port renders in Material 3's baseline purple. `Theme.kt:131` calls bare
+`darkColorScheme()` / `lightColorScheme()`, so the tab pills are lilac, the cards are
+tinted, and the app does not read as Libra in a side-by-side. Dark mode is not broken
+so much as unwritten: `LibraTheme(useDarkTheme = isSystemInDarkTheme())` already exists
+and already has the right default, but the scheme it hands to `MaterialTheme` is a
+stock palette nobody chose. Five semantic colours were ported carefully; the other
+forty came from Google.
 
-Decisions already made by the owner (do not re-litigate):
+The Swift app has no palette file and no colour assets — **every** colour is a UIKit
+semantic colour. That is why its dark mode needed no code, and it is why the port has
+nothing to copy from. Both schemes have to be written out by hand.
 
-- **Fidelity first, flow second.** Close the places the Compose port visibly
-  diverged from SwiftUI, then improve navigation inside that restored shape.
-  No redesign; it still reads as Libra — dense, text-first, no hero graphics.
-- **Open issues only.** `KNOWN_ISSUES.md` is mostly recorded *decisions*.
-  Those stay. Stage 2 lists the six entries that are actually work.
-- **Cleanup reaches the repo root**, not just `Translation/`. The Swift app on
-  `main` is not retired; it stays the read-only reference.
-- **No new features.** `docs/PORT_PLAN.md §0.5` still holds.
+Typography has the same shape of problem. `LibraType.figure` is monospaced. Libra's
+figures are **SF Pro Rounded, `.weight(.medium)`, `.monospacedDigit()`** — rounded with
+tabular numerals, not a typewriter face. Monospace is reserved for tickers, formulas
+and raw data. The port collapsed three families into one, and the one it kept is the
+wrong one for the most common case.
 
----
+Outcome: the app looks like Libra in both appearances on both platforms, with the same
+three typefaces doing the same three jobs.
 
-## 0. Rules for the implementer
+### Decisions already made — do not re-open
 
-1. **`docs/PORT_PLAN.md` is history.** It is the completed port plan, kept
-   because `KNOWN_ISSUES.md` cites its section numbers as `PORT_PLAN.md §N`.
-   This file is the plan. Never work from that one.
-2. **A decision is not a defect.** Entries in `KNOWN_ISSUES.md` that explain
-   why something differs from Swift stay as they are. Only [Open
-   issues](KNOWN_ISSUES.md#open-issues) and the items named in Stage 2 are work.
-3. The porting rules still apply: never format a user-visible number with
-   `toString()`, never `!!`, never `runBlocking` in production code, and port
-   the test alongside the change.
-4. Query an artifact's `maven-metadata.xml` before writing a version into
-   `gradle/libs.versions.toml`. Do not guess.
-5. `export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
-   before invoking Gradle.
-6. Commit per stage. No co-author trailers.
-7. Log every new deviation in `KNOWN_ISSUES.md`, in the section for the area it
-   constrains — the table at the top of that file maps directory to section.
+| | |
+|---|---|
+| Fonts | Native SF on iOS, bundled lookalikes on Android |
+| Theme control | Follow the system only. No setting, no `PreferenceStore` work |
+| Depth | Colours, fonts, surfaces, **and** the inset-grouped list chrome |
+| Freshness pill | Opaque capsule, high-contrast fill. No blur, no UIKit interop |
 
 ---
 
-## Stage 1 — Workspace and build (3 h)
+## Rules for the implementer
 
-**The Room schema is committed twice, one copy under a directory named
-`$projectDir`.** `core/build.gradle.kts:118` reads
-`schemaDirectory("${'$'}projectDir/schemas")`. The `${'$'}` escape means Room
-receives the literal string `$projectDir/schemas`, so it created
-`core/$projectDir/schemas/…/1.json` — and both that and `core/schemas/…/1.json`
-are tracked. Fix the expression
-(`schemaDirectory(layout.projectDirectory.dir("schemas").asFile.path)`),
-`git rm -r 'core/$projectDir'`, rebuild, and confirm the export now lands in
-`core/schemas`.
-
-**Try the configuration cache.** `gradle.properties` carries
-`org.gradle.configuration-cache=false` with nothing saying why. AGP 9,
-KSP 2.3.12 and the Compose plugin all claim support. Turn it on; if a task fails
-to serialise, put it back with the failing task named in a comment. A bare
-`false` teaches the next person nothing.
-
-**Two stale commands in `README.md`**, both contradicted by
-`KNOWN_ISSUES.md` → Platform shells: `open "$(xcode-select -p)/Applications/Simulator.app"`
-cannot work on Xcode 27, which moved the developer apps to
-`Xcode.app/Contents/Applications/` and replaced Simulator with `DeviceHub.app`;
-and the `xcodebuild` example names `iPhone 17 Pro`, whose 26.5 runtime is the
-broken one. Point both at what the manual pass actually used.
-
-**Delete the four `.DS_Store` files** — root, `Libra/`, `Translation/`,
-`Translation/iosApp/`. All ignored, none tracked.
-
-**At the repo root**, where `git status` currently shows three untracked
-directories:
-
-- `Claude outputs/` (9.3 MB) and `brag-output/` (7.0 MB) are untracked *and*
-  unignored, so a `git add -A` on `main` commits 16 MB of generated images.
-  Decide per directory — ignore or delete — and write the choice into
-  `.gitignore` beside the `.claude/` entry, which already explains that
-  reasoning. `docs/` (6.1 MB) is the README's screenshots; keep it.
-- `Translation/` shows as untracked because it is the `kmp-translation`
-  worktree. Ignore it for the same reason `.claude/` is ignored.
-- Two stale Claude worktrees sit at `main`'s tip:
-  `.claude/worktrees/master-plan-known-issues-ed4a90` and
-  `.claude/worktrees/mock-libra-website-63d82d`. `git worktree remove` each once
-  its branch has landed or been abandoned, then `git worktree prune`.
-- Root `README.md` and `ROADMAP.md` describe the Swift app as the product. One
-  line in each: the Kotlin port lives on `kmp-translation` under `Translation/`,
-  and `main` is the reference.
-
-**Accept:** `./gradlew :core:jvmTest` green; one schema directory, tracked once;
-`git status --short` clean at both roots; a fresh clone of `main` does not pull
-down the generated images.
+1. `docs/PORT_PLAN.md` and `docs/MAINTENANCE_PLAN.md` are history — the port, and
+   the cleanup pass after it. Both are finished. **This file is the plan.** Citations
+   of the form "PLAN.md §4" in `KNOWN_ISSUES.md` point at those archives, not here.
+2. The Swift app on `main` is read-only reference. Never edit it.
+3. Every colour value below is transcribed from UIKit semantics. If a screen needs a
+   colour not in the table, that is a finding — log it, do not invent a hex.
+4. Nothing outside `Theme.kt` and `components/` may hold a colour literal. There is
+   exactly one today (`ClaimBadge.kt:62`); at the end there must be zero.
+5. Commit per stage. No co-author trailers.
+6. Log deviations in `KNOWN_ISSUES.md` as you go, not at the end.
 
 ---
 
-## Stage 2 — The open issues (4 h)
+## Stage 1 — The palette (3h)
 
-Six entries. Everything else in `KNOWN_ISSUES.md` is a decision.
+**File:** `app/src/commonMain/kotlin/com/tylerabitbol/libra/ui/Theme.kt`
 
-**2.1 `SecretsError.explain` has no case for `DUPLICATE_ITEM` (-25299)**, which
-is exactly what `SecItemAdd` returns. Add the case and its test; the constant
-table and `explain` then agree.
+### 1.1 The iOS semantic values
 
-**2.2 `KeystoreSecretsStore` has no automated test.** It needs a real
-`AndroidKeyStore`, and `:core` has no Android instrumentation source set — it is
-compile-verified by `:androidApp:assembleDebug` and nothing more. Add an
-`androidInstrumentedTest` covering set → get → delete, that two writes of the
-same key produce different ciphertext, and the drop-the-orphaned-record path on
-`GeneralSecurityException`. If AGP 9 will not give a KMP library an
-instrumentation source set, put the test in `:androidApp` and say so in
-`KNOWN_ISSUES.md`.
+Write these as `private val` constants, named after the UIKit token, so a reader can
+check them against Apple's documentation rather than against taste.
 
-**2.3 `Format.currency` renders non-USD as `EUR 1,234.50`** and nothing covers
-it. Add the test that pins today's behaviour. Do not change the rendering — no
-caller passes a non-USD code, and changing it quietly is how a figure moves.
+| Token | Light | Dark |
+|---|---|---|
+| `systemGroupedBackground` | `#F2F2F7` | `#000000` |
+| `secondarySystemGroupedBackground` | `#FFFFFF` | `#1C1C1E` |
+| `tertiarySystemGroupedBackground` | `#F2F2F7` | `#2C2C2E` |
+| `label` | `#000000` | `#FFFFFF` |
+| `secondaryLabel` | `#3C3C43` @ 60% | `#EBEBF5` @ 60% |
+| `tertiaryLabel` | `#3C3C43` @ 30% | `#EBEBF5` @ 30% |
+| `quaternaryLabel` | `#3C3C43` @ 18% | `#EBEBF5` @ 16% |
+| `separator` | `#3C3C43` @ 29% | `#545458` @ 65% |
+| `systemBlue` | `#007AFF` | `#0A84FF` |
+| `systemGreen` | `#34C759` | `#30D158` |
+| `systemRed` | `#FF3B30` | `#FF453A` |
+| `systemOrange` | `#FF9500` | `#FF9F0A` |
+| `systemPurple` | `#AF52DE` | `#BF5AF2` |
 
-**2.4 `-LibraOpenSymbol` arrives before hydration.** The deep link goes straight
-to the security page, so "What changed" renders from whatever the database holds
-at that instant: on a cold start, nothing, and the section reads "Nothing
-unusual in this window" while the same page reached through the Watchlist says
-"2 changes since …". Make the deep link await the hydration the Watchlist path
-does, or show the section's loading state rather than its empty state.
-Debug-only, so keep the fix within `DeveloperOptions`' reach.
+Resolve the alpha-on-label tokens to opaque `Color` values against their own
+background rather than leaving them translucent. Translucent text over a card over a
+grouped background composites differently in Compose than in UIKit, and the drift is
+visible in the tertiary tier.
 
-**2.5 and 2.6 — the two Gradle deprecation warnings.** Re-query
-`maven-metadata.xml` for `org.jetbrains.compose.material3:material3`: the 1.12.0
-line ended at `alpha03` when it was last checked on 2026-09-21. If a stable
-1.12.0 now exists, name the three coordinates explicitly in
-`app/build.gradle.kts` and drop the `compose.*` accessors; if not, re-date the
-note and leave it. The "incompatible with Gradle 10" warning comes from the
-plugins rather than our scripts — re-check it and move on.
+### 1.2 The Material slots that actually matter
 
-**Accept:** 475+ `:core` tests green on JVM and `iosSimulatorArm64`; the new
-secrets test green on a device or emulator; `KNOWN_ISSUES.md` → Open issues
-reduced to whatever genuinely remains.
+Seventeen files read `MaterialTheme.colorScheme.*`, and Material's own components read
+more slots than those files do. Build **explicit** `lightColorScheme(...)` /
+`darkColorScheme(...)` — every slot below named. The unset remainder stays baseline
+purple and will leak through a menu or a sheet the first time someone opens one.
 
----
+| Slot | Gets | Why it matters |
+|---|---|---|
+| `background` / `onBackground` | grouped bg / label | Every screen |
+| `surface` / `onSurface` | card fill / label | 19 card sites |
+| `surfaceVariant` / `onSurfaceVariant` | tertiary grouped / secondaryLabel | The `.secondary` tier, 75 Swift uses |
+| `surfaceContainer`, `-Low`, `-High`, `-Highest` | card fill / grouped bg ladder | `DropdownMenu`, `ModalBottomSheet`, `NavigationBar` |
+| `primary` / `onPrimary` | systemBlue / white | Accent, chips, chart |
+| **`secondaryContainer` / `onSecondaryContainer`** | systemBlue @ 15% / systemBlue | **This is the purple tab pill** |
+| `error` / `onError` | systemRed / white | Failing connection tests |
+| `outline` / `outlineVariant` | separator / separator @ 50% | Dividers, hairline borders |
+| `scrim` | black @ 32% | Sheet backdrop |
 
-## Stage 3 — UI fidelity (8 h)
+`secondaryContainer` is the single highest-value line in this stage. It is what paints
+the selected navigation-bar indicator.
 
-The Swift app on `main` is the reference and `docs/PORT_PLAN.md §3`'s mapping
-table still governs. The screenshots in `../docs/*.png` show the target: large
-titles, inset-grouped cards, chevron disclosure, signed figures in green and
-red, gray source labels under each name.
+### 1.3 Expand `LibraColors`
 
-**3.1 A top app bar on the three pushed routes only** — `SecurityDetailRoute`,
-`BenchmarkDetailRoute`, `SecretEntryRoute`. None of them has any back control
-today: the shell has no top bar, and Compose on iOS has no edge-swipe, so a user
-who opens a security can only tap a tab — which resets that tab. Give each a
-Material `TopAppBar` with a back chevron and the title Swift's
-`.navigationTitle` sets (the symbol, the benchmark's display name, the
-provider's display name). Two things to watch: put the bar in the *screen*, not
-in the shell's `Scaffold`, or all five tab roots grow a second title above the
-header rows they already draw; and draw the chevron as an `ImageVector` in
-`ui/Icons.kt` beside the five tab glyphs, because material-icons is not
-multiplatform past Compose 1.7.3.
+Keep the five that exist — their semantics were reasoned about and are right — but
+repoint them at the iOS values, and add what the surfaces and badges need:
 
-**3.2 The toolbar menus regain their structure.** `DropdownMenu` has no
-`Section` and no `Label(systemImage: "checkmark")`, which is why the kind filter
-draws plain-text category headers and marks the selection with a leading `✓ `.
-Material 3 does have `HorizontalDivider` inside a menu and
-`DropdownMenuItem(leadingIcon = …)`. Use both, so the sort menus on Research,
-Screener and Security Detail read as Swift's do. Keep the text fallback only
-where an icon would throw the labels out of alignment.
+```kotlin
+@Immutable
+data class LibraColors(
+    // existing five, now iOS-valued
+    val secondaryText: Color,     // secondaryLabel
+    val tertiaryText: Color,      // tertiaryLabel
+    val caution: Color,           // systemOrange
+    val positive: Color,          // systemGreen
+    val negative: Color,          // systemRed
+    // surfaces
+    val groupedBackground: Color,
+    val cardFill: Color,
+    val separator: Color,
+    val quaternaryFill: Color,
+    // claim tints — ClaimBadge.tint, ported verbatim
+    val claimFact: Color,         // label
+    val claimCalculation: Color,  // systemBlue
+    val claimInterpretation: Color, // systemPurple
+    val claimHypothesis: Color,   // systemOrange
+)
+```
 
-**3.3 Swipe-to-delete returns** to the rows Swift gives it — the screener's
-rules and the saved screens. `SwipeToDismissBox` with per-row dismiss state,
-*and* keep the visible Remove button: the reason it was added stands, since a
-swipe that nothing announces is not discoverable. Swift has both.
+`claimInterpretation` retires `ClaimBadge.kt:62`'s `Color(0xFF7A5AF8)` — a purple with
+no dark variant, the port's only stray literal.
 
-**3.4 Check the sheets.** The date picker stays a `DatePickerDialog` —
-`SelectableDates` enforces the same `...Date.now` bound Swift does. Confirm
-`AddSymbolSheet` presents as a `ModalBottomSheet` and carries the cancel
-affordance Swift gets from its `.cancellationAction` toolbar item.
+Chip alphas are constants, not colours: `chipFill = 0.15f`, `bannerFill = 0.12f`,
+`chipSelected = 0.18f`. The Swift pattern is
+`.background(tint.opacity(0.15), in: .rect(cornerRadius: 4)).foregroundStyle(tint)` and
+it appears on every screen; give it one helper rather than fifteen call sites.
 
-**3.5 Two things stay as they are.** The decorative card glyphs stay dropped,
-and dynamic colour stays off. Both are recorded decisions under
-`KNOWN_ISSUES.md` → UI.
+### 1.4 Preserve two rules exactly
 
-**Accept:** `./gradlew :app:iosSimulatorArm64Test` green — budget the
-~21-minute first run — and, the part no test covers, the app run on both
-platforms: open a security from the Watchlist and come back using the bar.
+These are not stylistic and must survive the refactor:
 
----
+- `DirectionalChangeText` (`Libra/Views/Components/DataCells.swift:44-51`): `> 0` green,
+  `< 0` red, **`== 0` and `null` both secondary**. A missing value is never drawn as a
+  neutral zero.
+- `growthColor` (`SecurityDetail/SecurityDetailView.swift:144-146`) uses `>= 0` — a
+  *different* boundary. Do not unify them.
 
-## Stage 4 — Flow between sections (4 h)
-
-**4.1 Per-tab back stacks.** `Navigation.kt` declares one flat `NavHost`: five
-tab routes and three pushed routes as siblings, with `switchTo` doing
-`popUpTo(startDestination){saveState}` + `restoreState`. The file's own comment
-promises Swift's behaviour — "opening a security from the Watchlist, glancing at
-the Dashboard and coming back returns to the security" — which a flat graph only
-approximates. Nest each section in its own `navigation<T>` graph holding the
-routes reachable from it, and have `switchTo` pop to the graph rather than to
-the app's start destination. `SecurityDetailRoute` is reachable from Watchlist,
-Research and Screener, so it is declared in all three: the route type is the
-same, the graph it sits in is what differs.
-
-**4.2 Prove it.** The `:app` UI tests read semantics, and this is a navigation
-property, so it needs its own test: open a security from the Watchlist, switch
-to Dashboard, switch back, assert the security is still on screen. Same for the
-Screener.
-
-**4.3 Re-read the deep link afterwards.** `LaunchedEffect(openSymbol)` pushes
-onto whatever is current, and its comment says it is pushed "rather than made
-the start destination, so the back gesture still lands on the Dashboard".
-Nesting changes what current means.
-
-Deliberately not in this stage: cross-screen links between sections, and a
-global symbol search. Both are new surfaces.
-
-**Accept:** the two navigation tests green, and the same trip made by hand on
-iOS, where there is no system back gesture to paper over a mistake.
+**Commit:** *The iOS semantic palette, in both appearances*
 
 ---
 
-## Stage 5 — Verification (3 h)
+## Stage 2 — Three typefaces doing three jobs (5h)
 
-The one line of `docs/PORT_PLAN.md §7` never met. Android has run only on
-`medium_phone`, API 36. API 26 is the manifest floor and the build asserts it,
-but nobody has watched the app run there, and no physical device has been used
-at all.
+### 2.1 The mechanism
 
-- Create an API 26 emulator, install `:androidApp:assembleDebug`, and walk it:
-  Dashboard, Watchlist add and open, Security Detail across all seven ranges
-  including 1D and 5D, Research, Screener, Benchmark Detail, Settings. API 26 is
-  where an adaptive-icon or Keystore assumption breaks if one is going to.
-- Run the same walk on a physical Android device.
-- iOS on **iPhone 18 Pro, iOS 27.0**. The 26.5 runtime on this machine is
-  broken — `KNOWN_ISSUES.md` → Platform shells. Do not spend time on it.
-- `-LibraSelfTest` on both: six lines, all PASS.
-- Look at the charts rather than testing them. A year of sessions must fill the
-  width and carry four axis labels; 5D must draw five separate sessions. Both
-  failure modes drew a plausible line and passed every test.
+```kotlin
+// ui/LibraFonts.kt (commonMain)
+@Immutable
+data class LibraFontFamilies(val text: FontFamily, val rounded: FontFamily, val mono: FontFamily)
 
-**Accept:** the walk completed on API 26, on a physical device, and on iOS 27.0;
-`KNOWN_ISSUES.md` → Open issues updated to say what is actually left.
+@Composable expect fun libraFontFamilies(): LibraFontFamilies
+```
+
+**iOS actual** (`app/src/iosMain/.../LibraFonts.ios.kt`): `text = FontFamily.Default`
+and `mono = FontFamily.Monospace` already resolve to SF Pro and SF Mono through Skia —
+free, exact, nothing to ship. **`rounded` is the risk.** Compose MP has no public API
+for `UIFontDescriptor.withDesign(.rounded)`, so this needs a timeboxed spike (≤1h):
+try resolving the system font data through CoreText and wrapping it as a `Font`. If the
+spike does not land inside the box, take the fallback — bundle the rounded face on
+*both* platforms and keep text and mono native on iOS. Say which happened in
+`KNOWN_ISSUES.md`; do not spend a second hour on it.
+
+**Android actual**: bundle Inter, Nunito Sans, JetBrains Mono.
+
+```kotlin
+// app/build.gradle.kts, commonMain.dependencies
+implementation(compose.components.resources)
+```
+
+Files go in `app/src/commonMain/composeResources/font/` (Compose resources has no
+Android-only source set; guard the *use*, not the location — and note in
+`KNOWN_ISSUES.md` that the ~1.4 MB rides along in the iOS framework unless the spike
+succeeds and lets the fallback be dropped). All three are SIL OFL — ship `OFL.txt`
+alongside them and add an attribution line to Settings → About.
+
+### 2.2 The named styles
+
+Extend `LibraType` so every Swift `.font(` call has one Kotlin counterpart. Figures are
+**rounded + medium + tnum**, not monospace:
+
+```kotlin
+object LibraType {
+    // SF Pro Text — labels and prose
+    val caption: TextStyle        // 12/16   (26+ Swift uses)
+    val caption2: TextStyle       // 11/14   (13+)
+    val footnoteEmphasis: TextStyle
+    val subheadline: TextStyle
+    val callout: TextStyle
+    val headline: TextStyle       // (9)
+    val title3Emphasis: TextStyle
+
+    // SF Pro Rounded, Medium, tabular — every displayed number
+    val figure: TextStyle         // was Monospace. It is not.
+    val figureEmphasis: TextStyle
+    val figureHero: TextStyle     // largeTitle rounded medium
+
+    // SF Mono — tickers, formulas, raw data
+    val ticker: TextStyle         // subheadline mono semibold
+    val code: TextStyle           // caption mono   (11 uses)
+    val codeSmall: TextStyle      // caption2 mono  (10)
+}
+```
+
+Tabular figures in Compose:
+
+```kotlin
+fontFeatureSettings = "tnum"
+```
+
+on every rounded figure style. Swift applies `.monospacedDigit()` at eight sites
+(`DataCells.swift:20,43`, `DashboardView.swift:157,250`, `WatchlistView.swift:181`,
+`ScreenerView.swift:156`, `BenchmarkDetailView.swift:44`,
+`ResearchProfileCard.swift:115`, `EventCard.swift:77`) — baking it into the style is
+both closer to intent and harder to forget.
+
+### 2.3 Retire the inlined monospace
+
+`fontFamily = FontFamily.Monospace` appears in ~14 files outside `LibraType` —
+`SecurityDetailSections.kt` alone has twelve. Each one is a decision about whether that
+text is a *figure* (→ `figure`, rounded) or *raw data* (→ `code`, mono). It is not a
+find-and-replace; read each site against its Swift counterpart. The densest are
+`SecurityDetailSections.kt` (12), `ScreenerScreen.kt` (3), `SecurityDetailScreen.kt` (3),
+`WatchlistScreen.kt` (3).
+
+Finish with `grep -rn 'FontFamily.Monospace' app/src` returning only `LibraFonts`.
+
+Typography is wired by threading `libraFontFamilies()` into `libraTypography` inside
+`LibraTheme` — it must become a `@Composable` builder, since resource fonts resolve in
+composition.
+
+**Commit:** *SF Text, SF Rounded and SF Mono, each where Libra puts them*
+
+---
+
+## Stage 3 — Surfaces (4h)
+
+### 3.1 Spacing
+
+The port has four steps; Swift uses eight. Keep the four existing names at their
+current values so no call site breaks, and add the rest:
+
+```kotlin
+object LibraSpacing {
+    val hair = 2.dp; val tight = 4.dp; val snug = 6.dp; val small = 8.dp
+    val base = 10.dp          // Swift's dominant step
+    val medium = 12.dp; val large = 16.dp; val wide = 20.dp
+    val screen = 16.dp; val card = 14.dp
+    val pillClearance = 44.dp // bottom inset clearing the floating pill
+}
+```
+
+### 3.2 Shapes
+
+```kotlin
+object LibraShapes {
+    val badge = RoundedCornerShape(3.dp)
+    val chip = RoundedCornerShape(4.dp)
+    val panel = RoundedCornerShape(6.dp)   // derivation panel
+    val smallCard = RoundedCornerShape(8.dp)
+    val group = RoundedCornerShape(10.dp)  // grouped row stacks, macro cards
+    val card = RoundedCornerShape(12.dp)
+}
+```
+
+### 3.3 The card
+
+One Swift pattern repeats nineteen times: `.padding(14)` +
+`.background(secondarySystemGroupedBackground, in: .rect(cornerRadius: 12))`. There are
+**zero `.shadow(` calls in the entire Swift repo** — separation is by fill contrast
+alone. Any elevation in the Compose port is an invention and should go.
+
+Before writing a new helper, grep `app/src/commonMain` for
+`background(` + `RoundedCornerShape` to find what the port already duplicates, then add
+one `LibraCard` (or `Modifier.libraCard()`) in a new `ui/components/Surfaces.kt`
+alongside `libraChip(tint)` for the tinted-chip pattern.
+
+### 3.4 The two specific surfaces
+
+- **Freshness pill** (`DashboardScreen`, `SecurityDetailScreen`): opaque `cardFill`
+  capsule, 1dp `separator` border, bottom overlay, content inset by `pillClearance`.
+  Swift's `.regularMaterial` has no Compose MP equivalent; this is the chosen
+  substitute, not an approximation being passed off as one.
+- **`PriceChart.kt`** (Vico): area gradient `primary` 25% → 2%, line 2dp, overnight
+  gaps 1dp dashed `[2,2]` at `primary` 40%, fixed height 190dp.
+
+**Commit:** *Cards, chips and the surfaces underneath them*
+
+---
+
+## Stage 4 — Inset-grouped list chrome (5h)
+
+Swift never sets `.listStyle(` — `Form` and `List` default to inset-grouped, and the
+scroll-based screens hand-roll the same look (`DashboardView.swift:53-64`): rows in a
+zero-spacing stack, `Divider().padding(.leading, 12)` between them, a rounded-10 fill
+around the whole stack. Compose gives none of this.
+
+Add to `ui/components/GroupedList.kt`:
+
+```kotlin
+@Composable fun GroupedSection(header: String? = null, footer: String? = null,
+                               content: @Composable ColumnScope.() -> Unit)
+@Composable fun GroupedRow(onClick: (() -> Unit)? = null,
+                           leading: ...  , trailing: ... , content: ...)
+```
+
+`GroupedSection` draws the `LibraShapes.group` fill and inserts dividers inset 12dp
+from the start between children — not after the last one. Reuse `SectionHeader` from
+`SettingsScreen.kt:145` (promote it out of that file), and keep `SwipeToDelete` working
+*inside* a `GroupedRow`, which is the fiddly part.
+
+Adopt in, in this order: `SettingsScreen`, `SecretEntryScreen`, `WatchlistScreen`,
+`ScreenerScreen`, then the Dashboard macro stacks. `PushedScreen` and `MenuSelection`
+stay as they are.
+
+**Commit:** *Grouped sections, the way Form draws them*
+
+---
+
+## Stage 5 — Platform chrome and verification (3h)
+
+### 5.1 Android
+
+`androidApp/src/main/res/values/themes.xml` hardcodes
+`Theme.Material.Light.NoActionBar` with `windowBackground` = white — a white flash in
+front of a dark app. Move to a `DayNight` parent, extract `windowBackground` to a colour
+resource, and add `values-night/` with `#000000`. Then check the `enableEdgeToEdge()`
+call in `MainActivity` still gives readable status-bar icons in dark.
+
+### 5.2 iOS
+
+`iosApp/Info.plist` has no `UIUserInterfaceStyle`, which is correct — it follows the
+system. Verify nothing in `LibraApp.swift` or `MainViewController.kt` forces a style.
+
+### 5.3 What can be tested, honestly
+
+Compose UI test cannot assert a rendered colour. So:
+
+- **Unit tests** (`commonTest`, no composition): assert the palette itself — that
+  `lightColors.positive` is `#34C759`, that every `ColorScheme` slot listed in §1.2 is
+  non-null and non-baseline, that light and dark differ in every slot. Cheap, real,
+  catches the exact class of bug this plan exists to fix.
+- **`runComposeUiTest` on `iosSimulatorArm64`**: structure only — a `GroupedSection`
+  with three children renders two dividers; a `GroupedRow` with `onClick` is clickable.
+- **Screenshots**, the only real check: iPhone simulator light **and** dark, Android
+  emulator light **and** dark, across all five tabs plus the three pushed screens.
+  Compare against `docs/LI-*.png` / `docs/RM-*.png` on `main`.
+
+Baseline to hold: 477 `:core` jvmTest, 477 `:core` iOS, 20 `:app` iOS UI, 5 Android
+instrumentation, all passing.
+
+### 5.4 Android credentials
+
+The emulator's six API credentials were wiped in the previous session and must be
+re-entered **by the owner** before any Android screenshot that shows live data. Do not
+ask for the keys; ask for the re-entry.
+
+**Commit:** *Dark windows, and what the screenshots showed*
 
 ---
 
 ## Things that will go wrong
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| `core/$projectDir` survives the Gradle fix | it is tracked, not generated-and-ignored | `git rm -r` it; a rebuild will not remove a committed file |
-| Configuration cache fails on a KSP or Compose task | a plugin reading project state at execution time | revert to `false`, name the task in a comment |
-| Tab roots grow a second title | the `TopAppBar` went into the shell's `Scaffold` | per-screen only; the shell keeps `bottomBar` alone |
-| `Unresolved reference 'icons'` for the back chevron | material-icons is not multiplatform past Compose 1.7.3 | draw it in `ui/Icons.kt` beside the tab glyphs |
-| Content slides under the status bar | `Scaffold(contentWindowInsets = safeDrawing)` already pads; a screen-level bar double-counts it | let the screen's bar consume `WindowInsets.statusBars` |
-| Nested graphs break tab selection | selection reads `hierarchy`, which now includes the graph | match on the graph's route, not the start destination's |
-| `:app` UI tests take 21 minutes again | first build of the test binary after a clean | expected; budget it once per stage, not per run |
-| API 26 emulator refuses the install | an adaptive-icon or `minSdk` assumption | this is the point of Stage 5 — fix it and record it |
-| A chart looks right and is wrong | the UI tests read semantics computed from the data, not the drawing | look at it; this has happened twice |
-
----
+| | |
+|---|---|
+| iOS SF Pro Rounded has no Compose MP API | Timebox the CoreText spike to 1h; fall back to a bundled rounded face on both platforms |
+| An unset `ColorScheme` slot leaks purple | Name every slot in §1.2 explicitly; open a menu and a sheet in dark before committing |
+| `compose.components.resources` changes the iOS framework size | Measure `LibraKit` before and after; record it |
+| Resource fonts resolve in composition | `libraTypography` must become a `@Composable` builder, not a `val` |
+| The 14 monospace sites are not a sed | Each is a figure-vs-raw-data judgement against the Swift source |
+| `SwipeToDelete` inside `GroupedRow` | The dismiss background must be clipped by the section's rounded fill |
+| Resolved alpha labels drift from UIKit | Composite against the card, not the grouped background, for text sitting on cards |
 
 ## Definition of done
 
-- `./gradlew :core:jvmTest :core:iosSimulatorArm64Test :app:iosSimulatorArm64Test`
-  all green.
-- One Room schema directory, tracked once. `git status --short` clean at both
-  roots, and `git add -A` on `main` cannot sweep up the generated images.
-- Every pushed screen has a back control that works on iOS without a gesture.
-- A security opened from the Watchlist survives a trip to the Dashboard, with a
-  test that says so.
-- The `§7` walk completed on API 26, on a physical Android device, and on
-  iOS 27.0.
-- `KNOWN_ISSUES.md` → Open issues names only what is genuinely still open.
+- No colour literal outside `Theme.kt`; `grep FontFamily.Monospace app/src` hits only `LibraFonts`.
+- Light and dark screenshots on both platforms, all five tabs, no purple anywhere.
+- Figures render rounded with tabular numerals; tickers render monospaced.
+- Test baseline unchanged and green; new palette unit tests passing.
+- `KNOWN_ISSUES.md` records the font-spike outcome and the framework size delta.
 
 ## Out of scope
 
-Everything `docs/PORT_PLAN.md §8` ruled out, and these, each a recorded decision
-rather than an omission:
+Appearance setting (the owner chose system-only). Blur / Liquid Glass. Dynamic colour —
+still deliberately off; a caution is orange because it is a caution. Any change to
+`:core`. Any edit to the Swift app.
 
-- The three dead-looking-but-kept declarations, and the schema migration that
-  would drop the unread Room columns.
-- `appPaths()` and Compose string resources. Dropped by the owner; cheap to add
-  if a second language is ever wanted.
-- The Swift→JSON parity fixture step (`docs/PORT_PLAN.md §5`). Still valid if a
-  ported figure is ever doubted.
-- Retiring `Libra/` and `LibraTests/` on `main`.
-- The VoiceOver percentage bug in Swift's `PriceChartView` — fixed in Kotlin on
-  purpose, left in Swift, which is read-only.
-- Cross-screen links and global symbol search (Stage 4).
+| Stage | Hours |
+|---|---|
+| 1 Palette | 3 |
+| 2 Fonts and type | 5 |
+| 3 Surfaces | 4 |
+| 4 Grouped lists | 5 |
+| 5 Chrome and verification | 3 |
+| **Total** | **20** |
 
-## Estimate
+---
 
-| Stage | h |
-|---|---:|
-| 1 Workspace and build | 3 |
-| 2 Open issues | 4 |
-| 3 UI fidelity | 8 |
-| 4 Flow between sections | 4 |
-| 5 Verification | 3 |
-| **Total** | **≈ 22** |
+## Future stage — cleanup and optimization (sketch, not scheduled)
 
-Working time for the implementing agent, not calendar time. The uncertainties
-are the Android instrumentation source set in Stage 2 and the nested navigation
-graphs in Stage 4; both have a stated fallback above.
+To be planned properly after the look lands, because several of these are only
+measurable once the theme stops changing.
+
+**Shape.** `SecurityDetailSections.kt` is the port's largest UI file and the counterpart
+of an 841-line Swift view; it is where twelve of the fourteen monospace sites live and
+is the obvious split candidate — by section, not by line count. The five `*Host.kt`
+files are near-identical `LaunchedEffect` + delegate shells and probably want one
+generic host.
+
+**Recomposition.** The `snapshots: StateFlow<SnapshotStore?>` attach-after-launch pattern
+caused two real bugs already (`SecurityDetailHost`, `BenchmarkDetailHost`). Audit the
+remaining hosts for the same defect, and check whether the detail screens recompose on
+every snapshot emission rather than on the slice they read.
+
+**Still-open correctness.** Stage 2.4 of `docs/MAINTENANCE_PLAN.md` is not closed: the deep-linked
+security page and the Watchlist path disagreed on live keys. That is a bug, not a style
+issue, and should lead this stage rather than trail it.
+
+**Build.** Configuration cache is on; measure clean and incremental build times and the
+`LibraKit` framework size before and after the font bundling, so the number has a
+baseline. Check whether `:app`'s iOS-only test target is costing more than it returns.
+
+**Dead weight.** `docs/PORT_PLAN.md` and `docs/MAINTENANCE_PLAN.md` are both history
+already; fold them, and this file once it is done, into one archive. Sweep for unused composables and unreferenced `:core`
+helpers — the test count (477 × 2) suggests good coverage, so a coverage-guided sweep is
+low-risk.
