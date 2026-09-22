@@ -22,7 +22,10 @@ kotlin {
         target.binaries.framework {
             baseName = "LibraKit"
             isStatic = true
-            export(project(":core"))
+            // `dependencies.project(...)`, not `project(...)`: the latter is
+            // `Project.project(String)`, and passing a Project as a dependency
+            // notation is deprecated and fails in Gradle 10.
+            export(dependencies.project(":core"))
         }
     }
 

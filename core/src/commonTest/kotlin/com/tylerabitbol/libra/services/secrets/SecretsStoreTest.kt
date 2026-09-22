@@ -36,6 +36,22 @@ class KeychainErrorTest {
         )
     }
 
+    /**
+     * No Swift counterpart. `DUPLICATE_ITEM` sat in the constant table with no
+     * case in `explain`, which meant the one status `SecItemAdd` is most likely
+     * to return fell through to the bare-code branch.
+     */
+    @Test
+    fun errSecDuplicateItemSaysToRemoveTheKeyRatherThanReportingACode() {
+        val message = SecretsError.explain(OSStatusCode.DUPLICATE_ITEM)
+        assertContains(message.lowercase(), "already exists")
+        assertContains(message.lowercase(), "remove")
+        assertFalse(
+            message.contains("${OSStatusCode.DUPLICATE_ITEM}"),
+            "A mapped status must not fall through to the raw-code branch",
+        )
+    }
+
     @Test
     fun unmappedStatusesStillReportTheRawCodeSoNothingIsSwallowed() {
         val message = SecretsError.explain(OSStatusCode.DECODE)

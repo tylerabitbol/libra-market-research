@@ -22,6 +22,25 @@ class FormatTest {
         assertEquals(Format.notAvailable, Format.shortDate(null))
     }
 
+    /**
+     * No Swift counterpart. Foundation gave the Swift app a per-locale currency
+     * symbol for free; this renders the code and a space instead. Nothing calls
+     * either currency formatter with a non-USD code today, so this pins what
+     * they do rather than asserting what they should do — a figure that quietly
+     * changes shape is the failure mode worth catching here.
+     */
+    @Test
+    fun a_non_usd_code_is_rendered_as_the_code_not_as_a_symbol() {
+        assertEquals("EUR 1,234.50", Format.currency(1234.5, code = "EUR"))
+        assertEquals("-EUR 1,234.50", Format.currency(-1234.5, code = "EUR"))
+        assertEquals("JPY 1,234.50", Format.currency(1234.5, code = "JPY"))
+
+        // compactCurrency drops the symbol entirely rather than substituting
+        // the code, so the two formatters disagree. Recorded, not corrected.
+        assertEquals("1.23B", Format.compactCurrency(1_234_000_000.0, code = "EUR"))
+        assertEquals("\$1.23B", Format.compactCurrency(1_234_000_000.0))
+    }
+
     @Test
     fun large_figures_use_compact_magnitudes() {
         assertEquals("\$3.10T", Format.compactCurrency(3_100_000_000_000.0))

@@ -22,7 +22,13 @@ fun SecurityDetailHost(
     val registry = environment.registry.collectAsStateValue()
     val snapshots = environment.snapshots.collectAsStateValue()
 
-    LaunchedEffect(symbol, registry) { model.load(registry, snapshots) }
+    // `snapshots` is a key, not just an argument. The store attaches after
+    // launch, so a page composed before that — which is what `-LibraOpenSymbol`
+    // does — would otherwise load once against a null store and never look
+    // again: no stored history, no last visit, and "What changed" reading
+    // "Nothing unusual in this window" for a security that has changed.
+    // `ResearchHost` and `ScreenerHost` already key on it; this one did not.
+    LaunchedEffect(symbol, registry, snapshots) { model.load(registry, snapshots) }
 
     SecurityDetailScreen(
         state = state,

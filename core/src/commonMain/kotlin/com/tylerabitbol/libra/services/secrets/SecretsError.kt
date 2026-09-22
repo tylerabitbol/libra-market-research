@@ -34,6 +34,11 @@ class SecretsError(
          * Printing the bare code sent an earlier debugging session down the
          * wrong path.
          *
+         * `-25299` reaches here from `SecItemAdd`, which the store calls only
+         * after `SecItemUpdate` reported the item missing. A duplicate at that
+         * point means an entry exists that the update query did not match, so
+         * the advice is to remove the key rather than to retry.
+         *
          * [systemMessage] is what `SecCopyErrorMessageString` returned, which
          * only iOS can supply; the fallback keeps the raw code visible so an
          * unmapped status is never swallowed.
@@ -49,6 +54,9 @@ class SecretsError(
                 "The Keychain refused access. You may need to unlock the device."
             OSStatusCode.NOT_AVAILABLE ->
                 "The Keychain is unavailable on this device right now."
+            OSStatusCode.DUPLICATE_ITEM ->
+                "A Keychain entry for this key already exists but could not be " +
+                    "updated. Remove the key and enter it again."
             else ->
                 "Keychain error $status: ${systemMessage ?: "unknown error"}"
         }

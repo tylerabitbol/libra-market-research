@@ -79,19 +79,38 @@ names none of them.
 `CODE_SIGN_STYLE: Automatic` / `DEVELOPMENT_TEAM` block and the -34018
 explanation into `iosApp/project.yml` verbatim.
 
-**Two Gradle deprecation warnings are open and both are out of our hands.**
-Gradle reports the build "incompatible with Gradle 10" from the plugins, not
-from our scripts. Separately, the `compose.runtime` / `compose.foundation` /
-`compose.material3` accessors in `app/build.gradle.kts` are deprecated in favour
-of explicit coordinates — but `org.jetbrains.compose.material3:material3` has
-published no stable 1.12.0, only `1.12.0-alpha03`, so naming them explicitly
-would mean choosing an alpha over what the plugin resolves. Re-checked against
-`maven-metadata.xml` on 2026-09-21: the 1.12.0 line still ends at alpha03 and
-the newest of any kind is `1.13.0-alpha01`. The plugin knows the
-right mapping. Both warnings are cosmetic and stay until the plugins update.
-(The `androidLibrary { }` → `android { }` rename that accompanied them is
-done.)
+**One Gradle deprecation warning is left, and the other was never the plugins'
+fault.** This entry used to say the "incompatible with Gradle 10" warning came
+from the plugins rather than our scripts. That was wrong, and `--warning-mode
+all` says so in two lines: `val generateFixtures by tasks.registering` in
+`core/build.gradle.kts` is the deprecated delegate syntax, and
+`export(project(":core"))` in `app/build.gradle.kts` passes a `Project` as a
+dependency notation, because in the Kotlin DSL `project(String)` outside a
+`dependencies { }` block is `Project.project(...)` and returns the project
+itself. `tasks.register("generateFixtures")` and
+`dependencies.project(":core")` are the spellings that survive Gradle 10, and
+with both in place the build reports no deprecations at all.
 
+What remains is the `compose.runtime` / `compose.foundation` /
+`compose.material3` accessors in `app/build.gradle.kts`, deprecated in favour of
+explicit coordinates. Re-checked against `maven-metadata.xml` on 2026-09-21:
+`runtime` and `foundation` both publish a stable `1.12.0`, but
+`material3` still ends at `1.12.0-alpha03`, and the newest of any kind is
+`1.13.0-alpha01`. Naming the three explicitly would therefore mean pinning two
+stable artifacts beside an alpha — which is exactly the mismatch the plugin's
+accessors exist to prevent. Cosmetic, and it stays until material3 ships a
+stable 1.12.0. (The `androidLibrary { }` → `android { }` rename that
+accompanied them is done.)
+
+
+**Deviation: Stage 2 fixed the Gradle 10 warning instead of moving on.**
+`PLAN.md` Stage 2.5/2.6 says the "incompatible with Gradle 10" warning "comes
+from the plugins rather than our scripts — re-check it and move on". The
+re-check found the opposite: both deprecations were in our own build scripts,
+and both were one-line fixes. Correcting them rather than recording a wrong
+premise a third time seemed the better reading of a stage whose purpose is to
+shrink the open-issues list, but it is more than the stage asked for, so it is
+logged here.
 
 **One stale worktree could not be removed, and the root's own cleanup lands on
 merge.** `PLAN.md` Stage 1 asks for both Claude worktrees to be removed.
@@ -879,10 +898,19 @@ prefix, and that no mock answers to a real vendor's identity.
 
 ## Open issues
 
-**Two Gradle deprecation warnings**, both waiting on upstream plugin releases —
-see [Build and toolchain](#build-and-toolchain). Nothing else is open: the iOS
-Keychain `-50` that blocked credential entry is fixed, and the cause is written
-up under [Secrets](#secrets) because it is a trap worth not re-entering.
+**One Gradle deprecation warning**, waiting on a stable
+`org.jetbrains.compose.material3:material3` 1.12.0 — see [Build and
+toolchain](#build-and-toolchain). The Gradle 10 warning that used to sit beside
+it is fixed; it was our own scripts, not the plugins.
+
+`KeystoreSecretsStore` now has tests: `core/src/androidDeviceTest` runs five
+against a real AndroidKeyStore through `:core:connectedAndroidDeviceTest`. AGP 9
+does give a KMP library a device-test source set, so the `:androidApp` fallback
+`PLAN.md` allowed for was not needed. The one wrinkle is that
+`withDeviceTest { }` creates the source set during configuration, so the script
+reaches it with `getByName("androidDeviceTest")` rather than the typed
+accessor — an accessor is generated from the *previous* configuration and would
+not exist in a clean checkout.
 
 
 **`PORT_PLAN.md §7` is not met literally on two counts.** It asks for Android on an

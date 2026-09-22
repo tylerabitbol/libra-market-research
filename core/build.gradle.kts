@@ -18,7 +18,7 @@ plugins {
  * Literals are chunked because a JVM string constant cannot exceed 64 KB in
  * the class file, and `sec_companyfacts_AAPL.json` is 140 KB.
  */
-val generateFixtures by tasks.registering {
+val generateFixtures = tasks.register("generateFixtures") {
     val source = layout.projectDirectory.dir("src/commonTest/resources/fixtures")
     val output = layout.buildDirectory.dir("generated/fixtures/kotlin")
     inputs.dir(source)
@@ -74,6 +74,14 @@ kotlin {
         namespace = "com.tylerabitbol.libra.core"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
+
+        // `KeystoreSecretsStore` needs a real AndroidKeyStore, which exists
+        // only on a device or emulator. This is the only compilation in the
+        // project that can exercise it; everything else about secrets is
+        // covered by the common tests on JVM and the iOS simulator.
+        withDeviceTest {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     // Exists only so commonTest runs fast: ./gradlew :core:jvmTest
@@ -110,6 +118,16 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.ktor.client.mock)
+        }
+        // `getByName`, not the `androidDeviceTest` accessor: `withDeviceTest`
+        // creates the source set during configuration, and the typed accessors
+        // are generated from the *previous* configuration, so a clean checkout
+        // would fail to compile this script.
+        getByName("androidDeviceTest").dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.core)
+            implementation(libs.androidx.test.ext.junit)
         }
     }
 }
