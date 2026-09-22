@@ -17,6 +17,43 @@ for a small number of companies you actually follow.
 > nothing here should be relied on to make a financial decision. Do your own
 > research and consult a licensed professional.
 
+## Developer note
+
+Libra is a personal research project, not a shipping product. There is no App Store
+build, no backend and no account: it runs from Xcode against free-tier API keys you
+supply yourself, and those keys live in the Keychain, entered once in Settings.
+
+If you are here to read the code rather than run the app, three things are worth
+knowing before you start:
+
+- **The substance is in `Libra/Calculations/`.** Roughly 3,400 lines of plain Swift over
+  already-fetched data — returns, betas, percentile ranks, MAD-based anomaly detection.
+  Nothing but Foundation in that layer — no UI or persistence framework reaches it —
+  no model in the path, and the functions are unit-tested against fixed inputs.
+- **The *Design decisions* section below is the actual documentation.** Each entry is a
+  case where the obvious implementation produces something confident and wrong, and why
+  it was built the other way. If you read one section, read that one.
+- **The absences are deliberate.** No overall score, no rating, no recommendation, no AI
+  anywhere in the app. These are enforced constraints, not unfinished work.
+
+### Demo
+
+A 90-second walkthrough on NVDA, recorded on device. It runs the dashboard of index
+levels, into the security detail and its one-year chart, filters *What changed* by kind,
+opens the market attribution — beta 1.92, sector sensitivity 1.34, each with its
+arithmetic shown — then the eleven-dimension research profile with what supports and
+what challenges the picture, the Form 4 filings and the debt change, the screener
+matching 3 of 3, and finally the data sources with their connection tests.
+
+Silent screen recording; click to play.
+
+<p align="center">
+  <a href="docs/libra-demo.mp4">
+    <img src="docs/libra-demo-poster.jpg" width="300"
+         alt="Play a 90-second walkthrough of Libra on NVDA: dashboard, security detail, change filters, market attribution, research profile, filings, screener and data sources">
+  </a>
+</p>
+
 ## What problem it solves
 
 A conventional stock app tells you a position is down 3%. That is the least
