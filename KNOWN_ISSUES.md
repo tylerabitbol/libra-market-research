@@ -558,6 +558,19 @@ colour is off on purpose: a caution is orange because it is a caution, and
 letting the wallpaper choose would make "is this a warning?" a question about
 the device.
 
+**One graph per tab.** The `NavHost` was flat — five tab routes and three
+pushed routes as siblings — with `switchTo` saving state against the app's
+single start destination. That approximates Swift's one-`NavigationStack`-per-tab
+without giving any section a stack of its own, while the file's own comment
+claimed the behaviour. Each section is a `navigation<T>` graph now, and
+`SecurityDetailRoute` is declared in four of them: Watchlist, Research and
+Screener because each links to a security, and Dashboard because
+`-LibraOpenSymbol` pushes one there — which is what keeps the deep link's
+documented behaviour that back returns to the Dashboard. Tab selection matches
+the graph's route rather than its start destination's, since a security pushed
+inside the Watchlist's graph has a route of its own. `NavigationTest` pins all
+of it; the flat graph could not have passed it.
+
 **Type-safe navigation routes.** `@Serializable` route types rather than
 `"security/{symbol}"` format strings, so a destination's arguments are checked
 by the compiler and the `SavedState` argument API never appears. Switching tabs

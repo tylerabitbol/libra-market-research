@@ -20,7 +20,9 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
@@ -60,18 +62,45 @@ import kotlin.reflect.KClass
  */
 @Serializable data class SecretEntryRoute(val key: String, val provider: String)
 
+/**
+ * One graph per tab, so each tab owns a back stack.
+ *
+ * Swift gives every tab its own `NavigationStack`. This was one flat `NavHost`
+ * with the five tab routes and the three pushed routes as siblings, and
+ * `switchTo` saving state against the app's single start destination — which
+ * approximates the behaviour without giving each section a stack of its own.
+ * Nesting is what makes the promise in `switchTo` true.
+ *
+ * A route belongs to every graph it can be reached from, which is why
+ * `SecurityDetailRoute` appears in four of them. The route type is the same
+ * either way; what differs is the graph it is pushed onto, and therefore the
+ * stack it is restored with.
+ */
+@Serializable object DashboardGraph
+@Serializable object WatchlistGraph
+@Serializable object ResearchGraph
+@Serializable object ScreenerGraph
+@Serializable object SettingsGraph
+
 /** A tab: its route, its title, and the glyph SF Symbols gave the Swift app. */
 enum class AppSection(
-    val route: Any,
-    val routeClass: KClass<*>,
+    /** The section's graph, which is what the bar navigates to. */
+    val graph: Any,
+    /**
+     * Matched against the current destination's hierarchy to light the tab.
+     * The graph, not its start destination: a security pushed inside the
+     * Watchlist's graph must keep the Watchlist tab selected, and its own route
+     * is not the Watchlist's.
+     */
+    val graphClass: KClass<*>,
     val title: String,
     val icon: ImageVector,
 ) {
-    Dashboard(DashboardRoute, DashboardRoute::class, "Dashboard", LibraIcons.Dashboard),
-    Watchlist(WatchlistRoute, WatchlistRoute::class, "Watchlist", LibraIcons.Watchlist),
-    Research(ResearchRoute, ResearchRoute::class, "Research", LibraIcons.Research),
-    Screener(ScreenerRoute, ScreenerRoute::class, "Screener", LibraIcons.Screener),
-    Settings(SettingsRoute, SettingsRoute::class, "Settings", LibraIcons.Settings),
+    Dashboard(DashboardGraph, DashboardGraph::class, "Dashboard", LibraIcons.Dashboard),
+    Watchlist(WatchlistGraph, WatchlistGraph::class, "Watchlist", LibraIcons.Watchlist),
+    Research(ResearchGraph, ResearchGraph::class, "Research", LibraIcons.Research),
+    Screener(ScreenerGraph, ScreenerGraph::class, "Screener", LibraIcons.Screener),
+    Settings(SettingsGraph, SettingsGraph::class, "Settings", LibraIcons.Settings),
 }
 
 @Composable
@@ -99,7 +128,7 @@ fun LibraNavigation(
                 for (section in AppSection.entries) {
                     val selected = current?.hierarchy?.any {
                         @Suppress("UNCHECKED_CAST")
-                        it.hasRoute(section.routeClass as KClass<Any>)
+                        it.hasRoute(section.graphClass as KClass<Any>)
                     } == true
                     NavigationBarItem(
                         selected = selected,
@@ -112,21 +141,38 @@ fun LibraNavigation(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            NavHost(navController, startDestination = DashboardRoute) {
-                composable<DashboardRoute> { screens.dashboard(navController) }
-                composable<WatchlistRoute> { screens.watchlist(navController) }
-                composable<ResearchRoute> { screens.research(navController) }
-                composable<ScreenerRoute> { screens.screener(navController) }
-                composable<SettingsRoute> { screens.settings(navController) }
-                composable<SecurityDetailRoute> { entry ->
-                    screens.securityDetail(entry.toRoute<SecurityDetailRoute>().symbol, navController)
+            NavHost(navController, startDestination = DashboardGraph) {
+                navigation<DashboardGraph>(startDestination = DashboardRoute) {
+                    composable<DashboardRoute> { screens.dashboard(navController) }
+                    composable<BenchmarkDetailRoute> { entry ->
+                        screens.benchmarkDetail(
+                            entry.toRoute<BenchmarkDetailRoute>().id,
+                            navController,
+                        )
+                    }
+                    // Only `-LibraOpenSymbol` pushes a security here; nothing on
+                    // the Dashboard links to one. It is declared so the deep
+                    // link still lands on the Dashboard's stack, which is what
+                    // keeps its documented behaviour — back returns there.
+                    securityDetail(screens, navController)
                 }
-                composable<BenchmarkDetailRoute> { entry ->
-                    screens.benchmarkDetail(entry.toRoute<BenchmarkDetailRoute>().id, navController)
+                navigation<WatchlistGraph>(startDestination = WatchlistRoute) {
+                    composable<WatchlistRoute> { screens.watchlist(navController) }
+                    securityDetail(screens, navController)
                 }
-                composable<SecretEntryRoute> { entry ->
-                    val route = entry.toRoute<SecretEntryRoute>()
-                    screens.secretEntry(route, navController)
+                navigation<ResearchGraph>(startDestination = ResearchRoute) {
+                    composable<ResearchRoute> { screens.research(navController) }
+                    securityDetail(screens, navController)
+                }
+                navigation<ScreenerGraph>(startDestination = ScreenerRoute) {
+                    composable<ScreenerRoute> { screens.screener(navController) }
+                    securityDetail(screens, navController)
+                }
+                navigation<SettingsGraph>(startDestination = SettingsRoute) {
+                    composable<SettingsRoute> { screens.settings(navController) }
+                    composable<SecretEntryRoute> { entry ->
+                        screens.secretEntry(entry.toRoute<SecretEntryRoute>(), navController)
+                    }
                 }
             }
         }
@@ -140,10 +186,26 @@ fun LibraNavigation(
  * that reset the screen, which is not what a tab is.
  */
 fun NavHostController.switchTo(section: AppSection) {
-    navigate(section.route) {
+    navigate(section.graph) {
         popUpTo(graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+/**
+ * `SecurityDetailRoute`, declared into whichever graph is being built.
+ *
+ * Four graphs can reach a security, and each needs its own destination so the
+ * push lands on that section's stack. The screen is the same one; only its
+ * parent differs.
+ */
+private fun NavGraphBuilder.securityDetail(
+    screens: LibraScreens,
+    navController: NavHostController,
+) {
+    composable<SecurityDetailRoute> { entry ->
+        screens.securityDetail(entry.toRoute<SecurityDetailRoute>().symbol, navController)
     }
 }
 
