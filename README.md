@@ -27,9 +27,9 @@ If you are here to read the code rather than run the app, three things are worth
 knowing before you start:
 
 - **The substance is in `Libra/Calculations/`.** Roughly 3,400 lines of plain Swift over
-  already-fetched data — returns, betas, percentile ranks, MAD-based anomaly detection.
-  Nothing but Foundation in that layer — no UI or persistence framework reaches it —
-  no model in the path, and the functions are unit-tested against fixed inputs.
+  already-fetched data: returns, betas, percentile ranks, MAD-based anomaly detection.
+  Nothing but Foundation reaches that layer, no UI or persistence framework and no model
+  in the path, and the functions are unit-tested against fixed inputs.
 - **The *Design decisions* section below is the actual documentation.** Each entry is a
   case where the obvious implementation produces something confident and wrong, and why
   it was built the other way. If you read one section, read that one.
@@ -40,12 +40,12 @@ knowing before you start:
 
 A 90-second walkthrough on NVDA, recorded on device. It runs the dashboard of index
 levels, into the security detail and its one-year chart, filters *What changed* by kind,
-opens the market attribution — beta 1.92, sector sensitivity 1.34, each with its
-arithmetic shown — then the eleven-dimension research profile with what supports and
+opens the market attribution (beta 1.92, sector sensitivity 1.34, each with its
+arithmetic shown), then the eleven-dimension research profile with what supports and
 what challenges the picture, the Form 4 filings and the debt change, the screener
 matching 3 of 3, and finally the data sources with their connection tests.
 
-Silent screen recording. Click to play on Google Drive — GitHub will not play a video
+Silent screen recording. Click to play on Google Drive; GitHub will not play a video
 stored in a repository, only one hosted on its own CDN.
 
 <p align="center">
