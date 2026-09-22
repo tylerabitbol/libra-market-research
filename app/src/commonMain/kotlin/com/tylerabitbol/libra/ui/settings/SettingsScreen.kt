@@ -29,6 +29,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.tylerabitbol.libra.ui.components.libraCard
+import com.tylerabitbol.libra.ui.components.SectionCaption
+import com.tylerabitbol.libra.ui.components.GroupedSection
 import com.tylerabitbol.libra.app.AppEnvironment
 import com.tylerabitbol.libra.app.SourceReadiness
 import com.tylerabitbol.libra.models.provenance.DataProviderID
@@ -74,23 +77,30 @@ fun SettingsScreen(
             item { StorageUnavailableBanner(reason) }
         }
 
-        item { SectionHeader("Data sources") }
-
-        items(dataSources, key = { it.key.raw }) { source ->
-            val readiness = environment.readiness(source.provider)
-            Column(verticalArrangement = Arrangement.spacedBy(LibraSpacing.small)) {
-                DataSourceRow(
-                    source = source,
-                    readiness = readiness,
-                    // Typing a key into a store that cannot retain it is worse
-                    // than saying up front that it won't work.
-                    enabled = health.isAvailable,
-                    onClick = { onOpenKey(source.key, source.provider) },
-                )
-                if (readiness.isReady) {
-                    ConnectionTestRow(environment, source.provider)
+        item {
+            GroupedSection(header = "Data sources") {
+                for (source in dataSources) {
+                    row {
+                        val readiness = environment.readiness(source.provider)
+                        Column(
+                            Modifier.padding(LibraSpacing.medium),
+                            verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
+                        ) {
+                            DataSourceRow(
+                                source = source,
+                                readiness = readiness,
+                                // Typing a key into a store that cannot retain
+                                // it is worse than saying up front that it
+                                // won't work.
+                                enabled = health.isAvailable,
+                                onClick = { onOpenKey(source.key, source.provider) },
+                            )
+                            if (readiness.isReady) {
+                                ConnectionTestRow(environment, source.provider)
+                            }
+                        }
+                    }
                 }
-                HorizontalDivider()
             }
         }
 
@@ -107,9 +117,14 @@ fun SettingsScreen(
             )
         }
 
-        item { SectionHeader("About") }
+        item { SectionCaption("About") }
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(LibraSpacing.small)) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .libraCard(LibraShapes.group),
+                verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
+            ) {
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                     Text(
                         "Research tool",

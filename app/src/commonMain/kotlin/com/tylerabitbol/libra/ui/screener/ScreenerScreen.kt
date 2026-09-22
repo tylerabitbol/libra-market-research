@@ -39,6 +39,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tylerabitbol.libra.ui.components.GroupedSection
+import com.tylerabitbol.libra.ui.components.groupedRow
+import com.tylerabitbol.libra.ui.components.GroupedDivider
 import com.tylerabitbol.libra.ui.components.SwipeToDelete
 import com.tylerabitbol.libra.calculations.Screen
 import com.tylerabitbol.libra.calculations.ScreenCombinator
@@ -131,15 +134,26 @@ fun ScreenerScreen(
             }
 
             if (state.savedScreens.isNotEmpty()) {
-                item { SectionHeader("Saved screens") }
-                items(state.savedScreens.size, key = { state.savedScreens[it].id }) { index ->
-                    val saved = state.savedScreens[index]
-                    SwipeToDelete(
-                        rowKey = saved.id,
-                        label = "Delete",
-                        onDelete = { onDeleteSaved(saved) },
-                    ) {
-                        SavedScreenRow(saved, { onApplySaved(saved) }, { onDeleteSaved(saved) })
+                item {
+                    GroupedSection(header = "Saved screens") {
+                        for (saved in state.savedScreens) {
+                            row {
+                                // The swipe sits inside the group, so the red
+                                // panel it reveals is clipped by the group's
+                                // rounded fill rather than squaring it off.
+                                SwipeToDelete(
+                                    rowKey = saved.id,
+                                    label = "Delete",
+                                    onDelete = { onDeleteSaved(saved) },
+                                ) {
+                                    SavedScreenRow(
+                                        saved,
+                                        { onApplySaved(saved) },
+                                        { onDeleteSaved(saved) },
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -154,14 +168,18 @@ fun ScreenerScreen(
                         color = LibraTheme.colors.secondaryText,
                     )
                 }
-                else -> items(results.size, key = { results[it].symbol }) { index ->
-                    val subject = results[index]
-                    ResultRow(
-                        subject = subject,
-                        fields = state.screen.rules.map { it.field },
-                        onClick = { onOpenSecurity(subject.symbol) },
-                    )
-                    HorizontalDivider()
+                else -> item {
+                    GroupedSection {
+                        for (subject in results) {
+                            row {
+                                ResultRow(
+                                    subject = subject,
+                                    fields = state.screen.rules.map { it.field },
+                                    onClick = { onOpenSecurity(subject.symbol) },
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

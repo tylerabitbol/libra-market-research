@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -31,6 +32,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tylerabitbol.libra.ui.components.groupedRowPadding
+import com.tylerabitbol.libra.ui.components.groupedRow
+import com.tylerabitbol.libra.ui.components.GroupedDivider
 import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.support.RelativeTimeText
 import com.tylerabitbol.libra.ui.LibraAlpha
@@ -82,22 +86,42 @@ fun WatchlistScreen(
         } else {
             LazyColumn(
                 contentPadding = PaddingValues(LibraSpacing.large),
-                verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
+                // No blanket spacing: the rows below are one grouped card and
+                // must sit flush. The loose items pad themselves.
             ) {
                 if (isUsingSampleData) {
-                    item { SampleDataBanner() }
+                    item {
+                        Column(Modifier.padding(bottom = LibraSpacing.medium)) {
+                            SampleDataBanner()
+                        }
+                    }
                 }
 
-                items(state.sortedRows, key = { it.symbol }) { row ->
-                    WatchlistRowView(
-                        row = row,
-                        onClick = { onOpenSecurity(row.symbol) },
-                        onRemove = { onRemove(row.symbol) },
-                    )
-                    HorizontalDivider()
+                itemsIndexed(state.sortedRows, key = { _, row -> row.symbol }) { index, row ->
+                    // A lazy list cannot be wrapped in one card, so each row
+                    // carries its own share of the group fill and rounds only
+                    // the corners that are actually on the outside.
+                    Column(
+                        Modifier.groupedRow(
+                            isFirst = index == 0,
+                            isLast = index == state.sortedRows.lastIndex,
+                        ),
+                    ) {
+                        WatchlistRowView(
+                            row = row,
+                            onClick = { onOpenSecurity(row.symbol) },
+                            onRemove = { onRemove(row.symbol) },
+                            modifier = Modifier.padding(horizontal = groupedRowPadding),
+                        )
+                        if (index < state.sortedRows.lastIndex) GroupedDivider()
+                    }
                 }
 
-                item { FreshnessLabel(state.freshness) }
+                item {
+                    Column(Modifier.padding(top = LibraSpacing.medium)) {
+                        FreshnessLabel(state.freshness)
+                    }
+                }
             }
         }
     }
@@ -202,9 +226,10 @@ private fun WatchlistRowView(
     row: WatchlistRow,
     onClick: () -> Unit,
     onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
             .padding(vertical = 2.dp),
