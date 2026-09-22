@@ -963,12 +963,33 @@ accessor — an accessor is generated from the *previous* configuration and woul
 not exist in a clean checkout.
 
 
-**`PORT_PLAN.md §7` is not met literally on two counts.** It asks for Android on an
-API 26 emulator *and* a current device; the manual pass ran on `medium_phone`,
-API 36, and on no physical device. API 26 is the manifest floor and the build
-asserts it, but nobody has watched the app run there. iOS ran on 27.0 rather
-than the 26 the plan names, because the 26.5 runtime here is broken — see
-[Platform shells](#platform-shells).
+**`PORT_PLAN.md §7` is still not met, and `PLAN.md` Stage 5 did not close it.**
+The stage asked for four things. One is done, three are not, and the reasons
+differ:
+
+- **iOS 27.0 on iPhone 18 Pro: done.** Built through XcodeGen and `xcodebuild`,
+  run on live credentials. Dashboard, Watchlist, and the security page with its
+  1Y chart filling the width and drawing its axis labels. The new top bar's
+  back chevron returns to the Watchlist, which is the affordance iOS had no
+  substitute for.
+- **API 26 emulator: not run.** `system-images;android-26;google_apis;arm64-v8a`
+  exists, but this machine's SDK has no `cmdline-tools`, so there is no
+  `sdkmanager` or `avdmanager` to create the AVD with, and installing the image
+  means accepting Google's SDK licence. That is the owner's to accept, not an
+  agent's, so it stopped there.
+- **A physical Android device: not run.** None is attached. `adb devices` lists
+  only `emulator-5554`.
+- **`-LibraSelfTest`'s six PASS lines: not captured.** The self test does run on
+  iOS — the unified log shows it opening live connections to Finnhub, FRED and
+  Tiingo, which it could not do without reading the Keychain first — but Kermit
+  writes those lines to stdout, and neither `log stream` nor
+  `simctl launch --console-pty` surfaced them here. On Android it cannot run at
+  all until the credentials are re-entered; see the `-LibraOpenSymbol` entry
+  above for how they were lost.
+
+What the manual pass did establish still stands: `medium_phone`, API 36, and
+iOS 27.0. API 26 remains the manifest floor that the build asserts and nobody
+has watched.
 
 
 ## Deliberately absent
