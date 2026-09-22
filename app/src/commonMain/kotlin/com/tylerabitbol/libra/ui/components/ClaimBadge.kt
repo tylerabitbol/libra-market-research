@@ -29,6 +29,7 @@ import com.tylerabitbol.libra.models.provenance.Claim
 import com.tylerabitbol.libra.models.provenance.ClaimKind
 import com.tylerabitbol.libra.models.provenance.Derivation
 import com.tylerabitbol.libra.models.provenance.SourceReference
+import com.tylerabitbol.libra.ui.LibraAlpha
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 
@@ -45,7 +46,7 @@ fun ClaimBadge(kind: ClaimKind, modifier: Modifier = Modifier) {
         color = tint,
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(tint.copy(alpha = 0.15f))
+            .background(tint.copy(alpha = LibraAlpha.chipFill))
             .padding(horizontal = 5.dp, vertical = 2.dp)
             .semantics { contentDescription = "${kind.label}. ${kind.definition}" },
     )
@@ -57,10 +58,10 @@ fun ClaimBadge(kind: ClaimKind, modifier: Modifier = Modifier) {
  */
 @Composable
 private fun ClaimKind.tint(): Color = when (this) {
-    ClaimKind.Fact -> MaterialTheme.colorScheme.onSurface
-    ClaimKind.Calculation -> MaterialTheme.colorScheme.primary
-    ClaimKind.Interpretation -> Color(0xFF7A5AF8)
-    ClaimKind.Hypothesis -> LibraTheme.colors.caution
+    ClaimKind.Fact -> LibraTheme.colors.claimFact
+    ClaimKind.Calculation -> LibraTheme.colors.claimCalculation
+    ClaimKind.Interpretation -> LibraTheme.colors.claimInterpretation
+    ClaimKind.Hypothesis -> LibraTheme.colors.claimHypothesis
 }
 
 /**
