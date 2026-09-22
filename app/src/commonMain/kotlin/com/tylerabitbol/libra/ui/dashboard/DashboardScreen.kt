@@ -30,6 +30,7 @@ import com.tylerabitbol.libra.models.core.Benchmark
 import com.tylerabitbol.libra.models.core.MacroUnit
 import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.support.RelativeTimeText
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
@@ -148,7 +149,7 @@ private fun BenchmarkGroup(
     Column(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(LibraShapes.group)
             .background(MaterialTheme.colorScheme.surfaceVariant),
     ) {
         for ((index, row) in rows.withIndex()) {
@@ -290,7 +291,7 @@ private fun SectorTile(performance: BenchmarkPerformance, onClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(LibraShapes.smallCard)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .clickable(onClick = onClick)
             .padding(10.dp),
@@ -314,7 +315,7 @@ private fun MacroCard(reading: DashboardViewModel.MacroReading) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(LibraShapes.smallCard)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(3.dp),

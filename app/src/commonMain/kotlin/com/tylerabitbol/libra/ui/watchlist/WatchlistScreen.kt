@@ -33,6 +33,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.support.RelativeTimeText
+import com.tylerabitbol.libra.ui.LibraAlpha
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
@@ -172,8 +174,8 @@ private fun SaveErrorBanner(message: String, onDismiss: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = LibraSpacing.large)
-            .clip(RoundedCornerShape(8.dp))
-            .background(LibraTheme.colors.negative.copy(alpha = 0.12f))
+            .clip(LibraShapes.smallCard)
+            .background(LibraTheme.colors.negative.copy(alpha = LibraAlpha.bannerFill))
             .padding(LibraSpacing.medium),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
@@ -295,8 +297,8 @@ private fun WatchlistRowContext(row: WatchlistRow) {
                     style = LibraType.codeSmallEmphasis,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                        .clip(LibraShapes.badge)
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = LibraAlpha.chipFill))
                         .padding(horizontal = 4.dp, vertical = 1.dp),
                 )
             }

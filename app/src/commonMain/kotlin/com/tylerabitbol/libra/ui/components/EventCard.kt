@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.models.core.DetectedEventDTO
 import com.tylerabitbol.libra.support.Format
+import com.tylerabitbol.libra.ui.LibraAlpha
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 import kotlin.math.max
@@ -46,9 +48,7 @@ fun EventCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(14.dp),
+            .libraCard(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         EventHeader(event, symbol, isNew)
@@ -124,9 +124,7 @@ private fun Tag(text: String, tint: Color, accessibilityLabel: String? = null) {
         style = LibraType.codeSmallEmphasis,
         color = tint,
         modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(tint.copy(alpha = 0.15f))
-            .padding(horizontal = 5.dp, vertical = 2.dp)
+            .libraChip(tint)
             .then(
                 if (accessibilityLabel == null) {
                     Modifier

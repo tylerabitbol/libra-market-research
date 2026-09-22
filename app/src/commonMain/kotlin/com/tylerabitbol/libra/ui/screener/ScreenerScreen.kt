@@ -46,7 +46,9 @@ import com.tylerabitbol.libra.calculations.ScreenComparison
 import com.tylerabitbol.libra.calculations.ScreenField
 import com.tylerabitbol.libra.calculations.ScreenRule
 import com.tylerabitbol.libra.calculations.ScreenSubject
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
+import com.tylerabitbol.libra.ui.components.libraCard
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.viewmodels.ScreenerUiState
@@ -285,9 +287,7 @@ private fun RuleEditor(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(LibraSpacing.medium),
+            .libraCard(LibraShapes.group),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(

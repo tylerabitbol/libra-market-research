@@ -18,6 +18,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.tylerabitbol.libra.ui.LibraAlpha
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 
@@ -55,7 +57,7 @@ fun DisclaimerBanner(modifier: Modifier = Modifier) {
 fun SampleDataBanner(modifier: Modifier = Modifier) {
     Banner(
         modifier = modifier,
-        background = LibraTheme.colors.caution.copy(alpha = 0.12f),
+        background = LibraTheme.colors.caution.copy(alpha = LibraAlpha.bannerFill),
         glyph = "!",
         glyphColor = LibraTheme.colors.caution,
         title = "Sample data",
@@ -80,7 +82,7 @@ private fun Banner(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(LibraShapes.smallCard)
             .background(background)
             .padding(horizontal = LibraSpacing.medium, vertical = 10.dp)
             // One announcement rather than three fragments, which is what

@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.ui.components.menuCheckmark
 import com.tylerabitbol.libra.models.core.EvidenceCategory
+import com.tylerabitbol.libra.ui.LibraAlpha
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.components.EventCard
@@ -206,7 +207,7 @@ private fun FilterChip(title: String, isOn: Boolean, onClick: () -> Unit) {
             .clip(CircleShape)
             .background(
                 if (isOn) {
-                    accent.copy(alpha = 0.18f)
+                    accent.copy(alpha = LibraAlpha.chipSelected)
                 } else {
                     MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 },

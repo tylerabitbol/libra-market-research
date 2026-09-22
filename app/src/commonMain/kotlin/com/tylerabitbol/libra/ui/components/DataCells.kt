@@ -1,5 +1,6 @@
 package com.tylerabitbol.libra.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -138,18 +140,23 @@ fun FreshnessLabel(
 /**
  * [FreshnessLabel] pinned over a page that scrolls under it.
  *
- * SwiftUI floats it on `.regularMaterial`, which separates it from whatever it
- * covers. Compose has no material, and on a flat `surfaceVariant` the pill was
- * the same tone as the cards beneath it — the label read as text spilled across
- * the content behind it. So it takes an opaque surface and a shadow instead.
+ * SwiftUI floats it on `.regularMaterial` — a real backdrop blur, which
+ * separates it from whatever it covers. Compose Multiplatform has no
+ * cross-platform equivalent, and the two honest substitutes are a translucent
+ * scrim or an opaque fill. A scrim without blur smears the content behind it,
+ * so this is opaque: the card fill, with a hairline separator border to hold
+ * the edge where the pill sits over a card of the same colour.
+ *
+ * No shadow. The Swift app has none anywhere, and a drop shadow under a pill
+ * that nothing else in the app casts reads as a different app's component.
  */
 @Composable
 fun PinnedFreshnessLabel(freshness: Freshness, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 3.dp,
+        color = LibraTheme.colors.cardFill,
+        border = BorderStroke(Dp.Hairline, LibraTheme.colors.separator),
     ) {
         FreshnessLabel(
             freshness,

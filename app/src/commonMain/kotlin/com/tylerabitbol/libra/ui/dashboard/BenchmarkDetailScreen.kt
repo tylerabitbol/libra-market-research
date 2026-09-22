@@ -31,7 +31,9 @@ import com.tylerabitbol.libra.calculations.PeriodReturn
 import com.tylerabitbol.libra.models.core.ChartAvailability
 import com.tylerabitbol.libra.models.core.ChartRange
 import com.tylerabitbol.libra.support.Format
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
+import com.tylerabitbol.libra.ui.components.libraCard
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.ui.components.DirectionalChangeText
@@ -122,9 +124,7 @@ private fun ChartSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(14.dp),
+            .libraCard(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         // Index-backed benchmarks offer five ranges, not seven: FRED publishes
@@ -233,9 +233,7 @@ private fun ReturnsSection(state: BenchmarkDetailUiState) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .padding(LibraSpacing.medium),
+                .libraCard(LibraShapes.group),
         ) {
             ReturnColumn("1D", state.daily)
             ReturnColumn("1W", state.weekly)

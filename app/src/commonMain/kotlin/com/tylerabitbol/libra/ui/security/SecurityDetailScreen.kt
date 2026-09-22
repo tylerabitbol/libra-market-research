@@ -55,6 +55,7 @@ import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.support.RelativeTimeText
 import com.tylerabitbol.libra.support.Freshness
 import com.tylerabitbol.libra.ui.LibraSpacing
+import com.tylerabitbol.libra.ui.components.libraCard
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.ui.components.menuCheckmark
@@ -801,9 +802,7 @@ internal fun Card(content: @Composable androidx.compose.foundation.layout.Column
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(14.dp),
+            .libraCard(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         content = content,
     )

@@ -34,6 +34,8 @@ import com.tylerabitbol.libra.app.SourceReadiness
 import com.tylerabitbol.libra.models.provenance.DataProviderID
 import com.tylerabitbol.libra.services.providers.ConnectionTest
 import com.tylerabitbol.libra.services.secrets.SecretKey
+import com.tylerabitbol.libra.ui.LibraAlpha
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
@@ -306,8 +308,8 @@ private fun StorageUnavailableBanner(reason: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(LibraTheme.colors.negative.copy(alpha = 0.12f))
+            .clip(LibraShapes.smallCard)
+            .background(LibraTheme.colors.negative.copy(alpha = LibraAlpha.bannerFill))
             .padding(horizontal = LibraSpacing.medium, vertical = 10.dp)
             .semantics(mergeDescendants = true) {
                 contentDescription = "Secure storage unavailable. $reason"

@@ -51,9 +51,7 @@ fun ResearchProfileCard(profile: ResearchProfile, modifier: Modifier = Modifier)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(14.dp),
+            .libraCard(),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         ClaimRow(profile.shapeClaim)

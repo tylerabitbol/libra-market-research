@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.calculations.FilingAnalysis
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 
@@ -45,9 +46,7 @@ fun FilingAnalysisCard(analysis: FilingAnalysis.Result, modifier: Modifier = Mod
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(14.dp),
+            .libraCard(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(
@@ -67,7 +66,7 @@ fun FilingAnalysisCard(analysis: FilingAnalysis.Result, modifier: Modifier = Mod
                 style = LibraType.codeSmallEmphasis,
                 color = LibraTheme.colors.secondaryText,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(LibraShapes.chip)
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.6f))
                     .padding(horizontal = 5.dp, vertical = 2.dp),
             )

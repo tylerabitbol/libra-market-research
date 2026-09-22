@@ -32,6 +32,7 @@ import com.tylerabitbol.libra.calculations.HistoricalContext
 import com.tylerabitbol.libra.calculations.ValuationMetric
 import com.tylerabitbol.libra.services.providers.FilingDTO
 import com.tylerabitbol.libra.support.Format
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
@@ -135,7 +136,7 @@ private fun ValuationRow(metric: ValuationMetric, context: HistoricalContext, as
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(LibraShapes.panel)
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
                     .padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -375,7 +376,7 @@ private fun PrimarySourceTag() {
         style = LibraType.codeSmallEmphasis,
         color = LibraTheme.colors.secondaryText,
         modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
+            .clip(LibraShapes.chip)
             .background(LibraTheme.colors.tertiaryText.copy(alpha = 0.2f))
             .padding(horizontal = 5.dp, vertical = 2.dp),
     )

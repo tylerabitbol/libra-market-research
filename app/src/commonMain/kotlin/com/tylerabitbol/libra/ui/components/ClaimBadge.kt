@@ -28,6 +28,7 @@ import com.tylerabitbol.libra.models.provenance.Claim
 import com.tylerabitbol.libra.models.provenance.ClaimKind
 import com.tylerabitbol.libra.models.provenance.Derivation
 import com.tylerabitbol.libra.models.provenance.SourceReference
+import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraAlpha
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
@@ -41,9 +42,7 @@ fun ClaimBadge(kind: ClaimKind, modifier: Modifier = Modifier) {
         style = LibraType.codeSmallEmphasis,
         color = tint,
         modifier = modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(tint.copy(alpha = LibraAlpha.chipFill))
-            .padding(horizontal = 5.dp, vertical = 2.dp)
+            .libraChip(tint)
             .semantics { contentDescription = "${kind.label}. ${kind.definition}" },
     )
 }
@@ -102,7 +101,7 @@ private fun DerivationDetail(derivation: Derivation?, sources: List<SourceRefere
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(6.dp))
+            .clip(LibraShapes.panel)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
             .padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),

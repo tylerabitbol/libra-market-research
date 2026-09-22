@@ -1,6 +1,7 @@
 package com.tylerabitbol.libra.ui
 
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -311,6 +312,28 @@ object LibraSpacing {
 
     /** Bottom inset so scrolled content clears the floating freshness pill. */
     val pillClearance = 44.dp
+}
+
+/**
+ * Corner radii, as a ladder rather than a literal.
+ *
+ * Swift uses six, and uses them consistently: the smaller the thing, the
+ * tighter the corner. The port already followed the same ladder — these are the
+ * radii it was already writing out by hand.
+ */
+object LibraShapes {
+    /** A tiny inline marker, like the RARE badge. */
+    val badge = RoundedCornerShape(3.dp)
+    /** A tinted chip or claim badge. */
+    val chip = RoundedCornerShape(4.dp)
+    /** The derivation panel behind an expanded claim. */
+    val panel = RoundedCornerShape(6.dp)
+    /** A small card, or a banner. */
+    val smallCard = RoundedCornerShape(8.dp)
+    /** A stack of rows read as one group. */
+    val group = RoundedCornerShape(10.dp)
+    /** The standard card. Nineteen of them in the Swift app. */
+    val card = RoundedCornerShape(12.dp)
 }
 
 /**
