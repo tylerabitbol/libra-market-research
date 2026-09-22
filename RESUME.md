@@ -11,6 +11,29 @@ SecurityDetail screens, all compiling on both `iosSimulatorArm64` and `android`,
 later ones ~15-40 s).
 Every commit is on this branch; nothing is stashed.
 
+**`PLAN.md`'s five stages have been worked, and four of them are finished.**
+Stage 1 (workspace and build), Stage 2 (the six open issues), Stage 3 (UI
+fidelity) and Stage 4 (per-tab navigation graphs) are done and committed.
+Stage 5 (verification) is not: iOS 27.0 was walked, but the API 26 emulator,
+the physical Android device and the self test's six PASS lines were not — the
+reasons are under [Open issues](KNOWN_ISSUES.md#open-issues), and two of them
+need the owner rather than more work.
+
+Test counts at that point: **477** `:core` on JVM, **477** on
+`iosSimulatorArm64`, **20** `:app` UI tests (17 plus three navigation tests),
+and **5** Android instrumentation tests against a real AndroidKeyStore, which
+`:core` had no compilation for before. No failures.
+
+Two things found and deliberately not fixed, both written up in
+`KNOWN_ISSUES.md`: the `-LibraOpenSymbol` page still disagrees with the
+Watchlist path on live keys even after both of Stage 2.4's fixes, and the base
+colour scheme is Material's baseline purple rather than Libra's neutral.
+
+The Android emulator's six credentials were lost during Stage 5 — `pm clear`
+removes the SharedPreferences the secrets store encrypts into. They have to be
+re-entered in Settings before anything on Android can be checked against live
+data again. iOS still has its own.
+
 The port plan is finished and archived at `docs/PORT_PLAN.md` — that is what
 `PORT_PLAN.md §N` means throughout this file and `KNOWN_ISSUES.md`. The current
 plan, covering workspace cleanup, the remaining open issues and the UI parity
