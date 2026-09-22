@@ -24,6 +24,8 @@ is the reference for every ported file.
 ## Toolchain
 
 JDK 21, Android SDK (compile 37, min 26), Xcode 27, XcodeGen.
+Use an iOS 27 simulator: the 26.5 runtime on this machine is broken, and
+`KNOWN_ISSUES.md` → Platform shells says how it fails.
 Installed here via Homebrew; `local.properties` points at the SDK.
 
 Everything large is relocatable: `GRADLE_USER_HOME`, `ANDROID_HOME`
@@ -64,19 +66,21 @@ iOS:
 ```sh
 cd iosApp && xcodegen generate         # after any project.yml change
 xcodebuild -project Libra.xcodeproj -scheme Libra \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' build
 ```
 
 Xcode builds the Kotlin framework itself, through the target's
 `embedAndSignAppleFrameworkForXcode` pre-build script, so opening
 `Libra.xcodeproj` and pressing Run is enough.
 
-To run it from a terminal instead, note that `open -a Simulator` does not find
-the app — it lives inside Xcode:
+To run it from a terminal instead, note that `open -a Simulator` fails and
+always will: Xcode 27 replaced Simulator with DeviceHub and moved the developer
+apps out of `Contents/Developer/Applications`, which `xcode-select -p` points
+at. The window you want is:
 
 ```sh
-open "$(xcode-select -p)/Applications/Simulator.app"
-xcrun simctl boot 'iPhone 17 Pro'
+open "/Applications/Xcode.app/Contents/Applications/DeviceHub.app"
+xcrun simctl boot 'iPhone 18 Pro'
 xcrun simctl install booted <path-to>/Libra.app
 xcrun simctl launch booted com.tylerabitbol.libra
 ```

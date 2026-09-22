@@ -93,6 +93,20 @@ right mapping. Both warnings are cosmetic and stay until the plugins update.
 done.)
 
 
+**One stale worktree could not be removed, and the root's own cleanup lands on
+merge.** `PLAN.md` Stage 1 asks for both Claude worktrees to be removed.
+`mock-libra-website-63d82d` was clean and had no commits beyond `main`, so it is
+gone. `master-plan-known-issues-ed4a90` is the worktree the cleanup itself ran
+in — git refuses to remove a worktree from inside it, and there is no way to do
+otherwise in one pass. Remove it from the main checkout once its branch lands.
+
+The same stage's root-side edits — the three new `.gitignore` entries and the
+pointer lines in `README.md` and `ROADMAP.md` — are committed on that branch
+rather than on `main`, so the root checkout keeps reporting `Claude outputs/`,
+`brag-output/` and `Translation/` as untracked until it merges. The rules
+themselves are verified: `git ls-files --others --exclude-from` against the new
+file returns nothing for all three.
+
 ## Support and value types
 
 Foundation types with no multiplatform counterpart, and what replaced them:

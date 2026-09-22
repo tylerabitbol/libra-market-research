@@ -114,8 +114,11 @@ kotlin {
     }
 }
 
+// `"${'$'}projectDir/schemas"` escapes the dollar, so Room was handed the literal
+// string and exported into a directory named `$projectDir`. Resolve the path
+// here instead, where there is nothing to escape.
 room {
-    schemaDirectory("${'$'}projectDir/schemas")
+    schemaDirectory(layout.projectDirectory.dir("schemas").asFile.path)
 }
 
 // Room's compiler runs through KSP, which must be wired up per target rather
