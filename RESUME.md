@@ -1,7 +1,7 @@
 # Where the port stands
 
 **Last checkpoint: the port is done. Phases 0-9 complete, and the manual pass
-of `PLAN.md §7` has been run on both platforms against live API keys.**
+of `PORT_PLAN.md §7` has been run on both platforms against live API keys.**
 Phases 0–7 complete: 475 `:core` tests green on both JVM and the iOS
 simulator. Phase 8: theme, navigation, the component set, and the Settings,
 SecretEntry, Watchlist, Dashboard, BenchmarkDetail, Research, Screener and
@@ -11,13 +11,18 @@ SecurityDetail screens, all compiling on both `iosSimulatorArm64` and `android`,
 later ones ~15-40 s).
 Every commit is on this branch; nothing is stashed.
 
+The port plan is finished and archived at `docs/PORT_PLAN.md` — that is what
+`PORT_PLAN.md §N` means throughout this file and `KNOWN_ISSUES.md`. The current
+plan, covering workspace cleanup, the remaining open issues and the UI parity
+work, is `PLAN.md`.
+
 A cleanup pass has since removed the declarations that had no references
 anywhere — four unwired vendor serializers, the `UnportedScreen` placeholder,
 an unused DAO query and test stub, and 39 unused imports. Both platforms still
 compile and the 475 JVM tests are green. The list, and the three dead-looking
 things deliberately kept, are under "Deliberately absent" in `KNOWN_ISSUES.md`.
 
-Read `PLAN.md` for the phase outline. `KNOWN_ISSUES.md` holds every deviation,
+Read `PORT_PLAN.md` for the phase outline. `KNOWN_ISSUES.md` holds every deviation,
 now organised by the part of the codebase it constrains rather than by phase —
 its table at the top maps a directory to the section to read before touching it.
 
@@ -94,7 +99,7 @@ Test suites at the same checkpoint: **475** `:core` on JVM, **475** `:core` on
   used to name. That 26.5 runtime is broken on this machine — one boot failed
   with `EINVAL` outright, and launching on it crashed the system shell. The
   27.0 devices are clean. `KNOWN_ISSUES.md`, "Platform shells".
-- **Android: `medium_phone`, API 36.** `PLAN.md §7` asks for an API 26
+- **Android: `medium_phone`, API 36.** `PORT_PLAN.md §7` asks for an API 26
   emulator and a current device. API 26 is the manifest floor and the build
   asserts it; no API 26 emulator and no physical device were exercised. That is
   the one line of the definition of done not literally met.
@@ -157,14 +162,14 @@ ported. Nothing from Phases 1–7 is outstanding.
 
 ## Phase 8 — UI: done
 
-In `PLAN.md §8`'s order: `Theme.kt`, `Icons.kt`, `Navigation.kt`, `App.kt`,
+In `PORT_PLAN.md §8`'s order: `Theme.kt`, `Icons.kt`, `Navigation.kt`, `App.kt`,
 `Screens.kt`; `Components/*` (banners, claim badge, data cells, attribution
 card, event card, research profile card, filing analysis card, `PriceChart`);
 `Settings` + `SecretEntry`; `Watchlist` + `AddSymbolSheet`; `Dashboard`;
 `BenchmarkDetail`; `Research`; `Screener`; `SecurityDetail`. Every route is
 ported, and the `UnportedScreen` placeholder has been deleted.
 
-The UI tests `PLAN.md §8` asked for are in: banners (`BannerTest`), a
+The UI tests `PORT_PLAN.md §8` asked for are in: banners (`BannerTest`), a
 provenance label on every figure (`ProvenanceTest`) and the chart's description
 (`PriceChartTest`). They earned their keep immediately — between them they found
 two live bugs, both written up in `KNOWN_ISSUES.md`: the chart announced a ten
@@ -177,7 +182,7 @@ Still owed by this phase: the `compose.runtime` / `foundation` / `material3`
 accessor deprecations in `app/build.gradle.kts`, which stay until material3
 publishes a stable 1.12.0 — see `KNOWN_ISSUES.md` under "Build and toolchain".
 
-Then **Phase 9** (4 h) — see `PLAN.md §4`. Its wiring list is the payoff for
+Then **Phase 9** (4 h) — see `PORT_PLAN.md §4`. Its wiring list is the payoff for
 everything Phases 7–8 left injectable with safe defaults.
 
 ### Notes on the UI, for Phase 9 and after

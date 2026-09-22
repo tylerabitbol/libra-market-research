@@ -1,12 +1,18 @@
-# Known issues and deviations from PLAN.md
+# Known issues and deviations from PORT_PLAN.md
 
-Every place this port diverges from `PLAN.md` or from the Swift app, and why.
+Every place this port diverges from `PORT_PLAN.md` or from the Swift app, and why.
 Organised by the part of the codebase it constrains, so touching one area means
 reading one section. `RESUME.md` says where the work stands; this file says what
 the code does that you would not predict.
 
 Resolved items are not kept. Entries that record a *decision* stay even when the
 work is done, because reversing the decision is the thing that would go wrong.
+
+`PORT_PLAN.md` is the completed port plan, now at `docs/PORT_PLAN.md`; its
+`§0`–`§9` are what the citations below mean. `PLAN.md` is a different
+document — the plan currently being worked. The entries under
+[Open issues](#open-issues) are the ones it re-opens; everything else here is a
+decision, and stays.
 
 | If you are touching | Read |
 |---|---|
@@ -166,7 +172,7 @@ for, written so Phase 6's provider tests reuse it.
 
 ## Persistence
 
-**`-lsqlite3` is not needed.** `PLAN.md §4` predicted a linker option on the
+**`-lsqlite3` is not needed.** `PORT_PLAN.md §4` predicted a linker option on the
 iOS framework. `BundledSQLiteDriver` ships its own SQLite, and
 `:app:linkDebugFrameworkIosSimulatorArm64` links clean without it.
 
@@ -247,7 +253,7 @@ porting the tests alongside the code rather than after it.
 
 ## Secrets
 
-**`SecretsStore` is an interface, not an `expect class`.** `PLAN.md §5` asked
+**`SecretsStore` is an interface, not an `expect class`.** `PORT_PLAN.md §5` asked
 for `expect class SecretsStore`. Swift's shape is a `protocol SecretsStoring`
 with two conformers — `KeychainSecretsStore` and `InMemorySecretsStore` — and
 the in-memory one is what every test and preview uses. An `expect class` admits
@@ -342,7 +348,7 @@ retraction under [Platform shells](#platform-shells). The rows are kept because
 seeding all six from one place is genuinely easier than typing two 40-character
 halves into a simulator, not because anything forced it.
 
-So: a deviation from `PLAN.md §0.5` ("no new features"), on the owner's
+So: a deviation from `PORT_PLAN.md §0.5` ("no new features"), on the owner's
 instruction and for convenience. It is debug-only — `DeveloperOptions` gates
 every argument on `isDebugBuild`, so a release build ignores the variables — and
 it adds no capability the other four secrets did not already have. If the Swift
@@ -360,7 +366,7 @@ ISO-8601 with and without fractional seconds, bare `yyyy-MM-dd`, and Finnhub's
 epoch seconds — so a formatter configured slightly differently in one provider
 can no longer shift a chart by a day.
 
-`PLAN.md §3` asked for one serializer per shape, and Long, String, ISO-instant
+`PORT_PLAN.md §3` asked for one serializer per shape, and Long, String, ISO-instant
 and day-instant siblings were written to match. Every provider turned out to
 reach `VendorDate` directly and to need leniency only on doubles, so all four
 sat unreferenced from the day they were written through the end of Phase 9 and
@@ -372,7 +378,7 @@ mixes ratios with date strings under one schema, so values are decoded as raw
 the lenient parser here would read `52WeekHighDate` as a year and put it where
 a multiple belongs. Swift's `JSONValue.doubleValue` had the same rule.
 
-**The XML parser is hand-rolled, not `xmlutil`.** `PLAN.md §6` allowed this as
+**The XML parser is hand-rolled, not `xmlutil`.** `PORT_PLAN.md §6` allowed this as
 a fallback; it is the better default here. The only XML this app reads is an
 SEC ownership form — a few kilobytes of plain elements, no namespaces to
 resolve, no DTD to honour, no schema to validate — so a parser dependency would
@@ -470,7 +476,7 @@ arrives first. This looked like a cross-platform disagreement on the
 
 ## UI
 
-**Vico draws both charts; the Canvas fallback was not needed.** `PLAN.md §8`
+**Vico draws both charts; the Canvas fallback was not needed.** `PORT_PLAN.md §8`
 allowed hand-drawing the chart if Vico could not express the gap between
 sessions. It can: `LineCartesianLayer.LineStroke.Dashed` and one series per
 `ChartSegment` give a full-weight traded run and a thinner dashed overnight
@@ -654,7 +660,7 @@ file to open. `AppLaunch.start` returns the environment; `AppLaunch.attach` is
 suspending and runs off the critical path, because the seeds write rows and a
 write on the main thread at launch is what makes a cold start stutter.
 
-**`Platform.isDebugBinary` rather than an Xcode build setting.** `PLAN.md §9`
+**`Platform.isDebugBinary` rather than an Xcode build setting.** `PORT_PLAN.md §9`
 says argv on iOS and `BuildConfig` on Android. Kotlin/Native already knows
 whether it is a debug binary, so the iOS shell reads that instead of threading a
 constant through the Xcode configuration to say the same thing. Android still
@@ -686,7 +692,7 @@ understands a fixed set of `INFOPLIST_KEY_*` settings and silently drops the
 rest. So `iosApp/project.yml` now uses XcodeGen's `info:` block, which writes a
 real plist, and restates there the four settings the target used to carry —
 they are lost otherwise. This is a divergence from `../project.yml`, which
-`PLAN.md §0` said to mirror; the Swift app is SwiftUI and never needed the key.
+`PORT_PLAN.md §0` said to mirror; the Swift app is SwiftUI and never needed the key.
 The generated `iosApp/Info.plist` is gitignored, like the generated project.
 
 **The Android launcher icon is adaptive; the iOS one is the Swift app's
@@ -754,7 +760,7 @@ is implicated: the same binary launches, self-tests and runs on
 
 ## Testing
 
-**Deviation from PLAN.md §5: the Swift-side parity fixture step was skipped.**
+**Deviation from PORT_PLAN.md §5: the Swift-side parity fixture step was skipped.**
 Xcode is available, so the plan's own escape clause does not apply — this was
 a judgement call, not a blocker. The step would have dumped calculator outputs
 from Swift to JSON and replayed them in Kotlin at 1e-9. It was skipped because
@@ -865,7 +871,7 @@ Keychain `-50` that blocked credential entry is fixed, and the cause is written
 up under [Secrets](#secrets) because it is a trap worth not re-entering.
 
 
-**`PLAN.md §7` is not met literally on two counts.** It asks for Android on an
+**`PORT_PLAN.md §7` is not met literally on two counts.** It asks for Android on an
 API 26 emulator *and* a current device; the manual pass ran on `medium_phone`,
 API 36, and on no physical device. API 26 is the manifest floor and the build
 asserts it, but nobody has watched the app run there. iOS ran on 27.0 rather
@@ -876,13 +882,13 @@ than the 26 the plan names, because the 26.5 runtime here is broken — see
 ## Deliberately absent
 
 **`expect fun appPaths()` and Compose string resources: both dropped.**
-`PLAN.md §9` lists them; neither is worth doing as written, and the owner
+`PORT_PLAN.md §9` lists them; neither is worth doing as written, and the owner
 agreed. The per-platform `openLibraDatabase` already puts the file where each
 platform wants it — `NSDocumentDirectory` on iOS, `getDatabasePath` on Android
 — so `appPaths()` would be an abstraction over one call site, and the secrets
 stores have no path at all (Keychain and AndroidKeyStore are not files).
 Extracting every English string into a resource bundle is churn whose only
-payoff is localisation, which `PLAN.md §8` rules out for the port ("English
+payoff is localisation, which `PORT_PLAN.md §8` rules out for the port ("English
 only, don't localise during the port"). Both are cheap to add later if a second
 language is ever wanted.
 

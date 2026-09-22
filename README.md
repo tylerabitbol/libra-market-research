@@ -1,10 +1,12 @@
 # Libra — Kotlin Multiplatform
 
 Port of the SwiftUI app on `main` to Kotlin Multiplatform + Compose
-Multiplatform. See [PLAN.md](PLAN.md) for the phased plan and
-[KNOWN_ISSUES.md](KNOWN_ISSUES.md) for every deviation from the Swift original;
-[RESUME.md](RESUME.md) says where the port stands. The Swift app is the
-reference for every ported file.
+Multiplatform. The port is complete. [PLAN.md](PLAN.md) is the plan being
+worked now; [docs/PORT_PLAN.md](docs/PORT_PLAN.md) is the finished port plan it
+succeeded, kept because `KNOWN_ISSUES.md` cites its section numbers.
+[KNOWN_ISSUES.md](KNOWN_ISSUES.md) holds every deviation from the Swift
+original, and [RESUME.md](RESUME.md) says where the work stands. The Swift app
+is the reference for every ported file.
 
 ## Layout
 
