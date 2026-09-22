@@ -58,6 +58,7 @@ import com.tylerabitbol.libra.support.Freshness
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
+import com.tylerabitbol.libra.ui.components.menuCheckmark
 import com.tylerabitbol.libra.ui.components.AttributionCard
 import com.tylerabitbol.libra.ui.components.ClaimRow
 import com.tylerabitbol.libra.ui.components.DirectionalChangeText
@@ -360,8 +361,18 @@ private fun ChangesSection(
 /**
  * What the header stands in for while the panel is shut. A count only helps if
  * it says how far back it counted.
+ *
+ * "Nothing unusual" is a real finding, and saying it plainly is the point of
+ * the section — but only once there is something to say it about. Detection
+ * runs off stored history, and a page that is still loading has none, so the
+ * empty state and the not-yet state used to render identically. Reaching a
+ * security by `-LibraOpenSymbol` showed "Nothing unusual in this window" for a
+ * security that had two changes, because the launch argument arrives before
+ * the data does. Stating that it is still looking costs one line and is the
+ * difference between a finding and a guess.
  */
 private fun collapsedChangesSummary(state: SecurityDetailUiState): String {
+    if (state.events.isEmpty() && state.isLoading) return "Looking for changes…"
     if (state.events.isEmpty()) return "Nothing unusual in this window."
     val count = state.events.size
     val new = state.newSinceLastVisit.size
@@ -427,6 +438,12 @@ private fun emptyChangesMessage(state: SecurityDetailUiState): String {
         } else {
             "No price history loaded, so nothing can be compared."
         }
+    }
+    // Bars are in but the page has not finished: detection also reads the
+    // stored history and the last visit, and neither is necessarily there yet.
+    // Without this the panel states a finding before it has the inputs for one.
+    if (state.isLoading) {
+        return "Still loading this security's data, so nothing has been compared yet."
     }
     if (state.bars.size < EventDetector.minimumSample) {
         return "Only ${Format.count(state.bars.size, "session")} of history is " +
@@ -497,7 +514,8 @@ private fun WindowMenu(current: ChangeWindow, onSelect: (ChangeWindow) -> Unit) 
         DropdownMenu(expanded = isOpen, onDismissRequest = { isOpen = false }) {
             for (window in ChangeWindow.offered) {
                 DropdownMenuItem(
-                    text = { Text(checked(window == current) + window.displayName) },
+                    text = { Text(window.displayName) },
+                    leadingIcon = menuCheckmark(window == current),
                     onClick = {
                         onSelect(window)
                         isOpen = false
@@ -506,7 +524,8 @@ private fun WindowMenu(current: ChangeWindow, onSelect: (ChangeWindow) -> Unit) 
             }
             HorizontalDivider()
             DropdownMenuItem(
-                text = { Text("   Custom date…") },
+                text = { Text("Custom date…") },
+                leadingIcon = menuCheckmark(false),
                 onClick = {
                     isChoosingDate = true
                     isOpen = false
@@ -532,7 +551,8 @@ private fun KindMenu(state: SecurityDetailUiState, onSelect: (Set<EventKind>) ->
         }
         DropdownMenu(expanded = isOpen, onDismissRequest = { isOpen = false }) {
             DropdownMenuItem(
-                text = { Text(checked(filter.isEmpty()) + "All kinds") },
+                text = { Text("All kinds") },
+                leadingIcon = menuCheckmark(filter.isEmpty()),
                 onClick = {
                     onSelect(emptySet())
                     isOpen = false
@@ -549,11 +569,13 @@ private fun KindMenu(state: SecurityDetailUiState, onSelect: (Set<EventKind>) ->
                 // The category header toggles its whole group.
                 DropdownMenuItem(
                     text = { Text("All ${category.displayName.lowercase()}") },
+                    leadingIcon = menuCheckmark(kinds.all { it in filter }),
                     onClick = { onSelect(toggled(filter, kinds)) },
                 )
                 for (kind in kinds) {
                     DropdownMenuItem(
-                        text = { Text(checked(kind in filter) + kind.displayName) },
+                        text = { Text(kind.displayName) },
+                        leadingIcon = menuCheckmark(kind in filter),
                         onClick = { onSelect(toggled(filter, listOf(kind))) },
                     )
                 }
@@ -561,8 +583,6 @@ private fun KindMenu(state: SecurityDetailUiState, onSelect: (Set<EventKind>) ->
         }
     }
 }
-
-private fun checked(isOn: Boolean): String = if (isOn) "✓ " else "   "
 
 /** Adds the group if any of it is missing, removes it once it is all there. */
 private fun toggled(filter: Set<EventKind>, kinds: List<EventKind>): Set<EventKind> =

@@ -681,6 +681,43 @@ wrong window still draws, and the semantics the UI tests read are computed from
 the data rather than from the picture.
 
 
+**The `-LibraOpenSymbol` gap is narrowed, not closed, and the last check of it
+was lost.** `PLAN.md` Stage 2.4 offered two fixes and both are now in.
+`SecurityDetailHost`'s `LaunchedEffect` was keyed on the symbol and the registry
+but not on `snapshots`, so a page composed before the store attached loaded once
+against a null store and never looked again — a real defect, and
+`BenchmarkDetailHost` had it too. Separately, the panel stated a finding before
+it had the inputs for one: `collapsedChangesSummary` and `emptyChangesMessage`
+now say they are still looking while `isLoading` holds, which is the plan's
+second option.
+
+What is *not* established is that the two paths now agree. Run side by side on
+API 36 with live keys, the deep link still showed "Nothing unusual in this
+window" and no Finnhub metrics — no 52-week range, no beta, no average volume —
+while the same security reached through the Watchlist showed "2 changes since
+Sep 21, 2026" and every metric. The freshness pill still read "Loading…" nine
+seconds in, which points at the load itself stalling on that path rather than at
+the detection. The obvious suspect is back-pressure: the deep link fires the
+security's load into the same instant as the watchlist seed, and Finnhub's
+limiter is 50/min with a burst of 10.
+
+That comparison cannot be repeated as things stand. Verifying it meant clearing
+app data between cold starts, and `pm clear` removes the encrypted
+SharedPreferences the Android secrets store writes into, so the emulator's six
+credentials are gone. They have to be re-entered in Settings, or re-seeded with
+`LibraSeedKeys` and the `LIBRA_…` extras, before this can be looked at again.
+
+**The base colour scheme is Material's, not Libra's.** `Theme.kt` ends in
+`colorScheme = if (useDarkTheme) darkColorScheme() else lightColorScheme()`,
+which is the Material 3 *baseline* palette — the purple one. Dynamic colour is
+off, as the UI section records, but that was never the whole question: the Swift
+app is neutral, near-black on near-white with colour reserved for a caution, a
+gain or a loss, and the port renders purple tab indicators, purple text buttons
+and a lilac card fill against a lilac-white background. `LibraColors` already
+names the semantic colours correctly; what is unmatched is everything
+underneath them. Not addressed, because no stage asked for it and a palette is
+the owner's call.
+
 ## Platform shells
 
 **Launch wiring lives in `:core`, not in each shell.** Swift splits it between

@@ -15,6 +15,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -58,7 +59,19 @@ fun AddSymbolSheet(
                 .padding(bottom = LibraSpacing.large),
             verticalArrangement = Arrangement.spacedBy(LibraSpacing.medium),
         ) {
-            Text("Add security", style = MaterialTheme.typography.titleMedium)
+            // Swift presents this inside a `NavigationStack` whose toolbar
+            // carries a `.cancellationAction`. A bottom sheet can be dragged
+            // down or dismissed by its scrim, but neither is announced, and
+            // neither is reachable without a pointer — so the button Swift
+            // draws is drawn here too, beside the title it sits beside there.
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Add security", style = MaterialTheme.typography.titleMedium)
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
 
             OutlinedTextField(
                 value = query,

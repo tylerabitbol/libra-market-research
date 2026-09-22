@@ -32,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.tylerabitbol.libra.ui.components.menuCheckmark
 import com.tylerabitbol.libra.models.core.EvidenceCategory
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
@@ -99,6 +100,12 @@ private fun ResearchToolbar(
                     for (option in ResearchViewModel.Sort.entries) {
                         DropdownMenuItem(
                             text = { Text(option.displayName) },
+                            // Swift's sort menu is a `Picker`, which marks the
+                            // current choice. This menu had no indicator at
+                            // all: the label said "Sort: Most recent" and the
+                            // open menu then said nothing about which row that
+                            // was.
+                            leadingIcon = menuCheckmark(option == sort),
                             onClick = {
                                 onSelectSort(option)
                                 isSortMenuOpen = false

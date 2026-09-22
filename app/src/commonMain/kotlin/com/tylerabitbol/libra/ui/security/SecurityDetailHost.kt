@@ -6,6 +6,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.tylerabitbol.libra.app.AppEnvironment
+import com.tylerabitbol.libra.ui.components.PushedScreen
 import com.tylerabitbol.libra.ui.settings.collectAsStateValue
 import com.tylerabitbol.libra.viewmodels.SecurityDetailViewModel
 
@@ -14,6 +15,7 @@ import com.tylerabitbol.libra.viewmodels.SecurityDetailViewModel
 fun SecurityDetailHost(
     symbol: String,
     environment: AppEnvironment,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -30,12 +32,14 @@ fun SecurityDetailHost(
     // `ResearchHost` and `ScreenerHost` already key on it; this one did not.
     LaunchedEffect(symbol, registry, snapshots) { model.load(registry, snapshots) }
 
-    SecurityDetailScreen(
-        state = state,
-        isUsingSampleData = environment.isUsingSampleData,
-        onSelectRange = { model.select(it, registry, snapshots) },
-        onSetChangeWindow = model::setChangeWindow,
-        onSetKindFilter = model::setKindFilter,
-        modifier = modifier,
-    )
+    // Swift's `.navigationTitle(model.symbol)`.
+    PushedScreen(title = symbol, onBack = onBack, modifier = modifier) {
+        SecurityDetailScreen(
+            state = state,
+            isUsingSampleData = environment.isUsingSampleData,
+            onSelectRange = { model.select(it, registry, snapshots) },
+            onSetChangeWindow = model::setChangeWindow,
+            onSetKindFilter = model::setKindFilter,
+        )
+    }
 }

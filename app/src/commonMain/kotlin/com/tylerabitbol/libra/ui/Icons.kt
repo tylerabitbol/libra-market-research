@@ -83,6 +83,27 @@ object LibraIcons {
         }
     }
 
+    /**
+     * `chevron.left` — the back affordance `NavigationStack` draws for free and
+     * a Compose `NavHost` does not. On iOS there is no edge-swipe either, so
+     * without this a pushed screen has no way out but the tab bar.
+     */
+    val Back: ImageVector = icon("Back") {
+        path(stroke = SolidColor(Color.Black), strokeLineWidth = 2f) {
+            moveTo(15f, 5f); lineTo(8f, 12f); lineTo(15f, 19f)
+        }
+    }
+
+    /**
+     * `checkmark` — what SwiftUI draws beside the selected row of a `Picker`
+     * inside a `Menu`, and beside `Label(…, systemImage: "checkmark")`.
+     */
+    val Check: ImageVector = icon("Check") {
+        path(stroke = SolidColor(Color.Black), strokeLineWidth = 2.2f) {
+            moveTo(4f, 12.5f); lineTo(9.5f, 18f); lineTo(20f, 6f)
+        }
+    }
+
     private fun icon(name: String, body: ImageVector.Builder.() -> Unit): ImageVector =
         ImageVector.Builder(
             name = name,

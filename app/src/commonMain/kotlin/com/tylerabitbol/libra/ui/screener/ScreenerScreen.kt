@@ -40,6 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tylerabitbol.libra.ui.components.SwipeToDelete
 import com.tylerabitbol.libra.calculations.Screen
 import com.tylerabitbol.libra.calculations.ScreenCombinator
 import com.tylerabitbol.libra.calculations.ScreenComparison
@@ -103,15 +104,21 @@ fun ScreenerScreen(
                 item { CombinatorPicker(state.screen, onChangeScreen) }
 
                 itemsIndexed(state.screen.rules) { index, rule ->
-                    RuleEditor(
-                        rule = rule,
-                        onChange = { updated ->
-                            val rules = state.screen.rules.toMutableList()
-                            rules[index] = updated
-                            onChangeScreen(state.screen.copy(rules = rules))
-                        },
-                        onRemove = { onRemoveRule(index) },
-                    )
+                    SwipeToDelete(
+                        rowKey = "rule-$index-${rule.field.raw}",
+                        label = "Remove",
+                        onDelete = { onRemoveRule(index) },
+                    ) {
+                        RuleEditor(
+                            rule = rule,
+                            onChange = { updated ->
+                                val rules = state.screen.rules.toMutableList()
+                                rules[index] = updated
+                                onChangeScreen(state.screen.copy(rules = rules))
+                            },
+                            onRemove = { onRemoveRule(index) },
+                        )
+                    }
                 }
 
                 item { ScreenNameField(state.screen, onChangeScreen) }
@@ -125,7 +132,13 @@ fun ScreenerScreen(
                 item { SectionHeader("Saved screens") }
                 items(state.savedScreens.size, key = { state.savedScreens[it].id }) { index ->
                     val saved = state.savedScreens[index]
-                    SavedScreenRow(saved, { onApplySaved(saved) }, { onDeleteSaved(saved) })
+                    SwipeToDelete(
+                        rowKey = saved.id,
+                        label = "Delete",
+                        onDelete = { onDeleteSaved(saved) },
+                    ) {
+                        SavedScreenRow(saved, { onApplySaved(saved) }, { onDeleteSaved(saved) })
+                    }
                 }
             }
 

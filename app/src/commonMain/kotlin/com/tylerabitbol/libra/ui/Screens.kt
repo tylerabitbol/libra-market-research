@@ -52,8 +52,12 @@ fun libraScreens(): LibraScreens = LibraScreens(
             },
         )
     },
-    securityDetail = { symbol, _ ->
-        SecurityDetailHost(symbol = symbol, environment = LocalAppEnvironment.current)
+    securityDetail = { symbol, navController ->
+        SecurityDetailHost(
+            symbol = symbol,
+            environment = LocalAppEnvironment.current,
+            onBack = { navController.popBackStack() },
+        )
     },
     benchmarkDetail = { id, navController ->
         // Same reasoning as `secretEntry`: the route carries the stable id, not
@@ -66,6 +70,7 @@ fun libraScreens(): LibraScreens = LibraScreens(
             BenchmarkDetailHost(
                 benchmark = benchmark,
                 environment = LocalAppEnvironment.current,
+                onBack = { navController.popBackStack() },
             )
         }
     },
@@ -84,6 +89,7 @@ fun libraScreens(): LibraScreens = LibraScreens(
                 provider = provider,
                 environment = LocalAppEnvironment.current,
                 onSaved = { navController.popBackStack() },
+                onBack = { navController.popBackStack() },
             )
         }
     },

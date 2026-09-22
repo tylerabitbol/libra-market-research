@@ -28,6 +28,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import com.tylerabitbol.libra.app.AppEnvironment
+import com.tylerabitbol.libra.ui.components.PushedScreen
 import com.tylerabitbol.libra.models.provenance.DataProviderID
 import com.tylerabitbol.libra.services.secrets.SecretKey
 import com.tylerabitbol.libra.ui.LibraSpacing
@@ -48,6 +49,7 @@ fun SecretEntryScreen(
     provider: DataProviderID,
     environment: AppEnvironment,
     onSaved: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // `remember(key)` rather than `rememberSaveable`: a draft credential must
@@ -71,14 +73,17 @@ fun SecretEntryScreen(
         }
     }
 
+    // The provider's name was drawn here as body text because there was no bar
+    // to put it in. It is Swift's `.navigationTitle(provider.displayName)`, so
+    // it moves into the bar rather than appearing twice.
+    PushedScreen(title = provider.displayName, onBack = onBack, modifier = modifier) {
     Column(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
             .padding(LibraSpacing.large),
         verticalArrangement = Arrangement.spacedBy(LibraSpacing.medium),
     ) {
-        Text(provider.displayName, style = MaterialTheme.typography.titleMedium)
         SectionHeader(key.displayName)
 
         OutlinedTextField(
@@ -165,5 +170,6 @@ fun SecretEntryScreen(
                     "address. Requests to EDGAR stay disabled until this is set.",
             )
         }
+    }
     }
 }
