@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DropdownMenu
@@ -39,11 +38,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.tylerabitbol.libra.ui.components.groupedRowPadding
+import com.tylerabitbol.libra.ui.components.groupedRowContent
+import com.tylerabitbol.libra.ui.components.groupedRowInset
 import com.tylerabitbol.libra.ui.components.GroupedSection
-import com.tylerabitbol.libra.ui.components.groupedRow
-import com.tylerabitbol.libra.ui.components.GroupedDivider
 import com.tylerabitbol.libra.ui.components.SwipeToDelete
+import com.tylerabitbol.libra.ui.components.ScreenHeader
 import com.tylerabitbol.libra.calculations.Screen
 import com.tylerabitbol.libra.calculations.ScreenCombinator
 import com.tylerabitbol.libra.calculations.ScreenComparison
@@ -52,7 +51,6 @@ import com.tylerabitbol.libra.calculations.ScreenRule
 import com.tylerabitbol.libra.calculations.ScreenSubject
 import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
-import com.tylerabitbol.libra.ui.components.libraCard
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.viewmodels.ScreenerUiState
@@ -95,42 +93,61 @@ fun ScreenerScreen(
             contentPadding = PaddingValues(
                 start = LibraSpacing.large,
                 end = LibraSpacing.large,
+                top = LibraSpacing.small,
                 bottom = 32.dp,
             ),
-            verticalArrangement = Arrangement.spacedBy(LibraSpacing.medium),
+            // UIKit's gap between grouped sections.
+            verticalArrangement = Arrangement.spacedBy(LibraSpacing.wide),
         ) {
-            item { CoverageNote(state) }
-
-            item { SectionHeader("Rules") }
-            if (state.screen.rules.isEmpty()) {
-                item {
-                    TextButton(onClick = onAddRule) { Text("Add a rule") }
+            // Swift's screener is one `List`: every block below is a section
+            // of it, so every block is a grouped card with its rows inset the
+            // same way, rather than loose text and buttons on the page.
+            item {
+                GroupedSection {
+                    row { CoverageNote(state) }
                 }
-            } else {
-                item { CombinatorPicker(state.screen, onChangeScreen) }
+            }
 
-                itemsIndexed(state.screen.rules) { index, rule ->
-                    SwipeToDelete(
-                        rowKey = "rule-$index-${rule.field.raw}",
-                        label = "Remove",
-                        onDelete = { onRemoveRule(index) },
-                    ) {
-                        RuleEditor(
-                            rule = rule,
-                            onChange = { updated ->
-                                val rules = state.screen.rules.toMutableList()
-                                rules[index] = updated
-                                onChangeScreen(state.screen.copy(rules = rules))
-                            },
-                            onRemove = { onRemoveRule(index) },
-                        )
+            item {
+                GroupedSection(
+                    header = "Rules",
+                    footer = state.untestableCount
+                        .takeIf { state.screen.rules.isNotEmpty() && it > 0 }
+                        ?.let(::untestableFootnote),
+                ) {
+                    if (state.screen.rules.isEmpty()) {
+                        row { AddRuleRow(onAddRule) }
+                    } else {
+                        row {
+                            Box(Modifier.groupedRowContent()) {
+                                CombinatorPicker(state.screen, onChangeScreen)
+                            }
+                        }
+                        for ((index, rule) in state.screen.rules.withIndex()) {
+                            row {
+                                SwipeToDelete(
+                                    rowKey = "rule-$index-${rule.field.raw}",
+                                    label = "Remove",
+                                    onDelete = { onRemoveRule(index) },
+                                ) {
+                                    RuleEditor(
+                                        rule = rule,
+                                        onChange = { updated ->
+                                            val rules = state.screen.rules.toMutableList()
+                                            rules[index] = updated
+                                            onChangeScreen(state.screen.copy(rules = rules))
+                                        },
+                                        onRemove = { onRemoveRule(index) },
+                                    )
+                                }
+                            }
+                        }
+                        row {
+                            Box(Modifier.groupedRowContent()) {
+                                ScreenNameField(state.screen, onChangeScreen)
+                            }
+                        }
                     }
-                }
-
-                item { ScreenNameField(state.screen, onChangeScreen) }
-
-                if (state.untestableCount > 0) {
-                    item { UntestableFootnote(state.untestableCount) }
                 }
             }
 
@@ -147,47 +164,10 @@ fun ScreenerScreen(
                                     label = "Delete",
                                     onDelete = { onDeleteSaved(saved) },
                                 ) {
-                                    // Inset inside the swipe, not around it,
-                                    // so the delete panel still reaches the
-                                    // card's edge.
-                                    Box(
-                                        Modifier.padding(
-                                            horizontal = groupedRowPadding,
-                                            vertical = LibraSpacing.snug,
-                                        ),
-                                    ) {
-                                        SavedScreenRow(
-                                            saved,
-                                            { onApplySaved(saved) },
-                                            { onDeleteSaved(saved) },
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            item { SectionHeader("${results.size} of ${state.subjects.size} match") }
-            when {
-                state.subjects.isEmpty() -> item { NothingToScreen() }
-                results.isEmpty() -> item {
-                    Text(
-                        "No held security matches these rules.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = LibraTheme.colors.secondaryText,
-                    )
-                }
-                else -> item {
-                    GroupedSection {
-                        for (subject in results) {
-                            row {
-                                Box(Modifier.padding(horizontal = groupedRowPadding)) {
-                                    ResultRow(
-                                        subject = subject,
-                                        fields = state.screen.rules.map { it.field },
-                                        onClick = { onOpenSecurity(subject.symbol) },
+                                    SavedScreenRow(
+                                        saved,
+                                        { onApplySaved(saved) },
+                                        { onDeleteSaved(saved) },
                                     )
                                 }
                             }
@@ -195,8 +175,46 @@ fun ScreenerScreen(
                     }
                 }
             }
+
+            item {
+                GroupedSection(header = "${results.size} of ${state.subjects.size} match") {
+                    when {
+                        state.subjects.isEmpty() -> row { NothingToScreen() }
+                        results.isEmpty() -> row {
+                            Text(
+                                "No held security matches these rules.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = LibraTheme.colors.secondaryText,
+                                modifier = Modifier.groupedRowContent(),
+                            )
+                        }
+                        else -> for (subject in results) {
+                            row {
+                                ResultRow(
+                                    subject = subject,
+                                    fields = state.screen.rules.map { it.field },
+                                    onClick = { onOpenSecurity(subject.symbol) },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun AddRuleRow(onAddRule: () -> Unit) {
+    Text(
+        "Add a rule",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onAddRule)
+            .groupedRowContent(),
+    )
 }
 
 @Composable
@@ -208,14 +226,7 @@ private fun ScreenerToolbar(
 ) {
     var isMenuOpen by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = LibraSpacing.large, vertical = LibraSpacing.small),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Screener", style = MaterialTheme.typography.titleLarge)
+    ScreenHeader("Screener") {
         Box {
             TextButton(onClick = { isMenuOpen = true }) { Text("Screen") }
             DropdownMenu(expanded = isMenuOpen, onDismissRequest = { isMenuOpen = false }) {
@@ -246,31 +257,25 @@ private fun ScreenerToolbar(
 private fun CoverageNote(state: ScreenerUiState) {
     val count = state.subjects.size
     val noun = if (count == 1) "security" else "securities"
-    Column(verticalArrangement = Arrangement.spacedBy(LibraSpacing.tight)) {
+    Column(
+        Modifier.groupedRowContent(),
+        verticalArrangement = Arrangement.spacedBy(LibraSpacing.tight),
+    ) {
         Text(
             "Screening the $count $noun this app holds data for — your watchlist " +
                 "and anything you have opened. This is not a market-wide scan, and " +
                 "nothing here costs an API request.",
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.bodySmall,
             color = LibraTheme.colors.secondaryText,
         )
         state.loadFailure?.let {
             Text(
                 it,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = LibraTheme.colors.caution,
             )
         }
     }
-}
-
-@Composable
-private fun SectionHeader(title: String) {
-    Text(
-        title,
-        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-        modifier = Modifier.padding(top = LibraSpacing.small),
-    )
 }
 
 @Composable
@@ -294,7 +299,10 @@ private fun CombinatorPicker(screen: Screen, onChange: (Screen) -> Unit) {
 private fun FieldPicker(field: ScreenField, onSelect: (ScreenField) -> Unit) {
     var isOpen by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { isOpen = true }) { Text(field.displayName) }
+        // No side padding, so the label lines up with the rows around it.
+        TextButton(onClick = { isOpen = true }, contentPadding = PaddingValues(0.dp)) {
+            Text(field.displayName)
+        }
         DropdownMenu(expanded = isOpen, onDismissRequest = { isOpen = false }) {
             for (option in ScreenField.entries) {
                 DropdownMenuItem(
@@ -315,11 +323,14 @@ private fun RuleEditor(
     onChange: (ScreenRule) -> Unit,
     onRemove: () -> Unit,
 ) {
+    // A row of the Rules section, so inset like one — not a card of its own.
+    // Less above and below than a text row: the buttons at the top and the
+    // segmented control at the bottom carry their own touch padding.
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .libraCard(LibraShapes.group),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = groupedRowInset, vertical = LibraSpacing.tight),
+        verticalArrangement = Arrangement.spacedBy(LibraSpacing.tight),
     ) {
         Row(
             Modifier.fillMaxWidth(),
@@ -329,7 +340,7 @@ private fun RuleEditor(
             FieldPicker(rule.field) { onChange(rule.copy(field = it)) }
             // SwiftUI deleted a rule by swiping the list row. An explicit
             // control is discoverable without a gesture nothing announces.
-            TextButton(onClick = onRemove) { Text("Remove") }
+            TextButton(onClick = onRemove, contentPadding = PaddingValues(0.dp)) { Text("Remove") }
         }
 
         Row(
@@ -398,21 +409,19 @@ private fun ScreenNameField(screen: Screen, onChange: (Screen) -> Unit) {
  * A screen that quietly drops what it could not test reports a smaller
  * universe than the user thinks they searched.
  */
-@Composable
-private fun UntestableFootnote(count: Int) {
+private fun untestableFootnote(count: Int): String {
     val clause = if (count == 1) "security lacks" else "securities lack"
-    Text(
-        "$count held $clause a figure one of these rules needs, so they cannot " +
-            "match. Open them once to fill in what is missing.",
-        style = MaterialTheme.typography.labelSmall,
-        color = LibraTheme.colors.secondaryText,
-    )
+    return "$count held $clause a figure one of these rules needs, so they cannot " +
+        "match. Open them once to fill in what is missing."
 }
 
 @Composable
 private fun SavedScreenRow(saved: Screen, onApply: () -> Unit, onDelete: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth(),
+        // Inset inside the swipe, not around it, so the delete panel still
+        // reaches the card's edge. The trailing inset is smaller because the
+        // Delete button carries its own.
+        Modifier.fillMaxWidth().padding(start = groupedRowInset, end = LibraSpacing.small, top = LibraSpacing.snug, bottom = LibraSpacing.snug),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -436,7 +445,7 @@ private fun SavedScreenRow(saved: Screen, onApply: () -> Unit, onDelete: () -> U
 @Composable
 private fun NothingToScreen() {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(vertical = LibraSpacing.large),
+        modifier = Modifier.groupedRowContent().padding(vertical = LibraSpacing.small),
         verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -462,7 +471,7 @@ private fun ResultRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 6.dp),
+            .groupedRowContent(),
         verticalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         Row(
@@ -476,7 +485,7 @@ private fun ResultRow(
             )
             Text(
                 subject.name,
-                style = MaterialTheme.typography.labelSmall,
+                style = MaterialTheme.typography.bodySmall,
                 color = LibraTheme.colors.secondaryText,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

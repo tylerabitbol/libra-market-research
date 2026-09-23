@@ -1,11 +1,21 @@
 package com.tylerabitbol.libra.ui
 
 import androidx.compose.material3.Text
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runComposeUiTest
 import com.tylerabitbol.libra.ui.components.GroupedSection
+import com.tylerabitbol.libra.ui.components.ScreenHeader
+import com.tylerabitbol.libra.ui.components.groupedRowContent
+import com.tylerabitbol.libra.ui.components.groupedRowMinHeight
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -67,5 +77,30 @@ class GroupedListTest {
         assertEquals(4, count)
         onNodeWithText("row 0").assertIsDisplayed()
         onNodeWithText("row 3").assertIsDisplayed()
+    }
+
+    @Test
+    fun aOneLineRowIsNeverShorterThanAUIKitRow() = runComposeUiTest {
+        setContent {
+            LibraTheme {
+                GroupedSection {
+                    row { Text("Add a rule", Modifier.testTag("row").groupedRowContent()) }
+                }
+            }
+        }
+
+        // The spacing bug this guards: rows padded only at the sides, so a
+        // line of text filled its cell edge to edge.
+        onNodeWithTag("row").assertHeightIsAtLeast(groupedRowMinHeight)
+    }
+
+    @Test
+    fun aScreenTitleIsAnnouncedAsAHeading() = runComposeUiTest {
+        setContent {
+            LibraTheme { ScreenHeader("Watchlist") }
+        }
+
+        onNodeWithText("Watchlist")
+            .assert(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading))
     }
 }

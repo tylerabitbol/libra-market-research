@@ -731,6 +731,13 @@ Watchlist loaded live quotes while the Dashboard was still on "Loading…" at
 twenty-five seconds, so the keys and the network are fine and the stall is in the
 Dashboard's own sources.
 
+*Correction, 2026-09-23:* the owner reports the Dashboard loads fine; it is
+slow, not stuck. A later run on the emulator, given forty seconds before the
+screenshot, showed every index, VIX and the macro cards filled in and the pill
+reading "Updated just now". The earlier screenshots were simply taken too soon.
+Nothing here is a Dashboard stall. The deep-link disagreement above is still
+open and unrelated.
+
 **The base colour scheme is Material's, not Libra's.** `Theme.kt` ends in
 `colorScheme = if (useDarkTheme) darkColorScheme() else lightColorScheme()`,
 which is the Material 3 *baseline* palette — the purple one. Dynamic colour is
@@ -1057,6 +1064,49 @@ card, so the Watchlist uses `Modifier.groupedRow(isFirst, isLast)`, which rounds
 only the corners on the outside. Any list using it must not have blanket
 `verticalArrangement` spacing, or the card splits into separate strips. The
 Watchlist lost its `spacedBy(8)` for that reason.
+
+**Rows were inset at the sides only, and text sat against the cell edges.**
+Found by the owner after the look plan landed. `groupedRowPadding` was a single
+12dp horizontal inset; `List` rows in UIKit are inset 16 at the sides and 11
+above and below, with a 44pt minimum height. The port had none of the vertical
+half, so a one-line row was exactly as tall as its text and a Watchlist row's
+context line sat on the separator. `Modifier.groupedRowContent()` now applies
+the UIKit insets and the minimum height, and every `List`/`Form` row in the port
+uses it — Settings, Watchlist, Screener. Separators and section captions start
+at the same 16. The Dashboard's benchmark stacks keep 12: Swift draws those by
+hand at 12, not as a `List`, so they pass `dividerInset = groupedStackInset`.
+
+**The Screener was loose text and buttons, not a list.** Swift's screener is
+one `List` of four sections. The port put the coverage note on the page, "Add a
+rule" as a free-floating text button, and each rule in its own card. All four
+are grouped sections now, with the untestable-count note as the Rules footer
+where Swift has it.
+
+**Every tab has a large title.** Watchlist, Research and Screener drew their
+own header rows at `titleLarge` (20sp); Dashboard and Settings had none. Swift
+gives every tab a `.navigationTitle` in the large style. `ScreenHeader` draws
+34/41 bold — UIKit's large title — with the tab's actions on the same line,
+since the shell has no navigation bar to put them in. It does not collapse on
+scroll the way a UIKit large title does; that would need a nested-scroll
+connection per screen for a small gain, and it is not attempted.
+
+**Watchlist's Remove button moved beside the cell.** It sat in the row's first
+line, where its 48dp touch target made that line taller than the text and left
+a gap above the context line. It now spans the whole cell at the trailing edge.
+
+**Event card fixes.** The unusualness label and descriptor had no gap between
+them, so the longest descriptor ran on from the label and wrapped centred. The
+date sat beside the kind instead of at the trailing edge, because two weighted
+children split the free space. The claim badge and text now share a baseline,
+as `.firstTextBaseline` does in Swift. The detail lines and the derivation's
+formula and values are back in mono: Stage 2 moved them to rounded figures,
+but Swift sets them `design: .monospaced`, and they are arithmetic, not
+headline figures.
+
+**Swipeable rows painted the page colour.** `SwipeToDelete`'s foreground used
+`colorScheme.surface`, which in this port is the page, not the card. Inside a
+grouped section that drew each swipeable row as a grey stripe. It uses
+`cardFill` now.
 
 **Dividers cannot be counted in a UI test.** They carry no semantics, on purpose,
 because a screen reader has no use for one. `GroupedListTest` asserts rows,

@@ -30,9 +30,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.ui.bundledFontCredit
-import com.tylerabitbol.libra.ui.components.libraCard
-import com.tylerabitbol.libra.ui.components.SectionCaption
+import com.tylerabitbol.libra.ui.components.groupedRowContent
 import com.tylerabitbol.libra.ui.components.GroupedSection
+import com.tylerabitbol.libra.ui.components.ScreenHeader
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import com.tylerabitbol.libra.app.AppEnvironment
 import com.tylerabitbol.libra.app.SourceReadiness
 import com.tylerabitbol.libra.models.provenance.DataProviderID
@@ -43,7 +45,6 @@ import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
-import com.tylerabitbol.libra.ui.components.Footnote
 import com.tylerabitbol.libra.ui.components.SampleDataBanner
 import kotlinx.coroutines.launch
 
@@ -65,104 +66,112 @@ fun SettingsScreen(
     val health = environment.secretsHealth.collectAsStateValue()
     val configured = environment.configuredKeys.collectAsStateValue()
 
-    LazyColumn(
-        modifier = modifier.fillMaxWidth(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(LibraSpacing.large),
-        verticalArrangement = Arrangement.spacedBy(LibraSpacing.medium),
-    ) {
-        if (environment.isUsingSampleData) {
-            item { SampleDataBanner() }
-        }
+    Column(modifier.fillMaxSize()) {
+        ScreenHeader("Settings")
+        LazyColumn(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(
+                start = LibraSpacing.large,
+                end = LibraSpacing.large,
+                top = LibraSpacing.small,
+                bottom = LibraSpacing.large,
+            ),
+            // UIKit's gap between grouped sections, footer to next header.
+            verticalArrangement = Arrangement.spacedBy(LibraSpacing.wide),
+        ) {
+            if (environment.isUsingSampleData) {
+                item { SampleDataBanner() }
+            }
 
-        health.reason?.let { reason ->
-            item { StorageUnavailableBanner(reason) }
-        }
+            health.reason?.let { reason ->
+                item { StorageUnavailableBanner(reason) }
+            }
 
-        item {
-            GroupedSection(header = "Data sources") {
-                for (source in dataSources) {
-                    row {
-                        val readiness = environment.readiness(source.provider)
-                        Column(
-                            Modifier.padding(LibraSpacing.medium),
-                            verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
-                        ) {
-                            DataSourceRow(
-                                source = source,
-                                readiness = readiness,
-                                // Typing a key into a store that cannot retain
-                                // it is worse than saying up front that it
-                                // won't work.
-                                enabled = health.isAvailable,
-                                onClick = { onOpenKey(source.key, source.provider) },
-                            )
-                            if (readiness.isReady) {
-                                ConnectionTestRow(environment, source.provider)
+            item {
+                // The FRED sentence is required verbatim by their API terms, which
+                // ask for it prominently in the application itself — a line in the
+                // repository's README would not satisfy it.
+                GroupedSection(
+                    header = "Data sources",
+                    footer = "Keys are stored in this device's secure storage. They are never " +
+                        "written to the app's database, never included in logs, and never " +
+                        "sent anywhere except the provider they belong to.\n\nThis product " +
+                        "uses the FRED® API but is not endorsed or certified by the Federal " +
+                        "Reserve Bank of St. Louis.",
+                ) {
+                    for (source in dataSources) {
+                        row {
+                            val readiness = environment.readiness(source.provider)
+                            Column(
+                                Modifier.groupedRowContent(),
+                                verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
+                            ) {
+                                DataSourceRow(
+                                    source = source,
+                                    readiness = readiness,
+                                    // Typing a key into a store that cannot retain
+                                    // it is worse than saying up front that it
+                                    // won't work.
+                                    enabled = health.isAvailable,
+                                    onClick = { onOpenKey(source.key, source.provider) },
+                                )
+                                if (readiness.isReady) {
+                                    ConnectionTestRow(environment, source.provider)
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        item {
-            // The FRED sentence is required verbatim by their API terms, which
-            // ask for it prominently in the application itself — a line in the
-            // repository's README would not satisfy it.
-            Footnote(
-                "Keys are stored in this device's secure storage. They are never written " +
-                    "to the app's database, never included in logs, and never sent " +
-                    "anywhere except the provider they belong to.\n\nThis product uses " +
-                    "the FRED® API but is not endorsed or certified by the Federal " +
-                    "Reserve Bank of St. Louis.",
-            )
-        }
-
-        item { SectionCaption("About") }
-        item {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .libraCard(LibraShapes.group),
-                verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
-            ) {
-                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                    Text(
-                        "Research tool",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LibraTheme.colors.secondaryText,
-                    )
-                    Text(
-                        "Not investment advice",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LibraTheme.colors.secondaryText,
-                    )
-                }
-                Text(
-                    "This app analyses and organises published information. It does not " +
-                        "make recommendations, predict prices, or tell you what to buy " +
-                        "or sell.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LibraTheme.colors.secondaryText,
-                )
-                Text(
-                    "For educational and informational purposes only. Nothing here is " +
-                        "investment advice or a recommendation to buy or sell any " +
-                        "security. Data comes from third-party providers and carries no " +
-                        "warranty as to accuracy, completeness or timeliness.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LibraTheme.colors.secondaryText,
-                )
-                bundledFontCredit?.let { credit ->
-                    Text(
-                        credit,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = LibraTheme.colors.tertiaryText,
-                    )
+            item {
+                // Swift's `Section("About")`: three rows of one Form section, so
+                // three cells with separators, not one card of stacked prose.
+                GroupedSection(header = "About") {
+                    row {
+                        Row(Modifier.groupedRowContent(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                            Text(
+                                "Research tool",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = LibraTheme.colors.secondaryText,
+                            )
+                            Text(
+                                "Not investment advice",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = LibraTheme.colors.secondaryText,
+                            )
+                        }
+                    }
+                    row {
+                        AboutText(
+                            "This app analyses and organises published information. It does not " +
+                                "make recommendations, predict prices, or tell you what to buy " +
+                                "or sell.",
+                        )
+                    }
+                    row {
+                        AboutText(
+                            "For educational and informational purposes only. Nothing here is " +
+                                "investment advice or a recommendation to buy or sell any " +
+                                "security. Data comes from third-party providers and carries no " +
+                                "warranty as to accuracy, completeness or timeliness.",
+                        )
+                    }
+                    bundledFontCredit?.let { credit -> row { AboutText(credit) } }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun AboutText(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = LibraTheme.colors.secondaryText,
+        modifier = Modifier.groupedRowContent(),
+    )
 }
 
 @Composable

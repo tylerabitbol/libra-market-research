@@ -73,12 +73,16 @@ fun ClaimRow(claim: Claim, modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            ClaimBadge(claim.kind)
-            Text(claim.text, style = MaterialTheme.typography.bodyMedium)
+        // Swift aligns on `.firstTextBaseline`: the badge's label and the
+        // claim's first line share a baseline. Top-aligned, the smaller badge
+        // text sat visibly high against the line beside it.
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ClaimBadge(claim.kind, Modifier.alignByBaseline())
+            Text(
+                claim.text,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.alignByBaseline(),
+            )
         }
 
         if (claim.derivation != null || claim.sources.isNotEmpty()) {
@@ -109,16 +113,16 @@ private fun DerivationDetail(derivation: Derivation?, sources: List<SourceRefere
         if (derivation != null) {
             Text(
                 derivation.formula,
-                style = LibraType.figure,
+                style = LibraType.code,
                 color = LibraTheme.colors.secondaryText,
             )
             for (input in derivation.inputs) {
                 Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                     Text(input.name, style = MaterialTheme.typography.bodySmall)
-                    Text(input.value, style = LibraType.figure)
+                    Text(input.value, style = LibraType.code)
                 }
             }
-            HorizontalDivider()
+            HorizontalDivider(color = LibraTheme.colors.separator)
             Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                 Text(
                     "Result",
@@ -128,7 +132,7 @@ private fun DerivationDetail(derivation: Derivation?, sources: List<SourceRefere
                 )
                 Text(
                     derivation.result,
-                    style = LibraType.figure.copy(fontWeight = FontWeight.SemiBold),
+                    style = LibraType.code.copy(fontWeight = FontWeight.SemiBold),
                 )
             }
         }

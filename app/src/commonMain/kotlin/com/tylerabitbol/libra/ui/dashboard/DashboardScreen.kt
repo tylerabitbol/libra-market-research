@@ -27,6 +27,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.ui.components.GroupedSection
+import com.tylerabitbol.libra.ui.components.ScreenHeader
+import com.tylerabitbol.libra.ui.components.groupedStackInset
 import com.tylerabitbol.libra.models.core.Benchmark
 import com.tylerabitbol.libra.models.core.MacroUnit
 import com.tylerabitbol.libra.support.Format
@@ -59,64 +61,67 @@ fun DashboardScreen(
     onOpenBenchmark: (Benchmark) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.fillMaxSize()) {
-        // One grid for the whole screen: the sector tiles need a grid, and
-        // nesting one inside a scrolling column gives it no height to work
-        // with. Full-width rows span every column instead.
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 110.dp),
-            contentPadding = PaddingValues(
-                start = LibraSpacing.large, end = LibraSpacing.large,
-                top = LibraSpacing.large,
-                // Clears the floating freshness pill so it never sits on top of
-                // the last row.
-                bottom = 44.dp,
-            ),
-            horizontalArrangement = Arrangement.spacedBy(LibraSpacing.small),
-            verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
-        ) {
-            if (isUsingSampleData) {
-                fullWidth { SampleDataBanner() }
-            }
-            // Below the sample-data warning deliberately: when both are
-            // showing, "these numbers are invented" is the more urgent one.
-            fullWidth { DisclaimerBanner() }
-
-            fullWidth { SectionHeader("Market") }
-            fullWidth { BenchmarkGroup(state.market, onOpenBenchmark) }
-
-            if (state.volatility.isNotEmpty()) {
-                fullWidth { SectionHeader("Volatility") }
-                fullWidth { BenchmarkGroup(state.volatility, onOpenBenchmark) }
-            }
-
-            if (state.macro.isNotEmpty()) {
-                fullWidth {
-                    SectionHeader("Macro", subtitle = "Potentially relevant context")
+    Column(modifier.fillMaxSize()) {
+        ScreenHeader("Dashboard")
+        Box(Modifier.weight(1f)) {
+            // One grid for the whole screen: the sector tiles need a grid, and
+            // nesting one inside a scrolling column gives it no height to work
+            // with. Full-width rows span every column instead.
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 110.dp),
+                contentPadding = PaddingValues(
+                    start = LibraSpacing.large, end = LibraSpacing.large,
+                    top = LibraSpacing.small,
+                    // Clears the floating freshness pill so it never sits on top of
+                    // the last row.
+                    bottom = 44.dp,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(LibraSpacing.small),
+                verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
+            ) {
+                if (isUsingSampleData) {
+                    fullWidth { SampleDataBanner() }
                 }
-                fullWidth {
-                    Column(verticalArrangement = Arrangement.spacedBy(LibraSpacing.small)) {
-                        for (reading in state.macro) {
-                            MacroCard(reading)
+                // Below the sample-data warning deliberately: when both are
+                // showing, "these numbers are invented" is the more urgent one.
+                fullWidth { DisclaimerBanner() }
+
+                fullWidth { SectionHeader("Market") }
+                fullWidth { BenchmarkGroup(state.market, onOpenBenchmark) }
+
+                if (state.volatility.isNotEmpty()) {
+                    fullWidth { SectionHeader("Volatility") }
+                    fullWidth { BenchmarkGroup(state.volatility, onOpenBenchmark) }
+                }
+
+                if (state.macro.isNotEmpty()) {
+                    fullWidth {
+                        SectionHeader("Macro", subtitle = "Potentially relevant context")
+                    }
+                    fullWidth {
+                        Column(verticalArrangement = Arrangement.spacedBy(LibraSpacing.small)) {
+                            for (reading in state.macro) {
+                                MacroCard(reading)
+                            }
                         }
+                    }
+                }
+
+                if (state.sectors.isNotEmpty()) {
+                    fullWidth { SectionHeader("Sectors", subtitle = "Daily change") }
+                    items(state.sectors, key = { it.id }) { row ->
+                        SectorTile(row) { onOpenBenchmark(row.benchmark) }
                     }
                 }
             }
 
-            if (state.sectors.isNotEmpty()) {
-                fullWidth { SectionHeader("Sectors", subtitle = "Daily change") }
-                items(state.sectors, key = { it.id }) { row ->
-                    SectorTile(row) { onOpenBenchmark(row.benchmark) }
-                }
-            }
+            PinnedFreshnessLabel(
+                state.overallFreshness,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = LibraSpacing.small),
+            )
         }
-
-        PinnedFreshnessLabel(
-            state.overallFreshness,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = LibraSpacing.small),
-        )
     }
 }
 
@@ -147,7 +152,7 @@ private fun BenchmarkGroup(
     rows: List<BenchmarkPerformance>,
     onOpen: (Benchmark) -> Unit,
 ) {
-    GroupedSection {
+    GroupedSection(dividerInset = groupedStackInset) {
         for (performance in rows) {
             row { BenchmarkRow(performance) { onOpen(performance.benchmark) } }
         }

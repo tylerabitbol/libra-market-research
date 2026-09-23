@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,11 +20,14 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.models.core.DetectedEventDTO
 import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.ui.LibraAlpha
 import com.tylerabitbol.libra.ui.LibraShapes
+import com.tylerabitbol.libra.ui.LibraSpacing
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 import kotlin.math.max
@@ -58,7 +62,8 @@ fun EventCard(
         if (event.detailLines.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 for (line in event.detailLines) {
-                    Text(line, style = LibraType.figure, color = LibraTheme.colors.secondaryText)
+                    // Raw arithmetic, so Swift sets it in mono, not as figures.
+                    Text(line, style = LibraType.code, color = LibraTheme.colors.secondaryText)
                 }
             }
         }
@@ -68,7 +73,7 @@ fun EventCard(
         }
 
         event.contextClaim?.let {
-            HorizontalDivider()
+            HorizontalDivider(color = LibraTheme.colors.separator)
             ClaimRow(it)
         }
     }
@@ -95,7 +100,8 @@ private fun EventHeader(event: DetectedEventDTO, symbol: String?, isNew: Boolean
             event.kind.displayName,
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
             color = LibraTheme.colors.secondaryText,
-            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
         if (isNew) {
             Tag("NEW", MaterialTheme.colorScheme.primary)
@@ -108,11 +114,16 @@ private fun EventHeader(event: DetectedEventDTO, symbol: String?, isNew: Boolean
                     "before the close and is not yet recorded.",
             )
         }
+        // Swift's `Spacer()`: the date belongs at the trailing edge, not
+        // beside the kind. The spacer is the only weighted child — a second
+        // weight on the kind split the free space in half and stranded the
+        // date short of the edge.
+        Spacer(Modifier.weight(1f))
         Text(
             Format.dayAndMonth(event.occurredAt),
             style = LibraType.figure,
             color = LibraTheme.colors.tertiaryText,
-            modifier = Modifier.weight(1f, fill = false),
+            maxLines = 1,
         )
     }
 }
@@ -156,7 +167,14 @@ fun UnusualnessMeter(value: Double, modifier: Modifier = Modifier) {
             },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+        // A gap between the two, and the descriptor free to wrap under
+        // itself at the trailing edge: without them the longest descriptor
+        // ran straight on from the label and wrapped centred beneath it.
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(LibraSpacing.small),
+            verticalAlignment = Alignment.Top,
+        ) {
             Text(
                 "Unusual for this security",
                 style = MaterialTheme.typography.bodySmall,
@@ -166,8 +184,10 @@ fun UnusualnessMeter(value: Double, modifier: Modifier = Modifier) {
                 descriptor,
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontWeight = FontWeight.Medium,
+                    textAlign = TextAlign.End,
                 ),
                 color = LibraTheme.colors.secondaryText,
+                modifier = Modifier.weight(1f),
             )
         }
         ProportionBar(fraction = min(max(value, 0.0), 1.0).toFloat(), fromEnd = false)

@@ -32,9 +32,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.tylerabitbol.libra.ui.components.groupedRowPadding
+import com.tylerabitbol.libra.ui.components.groupedRowContent
+import com.tylerabitbol.libra.ui.components.groupedRowInset
 import com.tylerabitbol.libra.ui.components.groupedRow
 import com.tylerabitbol.libra.ui.components.GroupedDivider
+import com.tylerabitbol.libra.ui.components.ScreenHeader
 import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.support.RelativeTimeText
 import com.tylerabitbol.libra.ui.LibraAlpha
@@ -85,7 +87,14 @@ fun WatchlistScreen(
             EmptyWatchlist(onAddSecurity)
         } else {
             LazyColumn(
-                contentPadding = PaddingValues(LibraSpacing.large),
+                // The header row above already carries its own bottom space;
+                // a full 16 on top of it opened a gap no iOS list has.
+                contentPadding = PaddingValues(
+                    start = LibraSpacing.large,
+                    end = LibraSpacing.large,
+                    top = LibraSpacing.small,
+                    bottom = LibraSpacing.large,
+                ),
                 // No blanket spacing: the rows below are one grouped card and
                 // must sit flush. The loose items pad themselves.
             ) {
@@ -111,14 +120,16 @@ fun WatchlistScreen(
                             row = row,
                             onClick = { onOpenSecurity(row.symbol) },
                             onRemove = { onRemove(row.symbol) },
-                            modifier = Modifier.padding(horizontal = groupedRowPadding),
+                            modifier = Modifier.groupedRowContent(),
                         )
                         if (index < state.sortedRows.lastIndex) GroupedDivider()
                     }
                 }
 
                 item {
-                    Column(Modifier.padding(top = LibraSpacing.medium)) {
+                    // The section footer: aligned with the rows' content, as
+                    // a `List` footer is, rather than with the card's edge.
+                    Column(Modifier.padding(horizontal = groupedRowInset, vertical = LibraSpacing.small)) {
                         FreshnessLabel(state.freshness)
                     }
                 }
@@ -136,38 +147,29 @@ private fun WatchlistToolbar(
 ) {
     var isSortMenuOpen by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = LibraSpacing.large, vertical = LibraSpacing.small),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Watchlist", style = MaterialTheme.typography.titleLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(LibraSpacing.small)) {
-            if (canSort) {
-                Box {
-                    TextButton(onClick = { isSortMenuOpen = true }) {
-                        Text("Sort: ${sort.displayName}")
-                    }
-                    DropdownMenu(
-                        expanded = isSortMenuOpen,
-                        onDismissRequest = { isSortMenuOpen = false },
-                    ) {
-                        for (order in WatchlistViewModel.SortOrder.entries) {
-                            DropdownMenuItem(
-                                text = { Text(order.displayName) },
-                                onClick = {
-                                    onSelectSort(order)
-                                    isSortMenuOpen = false
-                                },
-                            )
-                        }
+    ScreenHeader("Watchlist") {
+        if (canSort) {
+            Box {
+                TextButton(onClick = { isSortMenuOpen = true }) {
+                    Text("Sort: ${sort.displayName}")
+                }
+                DropdownMenu(
+                    expanded = isSortMenuOpen,
+                    onDismissRequest = { isSortMenuOpen = false },
+                ) {
+                    for (order in WatchlistViewModel.SortOrder.entries) {
+                        DropdownMenuItem(
+                            text = { Text(order.displayName) },
+                            onClick = {
+                                onSelectSort(order)
+                                isSortMenuOpen = false
+                            },
+                        )
                     }
                 }
             }
-            TextButton(onClick = onAddSecurity) { Text("Add") }
         }
+        TextButton(onClick = onAddSecurity) { Text("Add") }
     }
 }
 
@@ -228,66 +230,77 @@ private fun WatchlistRowView(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
+    // Clickable before the inset, so the whole cell answers a tap and not only
+    // the text inside it. Remove sits beside the whole cell rather than inside
+    // its first line: a 48dp touch target in that line made it taller than
+    // the text and opened a gap above the context line below.
+    Row(
+        modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+            .then(modifier),
+        horizontalArrangement = Arrangement.spacedBy(LibraSpacing.small),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(LibraSpacing.medium),
-            verticalAlignment = Alignment.CenterVertically,
+        Column(
+            Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(LibraSpacing.tight),
         ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    row.symbol,
-                    style = LibraType.ticker,
-                )
-                Text(
-                    row.name,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = LibraTheme.colors.secondaryText,
-                    maxLines = 1,
-                )
-            }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                val error = row.error
-                if (!row.hasValue && error != null) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(LibraSpacing.medium),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        error.shortDescription,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = LibraTheme.colors.caution,
+                        row.symbol,
+                        style = LibraType.ticker,
                     )
-                } else {
-                    // A price from disk beats an error message. The refresh
-                    // failing does not make the last known price untrue — it
-                    // makes it old, which is what the stamp below says.
                     Text(
-                        Format.currency(row.last),
-                        style = LibraType.figureEmphasis,
-                        color = if (row.isStoredCopy) {
-                            LibraTheme.colors.secondaryText
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
+                        row.name,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LibraTheme.colors.secondaryText,
+                        maxLines = 1,
                     )
-                    DirectionalChangeText(row.changePercent)
-                    row.asOf?.let {
+                }
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    val error = row.error
+                    if (!row.hasValue && error != null) {
                         Text(
-                            RelativeTimeText.string(it),
+                            error.shortDescription,
                             style = MaterialTheme.typography.labelSmall,
-                            color = LibraTheme.colors.tertiaryText,
+                            color = LibraTheme.colors.caution,
                         )
+                    } else {
+                        // A price from disk beats an error message. The refresh
+                        // failing does not make the last known price untrue — it
+                        // makes it old, which is what the stamp below says.
+                        Text(
+                            Format.currency(row.last),
+                            style = LibraType.figureEmphasis,
+                            color = if (row.isStoredCopy) {
+                                LibraTheme.colors.secondaryText
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            },
+                        )
+                        DirectionalChangeText(row.changePercent)
+                        row.asOf?.let {
+                            Text(
+                                RelativeTimeText.string(it),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = LibraTheme.colors.tertiaryText,
+                            )
+                        }
                     }
                 }
             }
-            TextButton(onClick = onRemove) {
-                Text("Remove", style = MaterialTheme.typography.labelSmall)
-            }
+            WatchlistRowContext(row)
         }
-        WatchlistRowContext(row)
+        // No side padding of its own: the row gap already separates it.
+        TextButton(onClick = onRemove, contentPadding = PaddingValues(horizontal = 0.dp)) {
+            Text("Remove", style = MaterialTheme.typography.labelSmall)
+        }
     }
 }
 

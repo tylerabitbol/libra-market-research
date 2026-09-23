@@ -1,5 +1,6 @@
 package com.tylerabitbol.libra.ui.research
 
+import com.tylerabitbol.libra.ui.components.ScreenHeader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -81,14 +82,7 @@ private fun ResearchToolbar(
 ) {
     var isSortMenuOpen by remember { mutableStateOf(false) }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = LibraSpacing.large, vertical = LibraSpacing.small),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("Research", style = MaterialTheme.typography.titleLarge)
+    ScreenHeader("Research") {
         if (canSort) {
             Box {
                 TextButton(onClick = { isSortMenuOpen = true }) {
@@ -131,7 +125,7 @@ private fun Feed(
         contentPadding = PaddingValues(
             start = LibraSpacing.large,
             end = LibraSpacing.large,
-            top = LibraSpacing.large,
+            top = LibraSpacing.small,
             bottom = 32.dp,
         ),
         verticalArrangement = Arrangement.spacedBy(LibraSpacing.medium),

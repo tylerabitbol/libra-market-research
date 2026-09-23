@@ -77,8 +77,10 @@ fun SwipeToDelete(
             },
         ) {
             // Opaque, so the red panel behind it is revealed by the swipe
-            // rather than showing through the row.
-            Box(Modifier.background(MaterialTheme.colorScheme.surface)) { content() }
+            // rather than showing through the row. The card's fill, because
+            // every swipeable row sits in a grouped card — the page colour
+            // here drew each one as a grey stripe across a white group.
+            Box(Modifier.background(LibraTheme.colors.cardFill)) { content() }
         }
     }
 }
