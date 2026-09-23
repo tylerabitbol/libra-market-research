@@ -5,13 +5,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -66,7 +63,7 @@ import com.tylerabitbol.libra.ui.components.DirectionalChangeText
 import com.tylerabitbol.libra.ui.components.EventCard
 import com.tylerabitbol.libra.ui.components.FilingAnalysisCard
 import com.tylerabitbol.libra.ui.components.PinnedFreshnessLabel
-import com.tylerabitbol.libra.ui.components.MetricCell
+import com.tylerabitbol.libra.ui.components.RangeBar
 import com.tylerabitbol.libra.ui.components.PriceChart
 import com.tylerabitbol.libra.ui.components.ResearchProfileCard
 import com.tylerabitbol.libra.ui.components.SampleDataBanner
@@ -221,71 +218,100 @@ private fun Overview(state: SecurityDetailUiState) {
     }
 }
 
+/**
+ * The quote's key figures, as compact as they can be and still be read.
+ *
+ * This was a fixed-height grid of six cells in the figure style, where the two
+ * ranges wrapped. The ranges are now bars with their ends printed beneath, and
+ * the four single figures a two-column table, label and value on one line —
+ * about half the height, with the price's place in each range visible.
+ */
 @Composable
 private fun MetricGrid(state: SecurityDetailUiState) {
     val metrics = state.metrics
-    val dayRange = rangeText(state.quote?.low, state.quote?.high)
-    val yearRange = rangeText(
-        metrics?.currentValue("52WeekLow"),
-        metrics?.currentValue("52WeekHigh"),
-    )
     val averageVolume = metrics?.currentValue("10DayAverageTradingVolume")
+    val beta = metrics?.currentValue("beta")
 
-    // `adaptive` rather than a fixed column count, because the Swift grid
-    // adapts and a phone in landscape should use the width it has.
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 104.dp),
-        modifier = Modifier.fillMaxWidth().height(180.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        userScrollEnabled = false,
-        contentPadding = PaddingValues(0.dp),
-    ) {
-        item {
-            MetricCell(
-                "Market cap",
-                Format.compactCurrency(state.profile?.marketCap),
-                isAvailable = state.profile?.marketCap != null,
+    Column(verticalArrangement = Arrangement.spacedBy(LibraSpacing.medium)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(LibraSpacing.large)) {
+            RangeBar(
+                "Day range",
+                low = state.quote?.low,
+                high = state.quote?.high,
+                last = state.displayPrice,
+                modifier = Modifier.weight(1f),
             )
-        }
-        item {
-            MetricCell(
-                "Open",
-                Format.currency(state.quote?.open),
-                isAvailable = state.quote?.open != null,
-            )
-        }
-        item { MetricCell("Day range", dayRange, isAvailable = state.quote?.high != null) }
-        item {
-            MetricCell(
+            RangeBar(
                 "52-week range",
-                yearRange,
-                isAvailable = metrics?.currentValue("52WeekHigh") != null,
+                low = metrics?.currentValue("52WeekLow"),
+                high = metrics?.currentValue("52WeekHigh"),
+                last = state.displayPrice,
+                modifier = Modifier.weight(1f),
             )
         }
-        item {
-            MetricCell(
-                "Beta (Finnhub)",
-                Format.ratio(metrics?.currentValue("beta"), precision = 2),
-                isAvailable = metrics?.currentValue("beta") != null,
+        Column {
+            HorizontalDivider(color = LibraTheme.colors.separator)
+            StatPair(
+                "Market cap", Format.compactCurrency(state.profile?.marketCap),
+                "Open", Format.currency(state.quote?.open),
             )
-        }
-        item {
-            MetricCell(
-                "Avg volume (10d)",
-                Format.compact(averageVolume?.let { it * 1_000_000 }),
-                isAvailable = averageVolume != null,
+            HorizontalDivider(color = LibraTheme.colors.separator)
+            // "(Finnhub)" stays: the page fits its own beta further down, and
+            // two betas under one name would read as a contradiction.
+            StatPair(
+                "Beta (Finnhub)", Format.ratio(beta, precision = 2),
+                "Avg vol (10d)", Format.compact(averageVolume?.let { it * 1_000_000 }),
             )
         }
     }
 }
 
-private fun rangeText(low: Double?, high: Double?): String =
-    if (low == null || high == null) {
-        Format.notAvailable
-    } else {
-        "${Format.currency(low)} – ${Format.currency(high)}"
+/** Two label–value cells side by side, one table row. */
+@Composable
+private fun StatPair(
+    leftLabel: String,
+    leftValue: String,
+    rightLabel: String,
+    rightValue: String,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = LibraSpacing.snug),
+        horizontalArrangement = Arrangement.spacedBy(LibraSpacing.large),
+    ) {
+        StatCell(leftLabel, leftValue, Modifier.weight(1f))
+        StatCell(rightLabel, rightValue, Modifier.weight(1f))
     }
+}
+
+@Composable
+private fun StatCell(label: String, value: String, modifier: Modifier = Modifier) {
+    val available = value != Format.notAvailable
+    Row(
+        modifier.semantics(mergeDescendants = true) { contentDescription = "$label: $value" },
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = LibraTheme.colors.secondaryText,
+            maxLines = 1,
+        )
+        Text(
+            // "Not available" is too wide for half a row; a dash in the
+            // secondary colour says the same, and the description says it
+            // in full.
+            if (available) value else "—",
+            style = LibraType.figure,
+            color = if (available) {
+                MaterialTheme.colorScheme.onSurface
+            } else {
+                LibraTheme.colors.tertiaryText
+            },
+            maxLines = 1,
+        )
+    }
+}
 
 // MARK: - What changed
 
