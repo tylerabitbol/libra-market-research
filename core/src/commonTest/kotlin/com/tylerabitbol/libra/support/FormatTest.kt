@@ -124,4 +124,61 @@ class FormatTest {
         assertEquals("1,000", Format.fixed(1_000.0, 0))
         assertEquals("999", Format.fixed(999.0, 0))
     }
+
+    /**
+     * Worked answers, not Swift parity. Each expected string is the decimal
+     * value rounded half-to-even by hand, which is what ICU does and what the
+     * Swift app printed.
+     */
+    @Test
+    fun ties_round_to_even_on_the_decimal_value_not_the_binary_one() {
+        // 2.675 is stored as 2.67499999…; ×100 in binary gave 267.4999… and
+        // printed 2.67. As a decimal it is a tie, and 7 is odd: 2.68.
+        assertEquals("2.68", Format.fixed(2.675, 2))
+        // 1.015: a tie, 1 is odd, so up: 1.02 (binary scaling gave 1.01).
+        assertEquals("1.02", Format.fixed(1.015, 2))
+        // 1.005: a tie, 0 is even, so down: 1.00.
+        assertEquals("1.00", Format.fixed(1.005, 2))
+        // 0.125 is exact in binary: a tie, 2 is even, so 0.12.
+        assertEquals("0.12", Format.fixed(0.125, 2))
+        // Whole-number ties: 0.5 → 0, 1.5 → 2, 2.5 → 2.
+        assertEquals("0", Format.fixed(0.5, 0))
+        assertEquals("2", Format.fixed(1.5, 0))
+        assertEquals("2", Format.fixed(2.5, 0))
+        // Past the tie is not a tie: 2.6751 → 2.68, 2.6749 → 2.67.
+        assertEquals("2.68", Format.fixed(2.6751, 2))
+        assertEquals("2.67", Format.fixed(2.6749, 2))
+    }
+
+    @Test
+    fun rounding_carries_through_every_digit_and_the_grouping() {
+        assertEquals("1,000.00", Format.fixed(999.995, 2))
+        assertEquals("10.0", Format.fixed(9.96, 1))
+        assertEquals("-1,000.0", Format.fixed(-999.96, 1))
+    }
+
+    @Test
+    fun values_that_round_to_zero_carry_no_sign() {
+        assertEquals("0.00", Format.fixed(-0.004, 2))
+        assertEquals("0.00", Format.fixed(0.0000001, 2))
+        assertEquals("0.0", Format.fixed(-0.0, 1))
+    }
+
+    @Test
+    fun very_small_and_very_large_values_come_through_scientific_notation() {
+        // toString() renders these as 1.5E-5 and 1.0E20; the digits are
+        // recovered from it rather than printed.
+        assertEquals("0.00002", Format.fixed(0.000015, 5)) // tie, 1 odd → up
+        assertEquals("100,000,000,000,000,000,000", Format.fixed(1e20, 0))
+        assertEquals("12,345,678,901,234.00", Format.fixed(12_345_678_901_234.0, 2))
+    }
+
+    @Test
+    fun a_compact_figure_that_rounds_up_to_a_thousand_takes_the_next_unit() {
+        // 999.97B at 0 decimals would be "1,000B".
+        assertEquals("\$1.00T", Format.compactCurrency(999_970_000_000.0))
+        assertEquals("1.00M", Format.compact(999_600.0))
+        // Just below the boundary keeps its unit: 999.4K.
+        assertEquals("999K", Format.compact(999_400.0))
+    }
 }

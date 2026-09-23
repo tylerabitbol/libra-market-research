@@ -46,6 +46,17 @@ object InsiderActivity {
         val saleValue: Double? get() = total(sales)
         val hasDiscretionaryActivity: Boolean get() = purchaseCount + saleCount > 0
 
+        /**
+         * The total covers only transactions that carry a price. When some do
+         * not, the label says how many did, so a partial sum is not read as
+         * the whole.
+         */
+        private fun valueLabel(label: String, transactions: List<InsiderTransactionDTO>): String {
+            val priced = transactions.count { it.approximateValue != null }
+            return if (priced == transactions.size) label
+            else "$label ($priced of ${transactions.size} priced)"
+        }
+
         private fun total(transactions: List<InsiderTransactionDTO>): Double? {
             val values = transactions.mapNotNull { it.approximateValue }
             return if (values.isEmpty()) null else values.sum()
@@ -78,11 +89,11 @@ object InsiderActivity {
                         Derivation.Input("purchases", "$purchaseCount"),
                         Derivation.Input("sales", "$saleCount"),
                         Derivation.Input(
-                            "approximate purchase value",
+                            valueLabel("approximate purchase value", purchases),
                             Format.compactCurrency(purchaseValue)
                         ),
                         Derivation.Input(
-                            "approximate sale value",
+                            valueLabel("approximate sale value", sales),
                             Format.compactCurrency(saleValue)
                         ),
                         Derivation.Input("excluded as scheduled", "$scheduledCount"),

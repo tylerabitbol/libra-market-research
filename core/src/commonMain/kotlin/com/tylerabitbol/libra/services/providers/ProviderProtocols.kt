@@ -226,6 +226,20 @@ data class CompanyMetricsDTO(
         val quarterlyPoints = quarterly[key] ?: emptyList()
         return if (quarterlyPoints.isEmpty()) (annual[key] ?: emptyList()) else quarterlyPoints
     }
+
+    /**
+     * Prefers annual history once it holds [minimumYears] points, falling
+     * back to [history].
+     *
+     * For metrics whose current value covers twelve months. Finnhub's
+     * quarterly margins are single quarters; a TTM margin ranked among them is
+     * a smoothed figure measured against spiky ones, and one exceptional
+     * quarter (GOOGL's 93.7% net margin) sets the top of the range.
+     */
+    fun twelveMonthHistory(key: String, minimumYears: Int): List<MetricPoint> {
+        val annualPoints = annual[key] ?: emptyList()
+        return if (annualPoints.size >= minimumYears) annualPoints else history(key)
+    }
 }
 
 data class RatingSnapshotDTO(

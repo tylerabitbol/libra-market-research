@@ -1,7 +1,6 @@
 package com.tylerabitbol.libra.support
 
 import kotlin.math.abs
-import kotlin.math.floor
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -65,7 +64,9 @@ object Format {
             1_000.0 to "K"
         )
         for ((threshold, suffix) in units) {
-            if (value >= threshold) {
+            // 999.5 of a unit rounds to "1,000" at the precision below, so it
+            // belongs to the next unit up: $999.97B is "$1.00T", not "$1,000B".
+            if (value >= threshold * 0.9995) {
                 val scaled = value / threshold
                 // Keep three significant figures so 3.10T and 412B both read well.
                 val precision = if (scaled >= 100) 0 else if (scaled >= 10) 1 else 2
@@ -194,37 +195,89 @@ object Format {
      * the Swift tests were written against it — `FormatTests` even avoids an
      * exact .5 tie on purpose. Rounding half-up here would silently change
      * figures the tests do not cover.
+     *
+     * The rounding works on the value's shortest decimal digits, as ICU's
+     * does, and not on `value × 10ⁿ` as a double. Scaling in binary turns the
+     * tie in 2.675 into 267.4999…, so it printed 2.67 where Swift printed
+     * 2.68, and a real tie almost never reached the half-to-even branch.
      */
     internal fun fixed(value: Double, decimals: Int, grouping: Boolean = true): String {
         if (!value.isFinite()) return notAvailable
         val negative = value < 0
-        val magnitude = abs(value)
+        val units = roundedUnits(abs(value), decimals)
 
-        var factor = 1L
-        repeat(decimals) { factor *= 10L }
-
-        val scaled = magnitude * factor
-        val lower = floor(scaled)
-        val remainder = scaled - lower
-        val rounded = when {
-            remainder > 0.5 -> lower + 1.0
-            remainder < 0.5 -> lower
-            // Exactly halfway: round to the even unit.
-            else -> if (lower.toLong() % 2L == 0L) lower else lower + 1.0
-        }
-
-        val units = rounded.toLong()
-        val whole = units / factor
-        val fraction = units % factor
+        val integerLength = units.length - decimals
+        val whole = if (integerLength > 0) units.substring(0, integerLength) else "0"
+        val fraction = units.takeLast(decimals).padStart(decimals, '0')
 
         val sb = StringBuilder()
-        if (negative && units != 0L) sb.append('-')
-        sb.append(if (grouping) group(whole.toString()) else whole.toString())
+        if (negative && units.any { it != '0' }) sb.append('-')
+        sb.append(if (grouping) group(whole) else whole)
         if (decimals > 0) {
             sb.append('.')
-            sb.append(fraction.toString().padStart(decimals, '0'))
+            sb.append(fraction)
         }
         return sb.toString()
+    }
+
+    /**
+     * `magnitude` rounded half-to-even to `decimals` places, as a digit string
+     * of whole units of 10⁻ᵈᵉᶜⁱᵐᵃˡˢ with no leading zeros ("0" for zero).
+     *
+     * Kept as digits throughout, so no figure is too large for a `Long`.
+     */
+    private fun roundedUnits(magnitude: Double, decimals: Int): String {
+        // Shortest round-trip digits: "2.675", "1.0E7", "1.5E-5".
+        val text = magnitude.toString()
+        val exponentAt = text.indexOfFirst { it == 'E' || it == 'e' }
+        val mantissa = if (exponentAt >= 0) text.substring(0, exponentAt) else text
+        val exponent = if (exponentAt >= 0) text.substring(exponentAt + 1).toInt() else 0
+        val dot = mantissa.indexOf('.')
+        val intPart = if (dot >= 0) mantissa.substring(0, dot) else mantissa
+        val fracPart = if (dot >= 0) mantissa.substring(dot + 1) else ""
+
+        // value = 0.digits × 10^point
+        var digits = (intPart + fracPart).trimEnd('0')
+        var point = intPart.length + exponent
+        while (digits.startsWith('0')) {
+            digits = digits.substring(1)
+            point -= 1
+        }
+        if (digits.isEmpty()) return "0"
+
+        val keep = point + decimals
+        if (keep < 0) return "0"
+        if (keep >= digits.length) {
+            return digits.padEnd(keep, '0').trimStart('0').ifEmpty { "0" }
+        }
+
+        val kept = digits.substring(0, keep)
+        val rest = digits.substring(keep)
+        val roundUp = when {
+            rest[0] > '5' -> true
+            rest[0] < '5' -> false
+            rest.length > 1 -> true
+            // Exactly halfway: round to the even unit.
+            else -> (kept.lastOrNull()?.digitToInt() ?: 0) % 2 == 1
+        }
+        val rounded = if (roundUp) increment(kept) else kept
+        return rounded.trimStart('0').ifEmpty { "0" }
+    }
+
+    /** Adds one to a non-negative decimal digit string: "199" → "200". */
+    private fun increment(digits: String): String {
+        val chars = digits.toCharArray()
+        var index = chars.size - 1
+        while (index >= 0) {
+            if (chars[index] == '9') {
+                chars[index] = '0'
+                index -= 1
+            } else {
+                chars[index] = chars[index] + 1
+                return chars.concatToString()
+            }
+        }
+        return "1" + chars.concatToString()
     }
 
     /** Inserts thousands separators: 1234567 → "1,234,567". */

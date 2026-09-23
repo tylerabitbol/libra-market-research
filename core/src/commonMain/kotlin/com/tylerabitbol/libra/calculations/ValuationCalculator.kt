@@ -74,6 +74,9 @@ data class HistoricalContext(
 
 object ValuationCalculator {
 
+    /** Fewer observations than this and a percentile is not reported. */
+    const val minimumObservations = 8
+
     /**
      * Percentile rank of [current] within [history].
      *
@@ -86,7 +89,7 @@ object ValuationCalculator {
     fun historicalContext(
         current: Double,
         history: List<MetricPoint>,
-        minimumObservations: Int = 8,
+        minimumObservations: Int = ValuationCalculator.minimumObservations,
         lowerIsCheaper: Boolean = true,
         currentIsFromHistory: Boolean = false
     ): HistoricalContext? {
@@ -254,7 +257,14 @@ data class ValuationMetric(
      * True when a *lower* value is conventionally the cheaper one. Recorded so
      * the UI can explain direction without implying a recommendation.
      */
-    val lowerIsCheaper: Boolean
+    val lowerIsCheaper: Boolean,
+    /**
+     * True when the current value is a trailing-twelve-month figure whose
+     * history must also be twelve-month figures: the margins and ROE, whose
+     * quarterly series are single quarters. The TTM multiples (`peTTM`,
+     * `psTTM`) have TTM quarterly series and keep the denser history.
+     */
+    val historyIsAnnual: Boolean = false
 ) {
     val id: String get() = key
 
@@ -281,7 +291,8 @@ data class ValuationMetric(
          */
         private fun margin(key: String, currentKey: String?, name: String) = ValuationMetric(
             key = key, currentKey = currentKey, displayName = name, unit = MetricUnit.Percent,
-            historyScale = 100.0, currentScale = 1.0, lowerIsCheaper = false
+            historyScale = 100.0, currentScale = 1.0, lowerIsCheaper = false,
+            historyIsAnnual = true
         )
 
         val all: List<ValuationMetric> = listOf(
@@ -346,7 +357,11 @@ fun resolvedHistoryScale(declared: Double, values: List<Double>): Double {
  * data is inspected before any factor is applied.
  */
 fun CompanyMetricsDTO.normalized(metric: ValuationMetric): NormalizedMetric? {
-    val raw = history(metric.key)
+    val raw = if (metric.historyIsAnnual) {
+        twelveMonthHistory(metric.key, minimumYears = ValuationCalculator.minimumObservations)
+    } else {
+        history(metric.key)
+    }
     if (raw.isEmpty()) return null
 
     val scale = resolvedHistoryScale(metric.historyScale, raw.map { it.value })

@@ -48,6 +48,7 @@ import com.tylerabitbol.libra.calculations.ChangeWindow
 import kotlin.time.Clock
 import kotlin.time.Instant
 import com.tylerabitbol.libra.calculations.EventDetector
+import com.tylerabitbol.libra.calculations.PeriodReturn
 import com.tylerabitbol.libra.models.core.ChartAvailability
 import com.tylerabitbol.libra.models.core.ChartRange
 import com.tylerabitbol.libra.models.core.EventKind
@@ -723,13 +724,17 @@ private fun RelativeSection(state: SecurityDetailUiState) {
         }
 
         Card {
-            ReturnRow(state.symbol, state.rangeReturn?.percent, isSubject = true)
+            val subjectEnd = state.rangeReturn?.endDate
+            ReturnRow(state.symbol, state.rangeReturn, isSubject = true)
             state.sectorBenchmark?.let {
                 HorizontalDivider()
-                ReturnRow(it.displayName, state.sectorRangeReturn?.percent, isSubject = false)
+                ReturnRow(it.displayName, state.sectorRangeReturn, isSubject = false, subjectEnd)
             }
             HorizontalDivider()
-            ReturnRow("S&P 500", state.marketRangeReturn?.percent, isSubject = false)
+            // FRED publishes a session late, so this row usually ends a day
+            // before the one above it; the row says so rather than invite a
+            // subtraction across two windows.
+            ReturnRow("S&P 500", state.marketRangeReturn, isSubject = false, subjectEnd)
         }
 
         Card {
@@ -752,27 +757,47 @@ private fun RelativeSection(state: SecurityDetailUiState) {
     }
 }
 
+/**
+ * One leg's return over the range. [subjectEnd] is the security's last bar:
+ * when this leg ends on a different day, the row names its own end date.
+ */
 @Composable
-private fun ReturnRow(label: String, percent: Double?, isSubject: Boolean) {
+private fun ReturnRow(
+    label: String,
+    period: PeriodReturn?,
+    isSubject: Boolean,
+    subjectEnd: Instant? = null,
+) {
+    val endsElsewhere = period != null && subjectEnd != null &&
+        Format.shortDate(period.endDate) != Format.shortDate(subjectEnd)
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            label,
-            style = if (isSubject) {
-                LibraType.ticker
-            } else {
-                MaterialTheme.typography.bodyMedium
-            },
-            color = if (isSubject) {
-                MaterialTheme.colorScheme.onSurface
-            } else {
-                LibraTheme.colors.secondaryText
-            },
-        )
-        DirectionalChangeText(percent)
+        Column {
+            Text(
+                label,
+                style = if (isSubject) {
+                    LibraType.ticker
+                } else {
+                    MaterialTheme.typography.bodyMedium
+                },
+                color = if (isSubject) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    LibraTheme.colors.secondaryText
+                },
+            )
+            if (endsElsewhere && period != null) {
+                Text(
+                    "to ${Format.shortDate(period.endDate)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = LibraTheme.colors.tertiaryText,
+                )
+            }
+        }
+        DirectionalChangeText(period?.percent)
     }
 }
 

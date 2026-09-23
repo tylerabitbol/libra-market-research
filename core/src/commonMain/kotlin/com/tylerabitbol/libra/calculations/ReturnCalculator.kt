@@ -8,10 +8,13 @@ import com.tylerabitbol.libra.support.Format
 import kotlin.math.abs
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Instant
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * The realised return over a window, together with the window actually used.
@@ -186,9 +189,13 @@ object ReturnCalculator {
      * Uses the last bar at or before the window start, so a weekend or holiday
      * boundary resolves to the prior session rather than failing.
      *
-     * [tolerance] is how far before the requested start the chosen bar may sit
+     * [tolerance] is how far from the requested start the chosen bar may sit
      * while still counting as a full window. Defaults to 5 days, which absorbs
-     * a long weekend without hiding a genuine data gap.
+     * a long weekend without hiding a genuine data gap. It applies both ways:
+     * a start bar weeks *before* the requested start, left by a hole in the
+     * data, measures a longer window than was asked for, and is no more a
+     * full window than one that starts late. (Swift checked the late side
+     * only.)
      */
     fun trailingReturn(
         bars: List<PriceBar>,
@@ -215,7 +222,7 @@ object ReturnCalculator {
             endDate = endBar.date,
             startPrice = startBar.analysisClose,
             endPrice = endBar.analysisClose,
-            isFullWindow = gap <= tolerance
+            isFullWindow = gap.absoluteValue <= tolerance
         )
     }
 
@@ -226,6 +233,11 @@ object ReturnCalculator {
      * percentage points" stated as arithmetic rather than adjectives. Both
      * legs must cover comparable windows or the comparison is meaningless, so
      * mismatched windows return null instead of a misleading number.
+     *
+     * Both ends are checked. Swift checked only the start, so a benchmark
+     * whose last close was a week old was compared against a security priced
+     * today. Prefer [alignedRelativePerformance], which gives both legs the
+     * same end rather than merely tolerating a difference.
      */
     fun relativePerformance(
         security: PeriodReturn?,
@@ -233,8 +245,9 @@ object ReturnCalculator {
         maxWindowMismatch: Duration = 3.days
     ): RelativePerformance? {
         if (security == null || benchmark == null) return null
-        val mismatch = (security.startDate - benchmark.startDate).absoluteValue
-        if (mismatch > maxWindowMismatch) return null
+        val startMismatch = (security.startDate - benchmark.startDate).absoluteValue
+        val endMismatch = (security.endDate - benchmark.endDate).absoluteValue
+        if (startMismatch > maxWindowMismatch || endMismatch > maxWindowMismatch) return null
 
         return RelativePerformance(
             securityReturn = security.percent,
@@ -242,6 +255,36 @@ object ReturnCalculator {
             differencePoints = security.percent - benchmark.percent,
             startDate = maxOf(security.startDate, benchmark.startDate),
             endDate = minOf(security.endDate, benchmark.endDate)
+        )
+    }
+
+    /**
+     * Relative performance with both legs measured over the same window.
+     *
+     * The two series rarely end on the same day. FRED publishes the S&P 500 a
+     * session late, so measuring each series to its own last bar subtracts a
+     * return ending yesterday from one ending today — two windows a session
+     * apart, reported as one. Ending both on the day of the earlier last bar
+     * makes the difference a difference over one window.
+     *
+     * The cut is the end of that UTC day, not the bar's instant: vendors
+     * stamp a daily bar at different times of day (midnight UTC, or 04:00Z),
+     * and a cut at one vendor's midnight would drop the other's bar for the
+     * same session.
+     */
+    fun alignedRelativePerformance(
+        security: List<PriceBar>,
+        benchmark: List<PriceBar>,
+        window: DatePeriod,
+        zone: TimeZone = TimeZone.currentSystemDefault()
+    ): RelativePerformance? {
+        val securityEnd = security.maxOfOrNull { it.date } ?: return null
+        val benchmarkEnd = benchmark.maxOfOrNull { it.date } ?: return null
+        val lastDay = minOf(securityEnd, benchmarkEnd).toLocalDateTime(TimeZone.UTC).date
+        val end = lastDay.plus(DatePeriod(days = 1)).atStartOfDayIn(TimeZone.UTC) - 1.nanoseconds
+        return relativePerformance(
+            trailingReturn(security, window, asOf = end, zone = zone),
+            trailingReturn(benchmark, window, asOf = end, zone = zone)
         )
     }
 

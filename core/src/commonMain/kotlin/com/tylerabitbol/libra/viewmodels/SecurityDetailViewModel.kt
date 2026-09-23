@@ -1215,17 +1215,23 @@ val SecurityDetailUiState.marketRangeReturn: PeriodReturn?
  * stated in percentage points rather than adjectives.
  */
 val SecurityDetailUiState.relativeToSector: RelativePerformance?
-    get() = ReturnCalculator.relativePerformance(rangeReturn, sectorRangeReturn)
+    get() = ReturnCalculator.alignedRelativePerformance(bars, sectorBars, selectedRange.datePeriod)
 
+/**
+ * Against FRED's S&P 500, which publishes a session late — which is why this is
+ * the aligned form rather than [rangeReturn] less [marketRangeReturn].
+ */
 val SecurityDetailUiState.relativeToMarket: RelativePerformance?
-    get() = ReturnCalculator.relativePerformance(rangeReturn, marketRangeReturn)
+    get() = ReturnCalculator.alignedRelativePerformance(bars, marketBars, selectedRange.datePeriod)
 
 /**
  * How the sector itself did against the market — Section 13's "sector
  * strength", which is about the industry rather than this company.
  */
 val SecurityDetailUiState.sectorVersusMarket: RelativePerformance?
-    get() = ReturnCalculator.relativePerformance(sectorRangeReturn, marketRangeReturn)
+    get() = ReturnCalculator.alignedRelativePerformance(
+        sectorBars, marketBars, selectedRange.datePeriod
+    )
 
 /**
  * The eleven dimensions of Section 13, and with them Section 12's

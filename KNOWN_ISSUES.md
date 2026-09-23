@@ -18,6 +18,7 @@ decision, and stays.
 |---|---|
 | Gradle, versions, module layout, Xcode project | [Build and toolchain](#build-and-toolchain) |
 | `support/`, `models/` | [Support and value types](#support-and-value-types) |
+| `calculations/`, `Format` rounding | [Calculations: the math audit](#calculations-the-math-audit) |
 | `networking/` | [Networking](#networking) |
 | `persistence/` | [Persistence](#persistence) |
 | `services/secrets/` | [Secrets](#secrets) |
@@ -967,6 +968,70 @@ back to the app name, that a Finnhub failure which is not a miss does not
 quietly switch vendors, that sample filings carry the evictable accession
 prefix, and that no mock answers to a real vendor's identity.
 
+
+## Calculations: the math audit
+
+`PLAN.md` Stage 1, run 2026-09-23. Every formula in `calculations/` and
+`support/Format.kt` was read against its Swift original, and the ones below were
+worked by hand in `WorkedExampleTest` and `FormatTest`. Where the port now
+**disagrees with Swift on purpose**, the Swift line is named; Swift is not being
+changed, so the two apps will print different figures in these cases.
+
+### Fixed, and now diverging from Swift
+
+- **`Format.fixed` rounded the binary value, not the decimal one.** It scaled
+  `value × 10ⁿ` as a double, so 2.675 became 267.4999… and printed 2.67; ICU,
+  which the Swift app used, rounds the shortest decimal digits and prints 2.68.
+  The half-to-even branch almost never saw a real tie. It now rounds on the
+  digits of `toString()`, which is shortest round-trip on JVM (JDK 19+) and
+  Native alike, and no longer goes through a `Long`, so no figure overflows.
+  This matches Swift more closely than before, not less.
+- **`compactMagnitude` chose its unit before rounding**, so $999.97B printed as
+  "$1,000B". A value that rounds to 1,000 of a unit now takes the next one up
+  ("$1.00T"). Swift has the same bug (`Format.swift`, `compactMagnitude`).
+- **Relative performance compared two different windows.** The S&P 500 comes
+  from FRED, which publishes a session late, and each leg was measured to its own
+  last bar, so the security's return to today was set against the market's to
+  yesterday. `ReturnCalculator.alignedRelativePerformance` ends both legs on the
+  day of the earlier last bar (cut at the end of that UTC day, since vendors stamp
+  daily bars at different hours). The three relative figures on the security page
+  use it. The return rows above them still show each leg's own window, and a row
+  that ends on a different day from the security now says "to <date>".
+  Swift: `SecurityDetailViewModel.swift`, `relativeToMarket`.
+- **`relativePerformance` checked the start dates only.** A benchmark whose last
+  close was a week old passed. The end dates are now held to the same 3 days.
+  Swift: `ReturnCalculator.swift`, `relativePerformance`.
+- **`trailingReturn.isFullWindow` checked a late start only.** A start bar left
+  weeks early by a hole in the data measured a longer window than asked, and was
+  still labelled full. The tolerance now applies both ways. Swift:
+  `ReturnCalculator.swift`, `trailingReturn`.
+- **TTM margins were ranked against single quarters.** The current value of
+  each margin and ROE is trailing twelve months; its history came from Finnhub's
+  quarterly series, which are single quarters. So a smoothed figure was ranked
+  among spiky ones, and one exceptional quarter set the top of the range. The
+  margins now rank against the annual series once it holds 8 years
+  (`CompanyMetricsDTO.twelveMonthHistory`), and fall back to quarterly for a
+  younger company. The TTM multiples keep the quarterly series, which are TTM
+  too. Swift: `ValuationCalculator.swift`, `normalized`.
+- **Insider value totals summed only priced transactions** and did not say so.
+  The derivation label now reads "(2 of 3 priced)" when some carry no price.
+
+### Suspected, checked, and correct
+
+- **GOOGL's 93.7% quarterly net margin** (cited in `FundamentalDetector.kt` and
+  `ValuationCalculator.swift`). Checked against SEC companyfacts: Alphabet filed
+  net income of $112.193B on revenue of $119.796B for the quarter ending
+  2026-06-30. The arithmetic is right; the quarter was exceptional.
+- **Margin scaling** (`historyScale = 100`, `currentScale = 1`). Holds for all
+  four keys in the AAPL fixture: history 0.4691 / 0.3197 / 0.2692 / 1.5191 against
+  current 48.65 / 33.17 / 27.62 / 137.18.
+- **`AnomalyMeasure.measure` asks for `minimumSample - 1` priors.** Intended: the
+  observation is the remaining member of the sample. Same in Swift.
+- **The valuation percentile counts `<=`.** Documented as "at or below" and kept.
+- **`yearOverYear`'s 365 days ± 45** absorbs leap years and 52/53-week fiscal
+  calendars; worked in `WorkedExampleTest`.
+- **Median, MAD × 1.4826, sample (n − 1) standard deviation, drawdown**: worked
+  by hand and correct.
 
 ## Open issues
 
