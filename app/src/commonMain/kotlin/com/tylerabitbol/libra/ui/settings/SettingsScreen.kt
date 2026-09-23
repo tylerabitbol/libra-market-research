@@ -29,6 +29,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.tylerabitbol.libra.ui.bundledFontCredit
 import com.tylerabitbol.libra.ui.components.libraCard
 import com.tylerabitbol.libra.ui.components.SectionCaption
 import com.tylerabitbol.libra.ui.components.GroupedSection
@@ -152,6 +153,13 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = LibraTheme.colors.secondaryText,
                 )
+                bundledFontCredit?.let { credit ->
+                    Text(
+                        credit,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LibraTheme.colors.tertiaryText,
+                    )
+                }
             }
         }
     }

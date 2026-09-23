@@ -171,7 +171,12 @@ spike does not land inside the box, take the fallback — bundle the rounded fac
 *both* platforms and keep text and mono native on iOS. Say which happened in
 `KNOWN_ISSUES.md`; do not spend a second hour on it.
 
-**Android actual**: bundle Inter, Nunito Sans, JetBrains Mono.
+**Android actual**: bundle Inter, Nunito, JetBrains Mono.
+
+> *As built:* this originally said Nunito Sans, which is the version of Nunito
+> **without** rounded terminals — the wrong face for the one job it had. And the
+> fonts went into Android-only resources rather than Compose resources, so iOS
+> carries none of them. Both are recorded in `KNOWN_ISSUES.md`.
 
 ```kotlin
 // app/build.gradle.kts, commonMain.dependencies

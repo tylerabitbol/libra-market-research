@@ -35,3 +35,5 @@ private val resolved: LibraFontFamilies by lazy {
 
 @Composable
 actual fun libraFontFamilies(): LibraFontFamilies = resolved
+
+actual val bundledFontCredit: String? = null

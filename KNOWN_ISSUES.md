@@ -726,7 +726,10 @@ can be repeated. It was not repeated during the look plan, which is about
 rendering. One observation from that pass belongs here, though: on the emulator
 the Dashboard sat on "Loading…" for thirty seconds with every key present, the
 network resolving and nothing logged as an error. That looks like the same stall,
-on a path that has nothing to do with a deep link.
+on a path that has nothing to do with a deep link. A later launch narrowed it: the
+Watchlist loaded live quotes while the Dashboard was still on "Loading…" at
+twenty-five seconds, so the keys and the network are fine and the stall is in the
+Dashboard's own sources.
 
 **The base colour scheme is Material's, not Libra's.** `Theme.kt` ends in
 `colorScheme = if (useDarkTheme) darkColorScheme() else lightColorScheme()`,
@@ -1023,11 +1026,30 @@ matching, `LibraFonts.ios.kt` falls back to the default face.
 **Framework size delta: zero.** No font files and no `compose.components.resources`
 dependency were added, so `LibraKit` is unchanged by the typography work.
 
-**Android typography is incomplete.** `LibraFonts.android.kt` returns the
-platform's faces. Figures on Android are therefore medium weight and tabular but
-not rounded, and text is Roboto rather than an SF lookalike. The intended bundle
-is Inter, Nunito Sans and JetBrains Mono, all SIL OFL. They are not in the tree
-because fetching them is a download the owner has not yet authorised.
+**Android bundles Inter, Nunito and JetBrains Mono.** Downloaded with the owner's
+go-ahead from the `google/fonts` repository, all SIL OFL 1.1, 1.3 MB together.
+Each is a single variable font; `LibraFonts.android.kt` declares one `Font` per
+weight the type scale uses, each setting the weight axis on the same file.
+Variable fonts need API 26, which is minSdk.
+
+*Nunito, not Nunito Sans* — the plan named the wrong one. They are one project,
+and Google Fonts' own description of it says Nunito Sans is "the regular
+non-rounded terminal version". Nunito's digits are equal-width by default, so it
+lines figures up without needing `tnum`, which it does not have. Inter does have
+`tnum`, and has proportional digits without it.
+
+*Deviation: Android resources, not Compose resources.* The plan put the files in
+`commonMain/composeResources/`, accepting that 1.3 MB would ride along in the iOS
+framework. `:app`'s Android target can carry ordinary Android resources instead
+— `androidResources { enable = true }`, off by default for a multiplatform
+library — so the fonts are in `app/src/androidMain/res/font/` and iOS carries
+none of them. `compose.components.resources` was never added. The licences are
+in `res/raw/` so they ship inside the APK with the fonts, and Settings → About
+credits them on Android only (`bundledFontCredit` is null on iOS, which draws SF
+from the system and has nothing to credit).
+
+Checked on the emulator: tickers render in JetBrains Mono, and the prices match
+Nunito rather than Inter when compared against a local render of both.
 
 **Grouped lists come in two shapes.** `GroupedSection` takes its rows as a
 builder and draws dividers between them. A `LazyColumn` cannot be wrapped in one

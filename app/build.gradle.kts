@@ -15,6 +15,10 @@ kotlin {
         namespace = "com.tylerabitbol.libra.ui"
         compileSdk = libs.versions.androidCompileSdk.get().toInt()
         minSdk = libs.versions.androidMinSdk.get().toInt()
+        // Off by default for a multiplatform library. On for Android only, to
+        // carry the bundled fonts: iOS gets SF from the system and must not
+        // pay 1.3 MB for faces it never draws.
+        androidResources { enable = true }
     }
 
     // One framework carries Compose UI and :core. The iOS shell links this.

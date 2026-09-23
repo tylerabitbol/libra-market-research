@@ -46,3 +46,10 @@ val LocalLibraFonts = staticCompositionLocalOf {
         mono = FontFamily.Monospace,
     )
 }
+
+/**
+ * The attribution the bundled faces call for, or null where nothing is bundled.
+ *
+ * iOS draws SF from the system and has nothing to credit.
+ */
+expect val bundledFontCredit: String?
