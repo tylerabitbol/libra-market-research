@@ -2,8 +2,9 @@
 
 Port of the SwiftUI app on `main` to Kotlin Multiplatform + Compose
 Multiplatform. The port is complete. [PLAN.md](PLAN.md) is the plan being
-worked now; [docs/PORT_PLAN.md](docs/PORT_PLAN.md) is the finished port plan it
-succeeded, kept because `KNOWN_ISSUES.md` cites its section numbers.
+worked now: UI/UX and general improvements. The finished plans before it are in
+`docs/`: [PORT_PLAN.md](docs/PORT_PLAN.md), kept because `KNOWN_ISSUES.md` cites
+its section numbers, then `MAINTENANCE_PLAN.md` and `LOOK_PLAN.md`.
 [KNOWN_ISSUES.md](KNOWN_ISSUES.md) holds every deviation from the Swift
 original, and [RESUME.md](RESUME.md) says where the work stands. The Swift app
 is the reference for every ported file.

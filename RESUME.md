@@ -27,7 +27,7 @@ and **5** Android instrumentation tests against a real AndroidKeyStore, which
 Two things found and deliberately not fixed, both written up in
 `KNOWN_ISSUES.md`: the `-LibraOpenSymbol` page still disagrees with the
 Watchlist path on live keys even after both of Stage 2.4's fixes. The base
-colour scheme was Material's baseline purple; `PLAN.md` Stage 1 replaced it.
+colour scheme was Material's baseline purple; `docs/LOOK_PLAN.md` Stage 1 replaced it.
 
 The Android emulator's six credentials were lost during that pass's Stage 5 —
 `pm clear` removes the SharedPreferences the secrets store encrypts into. As of

@@ -749,7 +749,7 @@ names the semantic colours correctly; what is unmatched is everything
 underneath them. Not addressed, because no stage asked for it and a palette is
 the owner's call.
 
-*Resolved by `PLAN.md` Stage 1.* The owner asked for it. Every slot is now
+*Resolved by `docs/LOOK_PLAN.md` Stage 1.* The owner asked for it. Every slot is now
 transcribed from the UIKit token Swift leans on, and `ThemeTest` fails if any
 slot the app reads is left at the Material baseline.
 
@@ -1015,7 +1015,7 @@ iOS 27.0. API 26 remains the manifest floor that the build asserts and nobody
 has watched.
 
 
-### The look plan (`PLAN.md`)
+### The look plan (`docs/LOOK_PLAN.md`)
 
 **The iOS font spike landed; nothing is bundled on iOS.** The plan allowed an hour
 to find out whether Compose could reach SF Pro Rounded, with a fallback of
