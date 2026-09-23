@@ -61,6 +61,10 @@ fun SwipeToDelete(
             // that scrolls vertically.
             enableDismissFromStartToEnd = false,
             backgroundContent = {
+                // Nothing behind a row at rest. The row's rounded clip is
+                // antialiased, and a red panel under it showed through the
+                // soft edge as a pink rim round every card.
+                if (state.dismissDirection == SwipeToDismissBoxValue.Settled) return@SwipeToDismissBox
                 Box(
                     Modifier
                         .fillMaxSize()

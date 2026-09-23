@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 
@@ -55,6 +56,15 @@ data class WatchlistRow(
     val marketPercent: Double? = null,
     /** This row's sector's move, fetched once per distinct sector on the list. */
     val sectorPercent: Double? = null,
+    /**
+     * About a month of daily closes, oldest first, for the row's sparkline.
+     *
+     * Read from bars already on disk and never fetched: bars are Tiingo's
+     * scarcest request, and one per row would spend a list's worth of them on
+     * decoration. Empty until the security's page has been opened once and
+     * stored some, and the row draws nothing rather than a placeholder line.
+     */
+    val sparkline: List<Double> = emptyList(),
 ) {
     val id: String get() = symbol
 
@@ -188,9 +198,16 @@ class WatchlistViewModel(private val scope: CoroutineScope) {
         if (snapshots == null) return
         val stored = mutableMapOf<String, QuoteSnapshot>()
         val events = mutableMapOf<String, DetectedEventDTO>()
+        val sparklines = mutableMapOf<String, List<Double>>()
+        val sparklineStart = Clock.System.now() - sparklineDays.days
         for (symbol in _state.value.rows.map { it.symbol }) {
             runCatching { snapshots.lastQuote(symbol, Clock.System.now()) }
                 .getOrNull()?.let { stored[symbol] = it }
+            runCatching { snapshots.bars(symbol, from = sparklineStart) }
+                .getOrNull()
+                ?.map { it.analysisClose }
+                ?.takeIf { it.size >= 2 }
+                ?.let { sparklines[symbol] = it }
             // The feed of recorded changes, read rather than recomputed.
             runCatching { snapshots.events(symbol, limit = 1) }
                 .getOrNull()?.firstOrNull()?.let { events[symbol] = it }
@@ -198,7 +215,11 @@ class WatchlistViewModel(private val scope: CoroutineScope) {
         _state.update { current ->
             current.copy(
                 rows = current.rows.map { row ->
-                    row.copy(stored = stored[row.symbol], latestEvent = events[row.symbol])
+                    row.copy(
+                        stored = stored[row.symbol],
+                        latestEvent = events[row.symbol],
+                        sparkline = sparklines[row.symbol].orEmpty(),
+                    )
                 },
             )
         }
@@ -302,6 +323,9 @@ class WatchlistViewModel(private val scope: CoroutineScope) {
 
     companion object {
         internal val logger = Logger.withTag("watchlist")
+
+        /** How far back a row's sparkline reaches. */
+        const val sparklineDays = 31
 
         /**
          * The orderings, as a free function so tests exercise the shipped

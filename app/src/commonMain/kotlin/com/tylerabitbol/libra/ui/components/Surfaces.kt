@@ -1,6 +1,7 @@
 package com.tylerabitbol.libra.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -17,17 +18,18 @@ import androidx.compose.runtime.ReadOnlyComposable
 /**
  * The card, as one pattern.
  *
- * Swift repeats exactly this nineteen times: fourteen points of padding and a
- * twelve-point rounded fill of `secondarySystemGroupedBackground`. There is not
- * one `.shadow(` call in the whole Swift app — cards separate from the page by
- * fill contrast alone, which is what the grouped-list look is. Any elevation
- * here would be an invention.
+ * Swift repeats this nineteen times: fourteen points of padding and a
+ * twelve-point rounded fill of `secondarySystemGroupedBackground`, separated
+ * from the page by fill contrast alone. The refresh (`PLAN.md` Stage 5) rounds
+ * it to fourteen and gives it a hairline edge in light mode, where the fill
+ * contrast is a few percent; still no shadow.
  */
 @Composable
 @ReadOnlyComposable
 fun Modifier.libraCard(shape: Shape = LibraShapes.card): Modifier =
     clip(shape)
         .background(LibraTheme.colors.cardFill)
+        .border(0.5.dp, LibraTheme.colors.cardEdge, shape)
         .padding(LibraSpacing.card)
 
 /**

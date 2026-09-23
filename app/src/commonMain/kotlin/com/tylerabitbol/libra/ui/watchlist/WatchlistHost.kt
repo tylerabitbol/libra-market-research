@@ -49,9 +49,14 @@ fun WatchlistHost(
         members = watchlist?.members().orEmpty()
     }
 
-    LaunchedEffect(members, registry) {
+    // `snapshots` is a key: the store attaches after launch, and a list loaded
+    // against a null store never read its stored prices, events or sparklines.
+    // The security page had the same defect and was fixed the same way.
+    LaunchedEffect(members, registry, snapshots) {
         model.load(members, registry, snapshots)
     }
+
+    var isRefreshing by remember { mutableStateOf(false) }
 
     WatchlistScreen(
         state = state,
@@ -71,6 +76,27 @@ fun WatchlistHost(
         },
         saveError = saveError,
         onDismissError = { saveError = null },
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            scope.launch {
+                isRefreshing = true
+                try {
+                    model.refresh(members, registry, snapshots)
+                } finally {
+                    isRefreshing = false
+                }
+            }
+        },
+        onQuickAdd = { profile ->
+            scope.launch {
+                try {
+                    watchlist?.add(profile, members.size)
+                    revision++
+                } catch (error: Exception) {
+                    saveError = error.message ?: "Could not add ${profile.symbol}."
+                }
+            }
+        },
         modifier = modifier,
     )
 

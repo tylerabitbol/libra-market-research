@@ -1,5 +1,23 @@
 package com.tylerabitbol.libra.ui.watchlist
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import com.tylerabitbol.libra.services.providers.CompanyProfileDTO
+import com.tylerabitbol.libra.ui.LibraIcons
+import com.tylerabitbol.libra.ui.components.AnimatedFigure
+import com.tylerabitbol.libra.ui.components.ChangePill
+import com.tylerabitbol.libra.ui.components.Sparkline
+import com.tylerabitbol.libra.ui.components.SwipeToDelete
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -57,6 +75,7 @@ import com.tylerabitbol.libra.viewmodels.WatchlistViewModel
  * Membership lives in the database so the list renders instantly from disk and
  * stays usable offline; prices arrive afterwards and fill in.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WatchlistScreen(
     state: WatchlistUiState,
@@ -68,6 +87,9 @@ fun WatchlistScreen(
     modifier: Modifier = Modifier,
     saveError: String? = null,
     onDismissError: () -> Unit = {},
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
+    onQuickAdd: (CompanyProfileDTO) -> Unit = {},
 ) {
     Column(modifier.fillMaxSize()) {
         WatchlistToolbar(
@@ -84,8 +106,12 @@ fun WatchlistScreen(
         }
 
         if (state.rows.isEmpty()) {
-            EmptyWatchlist(onAddSecurity)
-        } else {
+            EmptyWatchlist(onAddSecurity, onQuickAdd)
+        } else PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
             LazyColumn(
                 // The header row above already carries its own bottom space;
                 // a full 16 on top of it opened a gap no iOS list has.
@@ -116,12 +142,22 @@ fun WatchlistScreen(
                             isLast = index == state.sortedRows.lastIndex,
                         ),
                     ) {
-                        WatchlistRowView(
-                            row = row,
-                            onClick = { onOpenSecurity(row.symbol) },
-                            onRemove = { onRemove(row.symbol) },
-                            modifier = Modifier.groupedRowContent(),
-                        )
+                        // Swipe left to remove, as a SwiftUI list row does. The
+                        // gesture is not the only way: a long press offers the
+                        // same action, and so does the accessibility actions
+                        // menu, so nothing depends on discovering the swipe.
+                        SwipeToDelete(
+                            rowKey = row.symbol,
+                            label = "Remove",
+                            onDelete = { onRemove(row.symbol) },
+                        ) {
+                            WatchlistRowView(
+                                row = row,
+                                onClick = { onOpenSecurity(row.symbol) },
+                                onRemove = { onRemove(row.symbol) },
+                                modifier = Modifier.groupedRowContent(),
+                            )
+                        }
                         if (index < state.sortedRows.lastIndex) GroupedDivider()
                     }
                 }
@@ -174,7 +210,10 @@ private fun WatchlistToolbar(
 }
 
 @Composable
-private fun EmptyWatchlist(onAddSecurity: () -> Unit) {
+private fun EmptyWatchlist(
+    onAddSecurity: () -> Unit,
+    onQuickAdd: (CompanyProfileDTO) -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxSize().padding(LibraSpacing.large),
         verticalArrangement = Arrangement.spacedBy(
@@ -183,6 +222,12 @@ private fun EmptyWatchlist(onAddSecurity: () -> Unit) {
         ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Icon(
+            LibraIcons.Watchlist,
+            contentDescription = null,
+            tint = LibraTheme.colors.tertiaryText,
+            modifier = Modifier.size(44.dp),
+        )
         Text("No securities yet", style = MaterialTheme.typography.titleMedium)
         Text(
             "Add a company to start tracking what changes underneath it.",
@@ -190,9 +235,32 @@ private fun EmptyWatchlist(onAddSecurity: () -> Unit) {
             color = LibraTheme.colors.secondaryText,
             textAlign = TextAlign.Center,
         )
-        Button(onClick = onAddSecurity) { Text("Add a security") }
+        Button(onClick = onAddSecurity) { Text("Search for a security") }
+        Text(
+            "Or start with one of these",
+            style = MaterialTheme.typography.labelSmall,
+            color = LibraTheme.colors.tertiaryText,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(LibraSpacing.small)) {
+            for (suggestion in starterSuggestions) {
+                SuggestionChip(
+                    onClick = { onQuickAdd(suggestion) },
+                    label = { Text(suggestion.symbol, style = LibraType.tickerSmall) },
+                )
+            }
+        }
     }
 }
+
+/**
+ * Three large, liquid companies an empty list can start from. Only the symbol
+ * and name are given; everything else is fetched as for any other addition.
+ */
+private val starterSuggestions = listOf(
+    CompanyProfileDTO(symbol = "AAPL", name = "Apple Inc."),
+    CompanyProfileDTO(symbol = "MSFT", name = "Microsoft Corporation"),
+    CompanyProfileDTO(symbol = "NVDA", name = "NVIDIA Corporation"),
+)
 
 @Composable
 private fun SaveErrorBanner(message: String, onDismiss: () -> Unit) {
@@ -223,6 +291,7 @@ private fun SaveErrorBanner(message: String, onDismiss: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WatchlistRowView(
     row: WatchlistRow,
@@ -230,20 +299,30 @@ private fun WatchlistRowView(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var isMenuOpen by remember { mutableStateOf(false) }
+
     // Clickable before the inset, so the whole cell answers a tap and not only
-    // the text inside it. Remove sits beside the whole cell rather than inside
-    // its first line: a 48dp touch target in that line made it taller than
-    // the text and opened a gap above the context line below.
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .then(modifier),
-        horizontalArrangement = Arrangement.spacedBy(LibraSpacing.small),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    // the text inside it. Remove is not drawn in the row: it is a swipe, a
+    // long press, and an accessibility action, which between them reach every
+    // way of using the screen without a button on every line.
+    Box {
         Column(
-            Modifier.weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { isMenuOpen = true },
+                    onLongClickLabel = "More actions",
+                )
+                .semantics {
+                    customActions = listOf(
+                        CustomAccessibilityAction("Remove ${row.symbol}") {
+                            onRemove()
+                            true
+                        },
+                    )
+                }
+                .then(modifier),
             verticalArrangement = Arrangement.spacedBy(LibraSpacing.tight),
         ) {
             Row(
@@ -261,9 +340,15 @@ private fun WatchlistRowView(
                         style = MaterialTheme.typography.bodySmall,
                         color = LibraTheme.colors.secondaryText,
                         maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Sparkline(row.sparkline)
+                Column(
+                    Modifier.widthIn(min = 76.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     val error = row.error
                     if (!row.hasValue && error != null) {
                         Text(
@@ -275,7 +360,7 @@ private fun WatchlistRowView(
                         // A price from disk beats an error message. The refresh
                         // failing does not make the last known price untrue — it
                         // makes it old, which is what the stamp below says.
-                        Text(
+                        AnimatedFigure(
                             Format.currency(row.last),
                             style = LibraType.figureEmphasis,
                             color = if (row.isStoredCopy) {
@@ -284,22 +369,28 @@ private fun WatchlistRowView(
                                 MaterialTheme.colorScheme.onSurface
                             },
                         )
-                        DirectionalChangeText(row.changePercent)
-                        row.asOf?.let {
-                            Text(
-                                RelativeTimeText.string(it),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = LibraTheme.colors.tertiaryText,
-                            )
-                        }
+                        ChangePill(row.changePercent)
                     }
                 }
             }
             WatchlistRowContext(row)
         }
-        // No side padding of its own: the row gap already separates it.
-        TextButton(onClick = onRemove, contentPadding = PaddingValues(horizontal = 0.dp)) {
-            Text("Remove", style = MaterialTheme.typography.labelSmall)
+
+        DropdownMenu(expanded = isMenuOpen, onDismissRequest = { isMenuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text("Open ${row.symbol}") },
+                onClick = {
+                    isMenuOpen = false
+                    onClick()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text("Remove from Watchlist", color = LibraTheme.colors.negative) },
+                onClick = {
+                    isMenuOpen = false
+                    onRemove()
+                },
+            )
         }
     }
 }
@@ -315,7 +406,8 @@ private fun WatchlistRowView(
 private fun WatchlistRowContext(row: WatchlistRow) {
     val event = row.latestEvent
     val versus = row.versusMarket
-    if (event == null && versus == null) return
+    val asOf = row.asOf
+    if (event == null && versus == null && asOf == null) return
 
     Row(
         Modifier.fillMaxWidth(),
@@ -342,6 +434,13 @@ private fun WatchlistRowContext(row: WatchlistRow) {
             }
         }
         Box(Modifier.weight(1f))
+        if (asOf != null) {
+            Text(
+                RelativeTimeText.string(asOf),
+                style = MaterialTheme.typography.labelSmall,
+                color = LibraTheme.colors.tertiaryText,
+            )
+        }
         if (versus != null) {
             // Percentage points, not percent, and labelled: this is a
             // difference between two returns, not a return.

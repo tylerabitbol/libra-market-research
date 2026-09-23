@@ -105,6 +105,13 @@ data class LibraColors(
     val separator: Color,
     /** The faintest fill UIKit offers. `quaternaryLabel`, used as a track. */
     val quaternaryFill: Color,
+    /**
+     * The hairline around a card. Light mode needs it: a white card on
+     * `#F2F2F7` separates by a few percent of luminance, and the refresh asked
+     * for edges. Dark mode has no edge, because a `#1C1C1E` card on black
+     * already stands out and a grey line around it reads as a wireframe.
+     */
+    val cardEdge: Color,
     /** `ClaimBadge` tints. Kind of statement, never good-versus-bad news. */
     val claimFact: Color,
     val claimCalculation: Color,
@@ -123,6 +130,7 @@ internal val lightColors = LibraColors(
     nestedFill = IOS.nestedLight,
     separator = IOS.separatorLight,
     quaternaryFill = IOS.quaternaryLabelLight,
+    cardEdge = IOS.separatorLight.copy(alpha = 0.18f),
     claimFact = IOS.labelLight,
     claimCalculation = IOS.blueLight,
     claimInterpretation = IOS.purpleLight,
@@ -140,6 +148,7 @@ internal val darkColors = LibraColors(
     nestedFill = IOS.nestedDark,
     separator = IOS.separatorDark,
     quaternaryFill = IOS.quaternaryLabelDark,
+    cardEdge = Color.Transparent,
     claimFact = IOS.labelDark,
     claimCalculation = IOS.blueDark,
     claimInterpretation = IOS.purpleDark,
@@ -332,8 +341,8 @@ object LibraShapes {
     val smallCard = RoundedCornerShape(8.dp)
     /** A stack of rows read as one group. */
     val group = RoundedCornerShape(10.dp)
-    /** The standard card. Nineteen of them in the Swift app. */
-    val card = RoundedCornerShape(12.dp)
+    /** The standard card. Twelve in Swift; fourteen since the refresh. */
+    val card = RoundedCornerShape(14.dp)
 }
 
 /**
