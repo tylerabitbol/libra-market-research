@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.tylerabitbol.libra.ui.components.groupedRowPadding
 import com.tylerabitbol.libra.ui.components.GroupedSection
 import com.tylerabitbol.libra.ui.components.groupedRow
 import com.tylerabitbol.libra.ui.components.GroupedDivider
@@ -146,11 +147,21 @@ fun ScreenerScreen(
                                     label = "Delete",
                                     onDelete = { onDeleteSaved(saved) },
                                 ) {
-                                    SavedScreenRow(
-                                        saved,
-                                        { onApplySaved(saved) },
-                                        { onDeleteSaved(saved) },
-                                    )
+                                    // Inset inside the swipe, not around it,
+                                    // so the delete panel still reaches the
+                                    // card's edge.
+                                    Box(
+                                        Modifier.padding(
+                                            horizontal = groupedRowPadding,
+                                            vertical = LibraSpacing.snug,
+                                        ),
+                                    ) {
+                                        SavedScreenRow(
+                                            saved,
+                                            { onApplySaved(saved) },
+                                            { onDeleteSaved(saved) },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -172,11 +183,13 @@ fun ScreenerScreen(
                     GroupedSection {
                         for (subject in results) {
                             row {
-                                ResultRow(
-                                    subject = subject,
-                                    fields = state.screen.rules.map { it.field },
-                                    onClick = { onOpenSecurity(subject.symbol) },
-                                )
+                                Box(Modifier.padding(horizontal = groupedRowPadding)) {
+                                    ResultRow(
+                                        subject = subject,
+                                        fields = state.screen.rules.map { it.field },
+                                        onClick = { onOpenSecurity(subject.symbol) },
+                                    )
+                                }
                             }
                         }
                     }

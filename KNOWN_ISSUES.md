@@ -720,6 +720,14 @@ SharedPreferences the Android secrets store writes into, so the emulator's six
 credentials are gone. They have to be re-entered in Settings, or re-seeded with
 `LibraSeedKeys` and the `LIBRA_…` extras, before this can be looked at again.
 
+*Update, 2026-09-23:* all six are stored on the emulator again — every source in
+Settings shows ready, and readiness means a key is present. So the comparison
+can be repeated. It was not repeated during the look plan, which is about
+rendering. One observation from that pass belongs here, though: on the emulator
+the Dashboard sat on "Loading…" for thirty seconds with every key present, the
+network resolving and nothing logged as an error. That looks like the same stall,
+on a path that has nothing to do with a deep link.
+
 **The base colour scheme is Material's, not Libra's.** `Theme.kt` ends in
 `colorScheme = if (useDarkTheme) darkColorScheme() else lightColorScheme()`,
 which is the Material 3 *baseline* palette — the purple one. Dynamic colour is
@@ -730,6 +738,10 @@ and a lilac card fill against a lilac-white background. `LibraColors` already
 names the semantic colours correctly; what is unmatched is everything
 underneath them. Not addressed, because no stage asked for it and a palette is
 the owner's call.
+
+*Resolved by `PLAN.md` Stage 1.* The owner asked for it. Every slot is now
+transcribed from the UIKit token Swift leans on, and `ThemeTest` fails if any
+slot the app reads is left at the Material baseline.
 
 ## Platform shells
 
@@ -985,11 +997,55 @@ differ:
   writes those lines to stdout, and neither `log stream` nor
   `simctl launch --console-pty` surfaced them here. On Android it cannot run at
   all until the credentials are re-entered; see the `-LibraOpenSymbol` entry
-  above for how they were lost.
+  above for how they were lost. (They are back as of 2026-09-23. The self test
+  has not been re-run.)
 
 What the manual pass did establish still stands: `medium_phone`, API 36, and
 iOS 27.0. API 26 remains the manifest floor that the build asserts and nobody
 has watched.
+
+
+### The look plan (`PLAN.md`)
+
+**The iOS font spike landed; nothing is bundled on iOS.** The plan allowed an hour
+to find out whether Compose could reach SF Pro Rounded, with a fallback of
+bundling a rounded face on both platforms. The fallback was never needed.
+`FontFamily.Default` and `FontFamily.Monospace` already resolve to SF Pro and SF
+Mono through Skia. Rounded resolves through
+`FontMgr.default.matchFamilyStyle(".AppleSystemUIFontRounded", …)`, not through the
+names Apple documents: `SF Pro Rounded`, `.SF UI Rounded` and
+`.SFUIRounded-Regular` all return null. The font file on disk is
+`/System/Library/Fonts/CoreUI/SFUIRounded.ttf`, a variable font whose name table
+says `.SF UI Rounded`, and CoreText answers to neither. That was found by probing
+on the iOS 27.0 simulator rather than assumed. If the private name ever stops
+matching, `LibraFonts.ios.kt` falls back to the default face.
+
+**Framework size delta: zero.** No font files and no `compose.components.resources`
+dependency were added, so `LibraKit` is unchanged by the typography work.
+
+**Android typography is incomplete.** `LibraFonts.android.kt` returns the
+platform's faces. Figures on Android are therefore medium weight and tabular but
+not rounded, and text is Roboto rather than an SF lookalike. The intended bundle
+is Inter, Nunito Sans and JetBrains Mono, all SIL OFL. They are not in the tree
+because fetching them is a download the owner has not yet authorised.
+
+**Grouped lists come in two shapes.** `GroupedSection` takes its rows as a
+builder and draws dividers between them. A `LazyColumn` cannot be wrapped in one
+card, so the Watchlist uses `Modifier.groupedRow(isFirst, isLast)`, which rounds
+only the corners on the outside. Any list using it must not have blanket
+`verticalArrangement` spacing, or the card splits into separate strips. The
+Watchlist lost its `spacedBy(8)` for that reason.
+
+**Dividers cannot be counted in a UI test.** They carry no semantics, on purpose,
+because a screen reader has no use for one. `GroupedListTest` asserts rows,
+header and footer; the separators are a screenshot check.
+
+**Launch in dark on Android is black from the first frame.** The window
+background used to be hardcoded white. It now comes from `values/` and
+`values-night/` colour resources, because the framework's DayNight parent is
+API 29+ and minSdk is 26. `enableEdgeToEdge()` needed no change: its default
+`SystemBarStyle.auto` already follows night mode, and the status-bar icons flip
+without help.
 
 
 ## Deliberately absent

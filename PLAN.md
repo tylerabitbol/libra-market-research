@@ -361,9 +361,9 @@ instrumentation, all passing.
 
 ### 5.4 Android credentials
 
-The emulator's six API credentials were wiped in the previous session and must be
-re-entered **by the owner** before any Android screenshot that shows live data. Do not
-ask for the keys; ask for the re-entry.
+The emulator's six API credentials were wiped during the previous plan. As of
+2026-09-23 they are stored again. If they are ever missing, the owner re-enters
+them. Do not ask for the keys themselves.
 
 **Commit:** *Dark windows, and what the screenshots showed*
 

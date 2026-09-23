@@ -26,13 +26,12 @@ and **5** Android instrumentation tests against a real AndroidKeyStore, which
 
 Two things found and deliberately not fixed, both written up in
 `KNOWN_ISSUES.md`: the `-LibraOpenSymbol` page still disagrees with the
-Watchlist path on live keys even after both of Stage 2.4's fixes, and the base
-colour scheme is Material's baseline purple rather than Libra's neutral.
+Watchlist path on live keys even after both of Stage 2.4's fixes. The base
+colour scheme was Material's baseline purple; `PLAN.md` Stage 1 replaced it.
 
-The Android emulator's six credentials were lost during Stage 5 — `pm clear`
-removes the SharedPreferences the secrets store encrypts into. They have to be
-re-entered in Settings before anything on Android can be checked against live
-data again. iOS still has its own.
+The Android emulator's six credentials were lost during that pass's Stage 5 —
+`pm clear` removes the SharedPreferences the secrets store encrypts into. As of
+2026-09-23 all six are stored again. iOS kept its own throughout.
 
 The port plan is finished and archived at `docs/PORT_PLAN.md` — that is what
 `PORT_PLAN.md §N` means throughout this file and `KNOWN_ISSUES.md`. The current
