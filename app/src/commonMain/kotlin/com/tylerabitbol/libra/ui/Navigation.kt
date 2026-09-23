@@ -1,5 +1,8 @@
 package com.tylerabitbol.libra.ui
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
@@ -141,7 +144,17 @@ fun LibraNavigation(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            NavHost(navController, startDestination = DashboardGraph) {
+            // A short crossfade, set explicitly. Left unset, navigation 2.9
+            // uses its own default, which on iOS slides the screen in from
+            // the edge; Libra fades, on both platforms, for pushes and tabs.
+            NavHost(
+                navController,
+                startDestination = DashboardGraph,
+                enterTransition = { fadeIn(tween(ScreenFadeMillis)) },
+                exitTransition = { fadeOut(tween(ScreenFadeMillis)) },
+                popEnterTransition = { fadeIn(tween(ScreenFadeMillis)) },
+                popExitTransition = { fadeOut(tween(ScreenFadeMillis)) },
+            ) {
                 navigation<DashboardGraph>(startDestination = DashboardRoute) {
                     composable<DashboardRoute> { screens.dashboard(navController) }
                     composable<BenchmarkDetailRoute> { entry ->
@@ -178,6 +191,9 @@ fun LibraNavigation(
         }
     }
 }
+
+/** How long a screen takes to fade in or out. */
+private const val ScreenFadeMillis = 220
 
 /**
  * Switching tabs keeps each section's stack.
