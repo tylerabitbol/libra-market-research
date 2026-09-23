@@ -22,9 +22,6 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -65,6 +62,8 @@ import com.tylerabitbol.libra.ui.components.FilingAnalysisCard
 import com.tylerabitbol.libra.ui.components.PinnedFreshnessLabel
 import com.tylerabitbol.libra.ui.components.RangeBar
 import com.tylerabitbol.libra.ui.components.PriceChart
+import com.tylerabitbol.libra.ui.components.RangePicker
+import com.tylerabitbol.libra.ui.components.periodLabel
 import com.tylerabitbol.libra.ui.components.ResearchProfileCard
 import com.tylerabitbol.libra.ui.components.SampleDataBanner
 import com.tylerabitbol.libra.viewmodels.SecurityDetailUiState
@@ -617,27 +616,13 @@ private fun toggled(filter: Set<EventKind>, kinds: List<EventKind>): Set<EventKi
 @Composable
 private fun ChartSection(state: SecurityDetailUiState, onSelectRange: (ChartRange) -> Unit) {
     Card {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Price", style = MaterialTheme.typography.titleMedium)
-            state.rangeReturn?.let { DirectionalChangeText(it.percent) }
-        }
+        // The range's move is in the chart's own summary now, computed from the
+        // line it sits above; a second figure here was measured from a
+        // slightly different start bar and could disagree with it.
+        Text("Price", style = MaterialTheme.typography.titleMedium)
 
         val ranges = ChartRange.entries
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            for ((index, range) in ranges.withIndex()) {
-                SegmentedButton(
-                    selected = range == state.selectedRange,
-                    onClick = { onSelectRange(range) },
-                    shape = SegmentedButtonDefaults.itemShape(index, ranges.size),
-                ) {
-                    Text(range.raw, style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
+        RangePicker(ranges, state.selectedRange, onSelectRange)
 
         when (val availability = state.chartAvailability) {
             is ChartAvailability.Loading -> Box(
@@ -669,6 +654,7 @@ private fun ChartSection(state: SecurityDetailUiState, onSelectRange: (ChartRang
                     segments = state.chartSegments,
                     ticks = state.chartAxisTicks,
                     isIntraday = state.selectedRange.usesIntraday,
+                    periodLabel = state.selectedRange.periodLabel,
                 )
                 state.chartNote?.let {
                     Text(
@@ -794,8 +780,9 @@ private fun ReturnRow(
     isSubject: Boolean,
     subjectEnd: Instant? = null,
 ) {
-    val endsElsewhere = period != null && subjectEnd != null &&
-        Format.shortDate(period.endDate) != Format.shortDate(subjectEnd)
+    val ownEnd = period?.endDate?.takeIf {
+        subjectEnd != null && Format.shortDate(it) != Format.shortDate(subjectEnd)
+    }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -815,9 +802,9 @@ private fun ReturnRow(
                     LibraTheme.colors.secondaryText
                 },
             )
-            if (endsElsewhere && period != null) {
+            if (ownEnd != null) {
                 Text(
-                    "to ${Format.shortDate(period.endDate)}",
+                    "to ${Format.shortDate(ownEnd)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = LibraTheme.colors.tertiaryText,
                 )

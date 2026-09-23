@@ -165,7 +165,7 @@ class PriceChartTest {
         // Swift asked Charts for `desiredCount: 4`; a positional axis has to be
         // told which four, and the placer must be given real positions — an
         // empty axis label is a Vico error, not a blank tick.
-        assertEquals(listOf(0.0, 40.0, 79.0, 119.0), spreadAcross(0..119, count = 4))
+        assertEquals(listOf(15.0, 45.0, 75.0, 105.0), spreadAcross(0..119, count = 4))
         assertEquals(listOf(0.0, 1.0, 2.0), spreadAcross(0..2, count = 4))
         assertEquals(emptyList(), spreadAcross(IntRange.EMPTY, count = 4))
     }

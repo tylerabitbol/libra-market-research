@@ -14,9 +14,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -39,6 +36,8 @@ import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.ui.components.DirectionalChangeText
 import com.tylerabitbol.libra.ui.components.Footnote
 import com.tylerabitbol.libra.ui.components.PriceChart
+import com.tylerabitbol.libra.ui.components.RangePicker
+import com.tylerabitbol.libra.ui.components.periodLabel
 import com.tylerabitbol.libra.viewmodels.BenchmarkDetailUiState
 import com.tylerabitbol.libra.viewmodels.availableRanges
 import com.tylerabitbol.libra.viewmodels.chartAvailability
@@ -130,17 +129,7 @@ private fun ChartSection(
         // Index-backed benchmarks offer five ranges, not seven: FRED publishes
         // at the close, and a range that can never draw is not offered.
         val ranges = state.availableRanges
-        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-            for ((index, range) in ranges.withIndex()) {
-                SegmentedButton(
-                    selected = range == state.selectedRange,
-                    onClick = { onSelectRange(range) },
-                    shape = SegmentedButtonDefaults.itemShape(index, ranges.size),
-                ) {
-                    Text(range.raw, style = MaterialTheme.typography.labelMedium)
-                }
-            }
-        }
+        RangePicker(ranges, state.selectedRange, onSelectRange)
 
         when (val availability = state.chartAvailability) {
             is ChartAvailability.Loading -> Box(
@@ -177,6 +166,7 @@ private fun ChartSection(
                     segments = state.chartSegments,
                     ticks = state.chartAxisTicks,
                     isIntraday = state.selectedRange.usesIntraday,
+                    periodLabel = state.selectedRange.periodLabel,
                     valueFormat = state.valueFormat,
                 )
                 state.chartNote?.let {
