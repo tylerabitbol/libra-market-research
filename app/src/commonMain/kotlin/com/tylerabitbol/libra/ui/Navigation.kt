@@ -16,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -117,8 +120,18 @@ fun LibraNavigation(
 
     // `-LibraOpenSymbol AAPL`, pushed once rather than made the start
     // destination, so the back gesture still lands on the Dashboard.
-    LaunchedEffect(openSymbol) {
-        if (openSymbol != null) navController.navigate(SecurityDetailRoute(openSymbol))
+    //
+    // Only once the graph exists. `NavHost` sits in `Scaffold`'s content,
+    // which composes during layout, after this effect is dispatched; pushing
+    // before it threw "You must call setGraph() before calling getGraph()"
+    // and aborted the app at launch whenever the effect won that race.
+    var pushedSymbol by rememberSaveable { mutableStateOf<String?>(null) }
+    val hasGraph = backStackEntry != null
+    LaunchedEffect(openSymbol, hasGraph) {
+        if (openSymbol != null && hasGraph && pushedSymbol != openSymbol) {
+            pushedSymbol = openSymbol
+            navController.navigate(SecurityDetailRoute(openSymbol))
+        }
     }
 
     Scaffold(
