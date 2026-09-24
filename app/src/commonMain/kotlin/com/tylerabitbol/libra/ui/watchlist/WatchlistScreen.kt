@@ -16,6 +16,7 @@ import com.tylerabitbol.libra.services.providers.CompanyProfileDTO
 import com.tylerabitbol.libra.ui.LibraIcons
 import com.tylerabitbol.libra.ui.components.AnimatedFigure
 import com.tylerabitbol.libra.ui.components.ChangePill
+import com.tylerabitbol.libra.ui.components.PlaceholderBar
 import com.tylerabitbol.libra.ui.components.Sparkline
 import com.tylerabitbol.libra.ui.components.SwipeToDelete
 import androidx.compose.foundation.background
@@ -156,6 +157,7 @@ fun WatchlistScreen(
                                 onClick = { onOpenSecurity(row.symbol) },
                                 onRemove = { onRemove(row.symbol) },
                                 modifier = Modifier.groupedRowContent(),
+                                isLoading = state.isLoading,
                             )
                         }
                         if (index < state.sortedRows.lastIndex) GroupedDivider()
@@ -298,6 +300,7 @@ private fun WatchlistRowView(
     onClick: () -> Unit,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
+    isLoading: Boolean = false,
 ) {
     var isMenuOpen by remember { mutableStateOf(false) }
 
@@ -356,6 +359,10 @@ private fun WatchlistRowView(
                             style = MaterialTheme.typography.labelSmall,
                             color = LibraTheme.colors.caution,
                         )
+                    } else if (!row.hasValue && isLoading) {
+                        // On its way, not missing: shapes, not dashes.
+                        PlaceholderBar(width = 72.dp, height = 16.dp)
+                        PlaceholderBar(width = 64.dp, height = 20.dp)
                     } else {
                         // A price from disk beats an error message. The refresh
                         // failing does not make the last known price untrue — it

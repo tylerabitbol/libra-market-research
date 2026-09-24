@@ -36,6 +36,7 @@ fun DashboardHost(
         state = state,
         isUsingSampleData = environment.isUsingSampleData,
         onOpenBenchmark = onOpenBenchmark,
+        onRefresh = { model.refresh(registry) },
         modifier = modifier,
     )
 }

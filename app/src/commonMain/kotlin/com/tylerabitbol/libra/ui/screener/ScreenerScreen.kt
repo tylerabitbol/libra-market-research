@@ -1,5 +1,8 @@
 package com.tylerabitbol.libra.ui.screener
 
+import com.tylerabitbol.libra.ui.LibraIcons
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -449,6 +452,12 @@ private fun NothingToScreen() {
         verticalArrangement = Arrangement.spacedBy(LibraSpacing.small),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        Icon(
+            LibraIcons.Screener,
+            contentDescription = null,
+            tint = LibraTheme.colors.tertiaryText,
+            modifier = Modifier.size(44.dp),
+        )
         Text("Nothing to screen yet", style = MaterialTheme.typography.titleMedium)
         Text(
             "Add securities to your watchlist and open a few. The screener works " +

@@ -3,7 +3,6 @@ package com.tylerabitbol.libra.ui.dashboard
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -40,6 +39,8 @@ import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.ui.components.DirectionalChangeText
 import com.tylerabitbol.libra.ui.components.DisclaimerBanner
 import com.tylerabitbol.libra.ui.components.PinnedFreshnessLabel
+import com.tylerabitbol.libra.ui.components.PlaceholderRows
+import com.tylerabitbol.libra.ui.components.Refreshable
 import com.tylerabitbol.libra.ui.components.SampleDataBanner
 import com.tylerabitbol.libra.viewmodels.BenchmarkPerformance
 import com.tylerabitbol.libra.viewmodels.DashboardUiState
@@ -60,10 +61,13 @@ fun DashboardScreen(
     isUsingSampleData: Boolean,
     onOpenBenchmark: (Benchmark) -> Unit,
     modifier: Modifier = Modifier,
+    onRefresh: suspend () -> Unit = {},
 ) {
     Column(modifier.fillMaxSize()) {
         ScreenHeader("Dashboard")
-        Box(Modifier.weight(1f)) {
+        // Under the header, not around it, so the spinner comes down from
+        // the top of the content rather than over the title.
+        Refreshable(onRefresh = onRefresh, modifier = Modifier.weight(1f)) {
             // One grid for the whole screen: the sector tiles need a grid, and
             // nesting one inside a scrolling column gives it no height to work
             // with. Full-width rows span every column instead.
@@ -87,7 +91,13 @@ fun DashboardScreen(
                 fullWidth { DisclaimerBanner() }
 
                 fullWidth { SectionHeader("Market") }
-                fullWidth { BenchmarkGroup(state.market, onOpenBenchmark) }
+                fullWidth {
+                    if (state.market.isEmpty() && state.isLoading) {
+                        PlaceholderRows(count = 4)
+                    } else {
+                        BenchmarkGroup(state.market, onOpenBenchmark)
+                    }
+                }
 
                 if (state.volatility.isNotEmpty()) {
                     fullWidth { SectionHeader("Volatility") }

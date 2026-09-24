@@ -7,6 +7,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import com.tylerabitbol.libra.app.AppEnvironment
 import com.tylerabitbol.libra.ui.components.PushedScreen
+import com.tylerabitbol.libra.ui.components.Refreshable
 import com.tylerabitbol.libra.ui.settings.collectAsStateValue
 import com.tylerabitbol.libra.viewmodels.SecurityDetailViewModel
 
@@ -34,12 +35,14 @@ fun SecurityDetailHost(
 
     // Swift's `.navigationTitle(model.symbol)`.
     PushedScreen(title = symbol, onBack = onBack, modifier = modifier) {
-        SecurityDetailScreen(
-            state = state,
-            isUsingSampleData = environment.isUsingSampleData,
-            onSelectRange = { model.select(it, registry, snapshots) },
-            onSetChangeWindow = model::setChangeWindow,
-            onSetKindFilter = model::setKindFilter,
-        )
+        Refreshable(onRefresh = { model.refresh(registry, snapshots) }) {
+            SecurityDetailScreen(
+                state = state,
+                isUsingSampleData = environment.isUsingSampleData,
+                onSelectRange = { model.select(it, registry, snapshots) },
+                onSetChangeWindow = model::setChangeWindow,
+                onSetKindFilter = model::setKindFilter,
+            )
+        }
     }
 }

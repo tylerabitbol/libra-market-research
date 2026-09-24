@@ -1,6 +1,7 @@
 package com.tylerabitbol.libra.ui.components
 
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.tylerabitbol.libra.models.core.ChartRange
 import com.tylerabitbol.libra.ui.LibraTheme
+import com.tylerabitbol.libra.ui.prefersReducedMotion
 
 /**
  * The chart's range control: a track with a thumb that slides to the chosen
@@ -51,6 +53,7 @@ fun RangePicker(
     if (ranges.isEmpty()) return
     val haptics = LocalHapticFeedback.current
     val index = ranges.indexOf(selected).coerceAtLeast(0)
+    val reduceMotion = prefersReducedMotion()
 
     BoxWithConstraints(
         modifier
@@ -63,7 +66,7 @@ fun RangePicker(
         val segment = maxWidth / ranges.size
         val offset by animateDpAsState(
             targetValue = segment * index,
-            animationSpec = spring(dampingRatio = 0.85f, stiffness = 600f),
+            animationSpec = if (reduceMotion) snap() else spring(dampingRatio = 0.85f, stiffness = 600f),
             label = "range thumb",
         )
         Box(
