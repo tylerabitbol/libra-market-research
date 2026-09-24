@@ -9,6 +9,7 @@ import com.tylerabitbol.libra.support.Format
 import kotlin.time.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 
 /**
@@ -51,6 +52,32 @@ object ChartSeriesBuilder {
         val days = series.map { startOfSession(it.date) }.toSet()
         val kept = days.sorted().takeLast(wanted).toSet()
         return series.filter { kept.contains(startOfSession(it.date)) }
+    }
+
+    /**
+     * The daily bars a range draws, cut by the same rule as
+     * [ReturnCalculator.trailingReturn]: back one period from the *latest
+     * bar*, starting at the last bar at or before that date.
+     *
+     * The chart used to start at the first bar after one period before
+     * *now*. On an end-of-day series that is a day behind, the two windows
+     * began on different sessions, and the S&P page showed "+0.37%" over the
+     * chart beside "+0.41%" under Trailing for the same month. Cut this way,
+     * the chart's first and last closes are exactly the return's.
+     *
+     * When the history is shorter than the range, every bar is drawn, as
+     * the return falls back to the earliest bar.
+     */
+    fun dailyWindow(
+        bars: List<PriceBar>,
+        range: ChartRange,
+        zone: TimeZone = TimeZone.currentSystemDefault(),
+    ): List<PriceBar> {
+        val sorted = bars.sortedBy { it.date }
+        val last = sorted.lastOrNull() ?: return emptyList()
+        val start = last.date.minus(range.datePeriod, zone)
+        val anchor = sorted.lastOrNull { it.date <= start }
+        return sorted.filter { it.date > start || it === anchor }
     }
 
     /** The series laid out end to end, one position per bar. */

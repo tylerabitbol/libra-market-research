@@ -184,6 +184,20 @@ object ReturnCalculator {
     }
 
     /**
+     * [window] as a step back in time, whichever sign it was written with.
+     *
+     * Callers pass both forms: `DatePeriod(months = -1)` in the trailing
+     * figures, and `ChartRange.datePeriod`, a positive length, everywhere a
+     * range is measured. Added as given, the positive form asked for a window
+     * starting in the future, and every range return — the headline return,
+     * the sector and market legs, "vs S&P" — was null.
+     */
+    private fun backwards(window: DatePeriod): DatePeriod = DatePeriod(
+        months = -abs(window.years * 12 + window.months),
+        days = -abs(window.days),
+    )
+
+    /**
      * Return over a trailing window ending at the most recent bar.
      *
      * Uses the last bar at or before the window start, so a weekend or holiday
@@ -206,7 +220,7 @@ object ReturnCalculator {
     ): PeriodReturn? {
         val sorted = bars.sortedBy { it.date }
         val endBar = sorted.lastOrNull { bar -> asOf == null || bar.date <= asOf } ?: return null
-        val requestedStart = endBar.date.plus(window, zone)
+        val requestedStart = endBar.date.plus(backwards(window), zone)
 
         // The last bar at or before the requested start; failing that, the
         // earliest bar we have, flagged as a partial window.

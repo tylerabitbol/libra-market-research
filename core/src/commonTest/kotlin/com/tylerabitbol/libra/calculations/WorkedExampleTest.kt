@@ -1,6 +1,7 @@
 package com.tylerabitbol.libra.calculations
 
 import com.tylerabitbol.libra.models.core.BarResolution
+import com.tylerabitbol.libra.models.core.ChartRange
 import com.tylerabitbol.libra.models.core.PriceBar
 import kotlin.math.abs
 import kotlin.test.Test
@@ -14,6 +15,8 @@ import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Answers worked by hand, not ported from Swift.
@@ -260,5 +263,43 @@ class WorkedExampleTest {
     @Test
     fun a_constant_line_has_no_position_in_its_range() {
         assertNull(assertNotNull(ChartSummary.of(listOf(5.0, 5.0))).position)
+    }
+
+    @Test
+    fun theChartsMoveIsTheTrailingReturnOverTheSameRange() {
+        // Weekdays only, the latest a Tuesday. One month back from the
+        // latest bar is a Saturday, so the window must open on the Friday
+        // before it, as the trailing return does.
+        val all = (0..60).map { day(it) }
+            .filter { it.toLocalDateTime(utc).dayOfWeek.isoDayNumber <= 5 }
+        val bars = all.mapIndexed { index, at -> bar(at, 100.0 + index * index % 7 + index) }
+        val shown = ChartSeriesBuilder.dailyWindow(bars, ChartRange.OneMonth, utc)
+        val trailing = assertNotNull(ReturnCalculator.trailingReturn(bars, DatePeriod(months = -1), zone = utc))
+
+        assertEquals(trailing.startDate, shown.first().date)
+        assertEquals(trailing.endDate, shown.last().date)
+        val summary = assertNotNull(ChartSummary.of(shown.map { it.analysisClose }))
+        near(trailing.percent, assertNotNull(summary.percent))
+    }
+
+    @Test
+    fun aRangesReturnIsMeasuredBackFromTheLatestBar() {
+        // ChartRange.datePeriod is a length, positive. Added to the end date
+        // it asked for a window starting a month in the *future*, and every
+        // range return, the "vs S&P" rows among them, came back null.
+        val bars = (0..40).map { bar(day(it), 100.0 + it) }
+        val period = assertNotNull(ReturnCalculator.trailingReturn(bars, ChartRange.OneMonth.datePeriod, zone = utc))
+        assertEquals(day(10), period.startDate)
+        assertEquals(day(40), period.endDate)
+        near(140.0 / 110.0 * 100 - 100, period.percent)
+        // The signed form callers already pass means the same window.
+        assertEquals(period, ReturnCalculator.trailingReturn(bars, DatePeriod(months = -1), zone = utc))
+    }
+
+    @Test
+    fun aShortHistoryDrawsEverythingItHas() {
+        val bars = (0..4).map { bar(day(it), 100.0 + it) }
+        assertEquals(bars, ChartSeriesBuilder.dailyWindow(bars, ChartRange.OneYear, TimeZone.UTC))
+        assertEquals(emptyList(), ChartSeriesBuilder.dailyWindow(emptyList(), ChartRange.OneYear))
     }
 }

@@ -317,8 +317,7 @@ private val BenchmarkDetailUiState.currentError: APIError?
 val BenchmarkDetailUiState.chartBars: List<PriceBar>
     get() {
         if (!selectedRange.usesIntraday) {
-            val start = selectedRange.startDate()
-            return heldBars.filter { it.date >= start }.sortedBy { it.date }
+            return ChartSeriesBuilder.dailyWindow(heldBars, selectedRange)
         }
         return ChartSeriesBuilder.regularHoursBars(heldBars, selectedRange)
     }

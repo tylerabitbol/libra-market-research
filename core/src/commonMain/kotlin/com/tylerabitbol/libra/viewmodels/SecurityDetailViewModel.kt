@@ -1268,10 +1268,7 @@ val SecurityDetailUiState.researchProfile: ResearchProfile
 
 /** Bars trimmed to the selected range, from the single wide fetch. */
 val SecurityDetailUiState.visibleBars: List<PriceBar>
-    get() {
-        val start = selectedRange.startDate()
-        return bars.filter { it.date >= start }.sortedBy { it.date }
-    }
+    get() = ChartSeriesBuilder.dailyWindow(bars, selectedRange)
 
 val SecurityDetailUiState.intradayBars: List<PriceBar>
     get() = intradayByResolution[selectedRange.resolution].orEmpty()

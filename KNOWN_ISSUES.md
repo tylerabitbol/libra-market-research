@@ -1016,6 +1016,33 @@ changed, so the two apps will print different figures in these cases.
 - **Insider value totals summed only priced transactions** and did not say so.
   The derivation label now reads "(2 of 3 priced)" when some carry no price.
 
+### Found after the audit (Stage 5), while checking the new charts
+
+- **Every range return was null in the port.** `ChartRange.datePeriod` is a
+  positive length (`DatePeriod(months = 1)`); Swift's `dateInterval` is negative
+  (`DateComponents(month: -1)`). `trailingReturn` adds its window to the end
+  date, so the port asked for windows starting in the future and got nothing:
+  the security page's range return, its sector and market legs, all three
+  relative figures, and the Momentum and Relative strength dimensions of the
+  research profile were silently missing. The audit worked `trailingReturn`
+  with negative periods only, so its tests passed. `trailingReturn` now steps
+  back whichever sign it is given (`backwards`), and
+  `aRangesReturnIsMeasuredBackFromTheLatestBar` pins it. A port bug, so this
+  restores Swift's behaviour rather than diverging from it.
+- **The chart and the return over the same range started on different
+  sessions.** The daily chart drew bars on or after one period before *now*;
+  the return starts at the bar at or before one period before the *latest
+  bar*. On FRED's day-late series the S&P page showed "+0.37%" over the chart
+  and "+0.41%" under Trailing for one month. Both now use
+  `ChartSeriesBuilder.dailyWindow`, so the chart's first and last closes are
+  the return's. This diverges from Swift, whose chart cuts at now
+  (`SecurityDetailViewModel.swift`, `visibleBars`); Swift prints no move over
+  the chart, so the mismatch never showed there.
+- **Direction colour followed the raw value, not the printed one.** A -0.001%
+  move printed "0.00%" in red. `Format.displayedSign` now decides the colour
+  and the "+", so zero-as-printed is always secondary. Swift colours by the
+  raw value too.
+
 ### Suspected, checked, and correct
 
 - **GOOGL's 93.7% quarterly net margin** (cited in `FundamentalDetector.kt` and
