@@ -2,10 +2,25 @@
 
 ## Current: `PLAN.md`, UI/UX and general improvements
 
-This work is on branch `claude/ui-ux-improvements`, cut from `kmp-translation`.
-Stages 1–5 were done on 2026-09-23. Stages 7 (optimisation) and 6 (cleanup)
-remain, in that order. Test counts: 501 `:core` tests on JVM and 501 on
-`iosSimulatorArm64`, and 31 `:app` UI tests, with no failures.
+**`PLAN.md` is complete.** This work is on branch `claude/ui-ux-improvements`,
+cut from `kmp-translation`, and is pushed to origin. Stages 1–5 were done on
+2026-09-23, then Stage 7 (optimisation), then Stage 6 (cleanup) on 2026-09-24.
+Test counts: 500 `:core` tests on JVM and 500 on `iosSimulatorArm64`, and 31
+`:app` UI tests, with no failures. (Stage 7 removed one test with the
+`ChartSummary` member it covered; it was 501 before that.)
+
+- **7, optimisation.** Hosts key their loads on the store, the security page is
+  one file per section, and build times are recorded.
+- **6, cleanup.** The approved branches and worktree are deleted, the
+  `Translation/` build output is cleaned (about 1.4 GB), and `docs/README.md`
+  indexes the finished plans. The owner chose the lighter docs touch; see
+  "`PLAN.md` deviations" in `KNOWN_ISSUES.md`.
+
+Left for the owner: `claude/master-plan-known-issues-ed4a90` and its worktree,
+`backup-before-reorder`, `phase-a-store-reads-and-fundamentals` and
+`claude/mock-libra-website-63d82d`, all kept; `main`'s untracked
+`Claude outputs/` and `brag-output/`; and the items under "Open now" at the top
+of `KNOWN_ISSUES.md`.
 
 - **1, math audit.** The findings are under "Calculations: the math audit" in
   `KNOWN_ISSUES.md`.
@@ -24,10 +39,6 @@ remain, in that order. Test counts: 501 `:core` tests on JVM and 501 on
 Checking the charts turned up one bug the audit missed. Every range return in
 the port was null, because `ChartRange.datePeriod` is positive. That is fixed
 in `f2b6097` and logged in `KNOWN_ISSUES.md`.
-
-The worktree `.claude/worktrees/ui-ux-improvements-plan` (branch
-`claude/ui-ux-improvements-plan`) is a leftover duplicate of the plan rename.
-It holds nothing needed, and deleting it waits on the owner.
 
 ## The port
 

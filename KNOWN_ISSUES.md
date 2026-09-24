@@ -1,5 +1,11 @@
 # Known issues and deviations from PORT_PLAN.md
 
+**Open now**
+
+- One Gradle deprecation warning, waiting on material3 1.12.0. [Open issues](#open-issues)
+- `PORT_PLAN.md §7`: the API 26 emulator, a physical Android device and the self test's six PASS lines. [Open issues](#open-issues)
+- `-LibraOpenSymbol` and the Watchlist path disagree on live keys. The entry is under [UI](#ui), not Open issues.
+
 Every place this port diverges from `PORT_PLAN.md` or from the Swift app, and why.
 Organised by the part of the codebase it constrains, so touching one area means
 reading one section. `RESUME.md` says where the work stands; this file says what
@@ -1106,6 +1112,24 @@ changed, so the two apps will print different figures in these cases.
   entity columns and type converters, which Room calls reflectively, and one
   serialized DTO field. Two speculative `ChartSummary` members from Stage 2 were
   removed.
+- **Stage 6 took the lighter docs touch.** The owner chose it over the plan.
+  The three finished plans were not folded into `docs/ARCHIVE.md`, and the
+  roughly 50 citations to them were not rewritten; `docs/README.md` indexes
+  them instead. `KNOWN_ISSUES.md` was not split; it gained an "Open now" list
+  at the top and is otherwise unchanged.
+- **Stage 6 kept these branches, at the owner's choice.**
+  `claude/master-plan-known-issues-ed4a90` and its worktree ("leave it for
+  now"; its one unmerged commit is neither merged nor dropped).
+  `backup-before-reorder`, `phase-a-store-reads-and-fundamentals` and
+  `claude/mock-libra-website-63d82d` were not approved for deletion. Deleted,
+  with approval: `claude/ui-ux-improvements-plan` and its worktree, and
+  `claude/math-graphs-ui-refresh-163246`, which was identical to `main`.
+- **`main`'s untracked `Claude outputs/` and `brag-output/` are untouched
+  (Stage 6).** `main` is read-only, so ignoring or moving them is the owner's.
+- **Build output in `Translation/` (Stage 6).** `./gradlew clean` on 2026-09-24
+  took `app/build` from 1.2 GB, `core/build` from 137 MB and `androidApp/build`
+  from 78 MB to nothing: about 1.4 GB. The root `build/` (9.4 MB) and
+  `.gradle/` (44 MB) remain.
 
 ## Open issues
 
