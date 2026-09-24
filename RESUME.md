@@ -1,5 +1,36 @@
 # Where the port stands
 
+## Current: `PLAN.md`, UI/UX and general improvements
+
+This work is on branch `claude/ui-ux-improvements`, cut from `kmp-translation`.
+Stages 1–5 were done on 2026-09-23. Stages 7 (optimisation) and 6 (cleanup)
+remain, in that order. Test counts: 499 `:core` tests on JVM and 499 on
+`iosSimulatorArm64`, and 31 `:app` UI tests, with no failures.
+
+- **1, math audit.** The findings are under "Calculations: the math audit" in
+  `KNOWN_ISSUES.md`.
+- **4, fades.** Screens crossfade over 220 ms.
+- **3, stats block.** Range bars and a two-column table.
+- **2, charts.** A summary strip, direction colour, a starting-close rule,
+  press-to-scrub, and a sliding range picker.
+- **5, refresh.**
+  - Hero price and tab bar.
+  - Watchlist sparklines, change pills, swipe and long-press to remove,
+    and one-tap starter symbols.
+  - Pull to refresh on the Dashboard, Watchlist and security pages.
+  - Placeholder shapes on first load, and Reduce Motion is respected.
+  - Light and dark screenshots for both platforms in `docs/refresh/`.
+
+Checking the charts turned up one bug the audit missed. Every range return in
+the port was null, because `ChartRange.datePeriod` is positive. That is fixed
+in `f2b6097` and logged in `KNOWN_ISSUES.md`.
+
+The worktree `.claude/worktrees/ui-ux-improvements-plan` (branch
+`claude/ui-ux-improvements-plan`) is a leftover duplicate of the plan rename.
+It holds nothing needed, and deleting it waits on the owner.
+
+## The port
+
 **Last checkpoint: the port is done. Phases 0-9 complete, and the manual pass
 of `PORT_PLAN.md §7` has been run on both platforms against live API keys.**
 Phases 0–7 complete: 475 `:core` tests green on both JVM and the iOS
