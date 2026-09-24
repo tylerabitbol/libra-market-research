@@ -95,16 +95,15 @@ fun DirectionalChangeText(
     Text(
         Format.signedPercent(percent, precision = precision),
         style = style,
-        color = directionColor(percent),
+        color = directionColor(Format.displayedSign(percent, precision)),
         modifier = modifier,
     )
 }
 
 @Composable
-private fun directionColor(percent: Double?): Color = when {
-    percent == null -> LibraTheme.colors.secondaryText
-    percent > 0 -> LibraTheme.colors.positive
-    percent < 0 -> LibraTheme.colors.negative
+private fun directionColor(shownSign: Int): Color = when {
+    shownSign > 0 -> LibraTheme.colors.positive
+    shownSign < 0 -> LibraTheme.colors.negative
     else -> LibraTheme.colors.secondaryText
 }
 

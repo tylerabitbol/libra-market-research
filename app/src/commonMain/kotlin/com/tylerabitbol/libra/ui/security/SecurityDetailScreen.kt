@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,11 +29,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -59,6 +64,7 @@ import com.tylerabitbol.libra.ui.components.ClaimRow
 import com.tylerabitbol.libra.ui.components.DirectionalChangeText
 import com.tylerabitbol.libra.ui.components.EventCard
 import com.tylerabitbol.libra.ui.components.FilingAnalysisCard
+import com.tylerabitbol.libra.ui.components.HeroPrice
 import com.tylerabitbol.libra.ui.components.PinnedFreshnessLabel
 import com.tylerabitbol.libra.ui.components.RangeBar
 import com.tylerabitbol.libra.ui.components.PriceChart
@@ -77,6 +83,8 @@ import com.tylerabitbol.libra.viewmodels.chartNote
 import com.tylerabitbol.libra.viewmodels.chartPoints
 import com.tylerabitbol.libra.viewmodels.chartSegments
 import com.tylerabitbol.libra.viewmodels.coverageNote
+import com.tylerabitbol.libra.viewmodels.ChartValueFormat
+import com.tylerabitbol.libra.viewmodels.displayChange
 import com.tylerabitbol.libra.viewmodels.displayChangePercent
 import com.tylerabitbol.libra.viewmodels.displayPrice
 import com.tylerabitbol.libra.viewmodels.freshness
@@ -110,18 +118,20 @@ fun SecurityDetailScreen(
     onSetKindFilter: (Set<EventKind>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scroll = rememberScrollState()
+    var heroHeight by remember { mutableIntStateOf(0) }
     Box(modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 .padding(LibraSpacing.large)
                 .padding(bottom = 40.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
             if (isUsingSampleData) SampleDataBanner()
 
-            Overview(state)
+            Box(Modifier.onSizeChanged { heroHeight = it.height }) { Overview(state) }
             ChangesSection(state, onSetChangeWindow, onSetKindFilter)
             ChartSection(state, onSelectRange)
             RelativeSection(state)
@@ -132,14 +142,20 @@ fun SecurityDetailScreen(
             FilingsSection(state)
         }
 
-        // Pinned rather than scrolled away: how old the page is qualifies
-        // every figure on it, so it must not be something you scroll past.
-        PinnedFreshnessLabel(
-            freshness = state.freshness,
+        // How old the page is qualifies every figure on it, so it must not be
+        // something you scroll past. The hero states it inline; once the hero
+        // has scrolled away, the same stamp is pinned in its place, rather
+        // than floating over the price and chart from the start.
+        AnimatedVisibility(
+            visible = scroll.value > heroHeight,
+            enter = fadeIn(),
+            exit = fadeOut(),
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 6.dp),
-        )
+        ) {
+            PinnedFreshnessLabel(freshness = state.freshness)
+        }
     }
 }
 
@@ -173,19 +189,13 @@ private fun Overview(state: SecurityDetailUiState) {
             }
         }
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text(
-                Format.currency(state.displayPrice),
-                style = LibraType.figureHero,
-            )
-            DirectionalChangeText(
-                state.displayChangePercent,
-                style = LibraType.figureEmphasis,
-            )
-        }
+        HeroPrice(
+            price = Format.currency(state.displayPrice),
+            change = state.displayChange,
+            percent = state.displayChangePercent,
+            valueFormat = ChartValueFormat.Currency,
+            freshness = state.freshness.takeUnless { state.isShowingSavedCopy },
+        )
 
         // A failed refresh must not blank a page the store can fill. When it
         // does fall back, the notice dates what is on screen rather than

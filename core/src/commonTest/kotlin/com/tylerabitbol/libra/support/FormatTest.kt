@@ -64,6 +64,25 @@ class FormatTest {
     }
 
     @Test
+    fun a_move_that_rounds_to_zero_has_no_direction() {
+        // The S&P's 1D read a red "0.00%" off a -0.001% move: the colour
+        // followed the raw value while the text followed the rounding.
+        assertEquals("0.00%", Format.signedPercent(0.001))
+        assertEquals("0.00%", Format.signedPercent(-0.001))
+        assertEquals(0, Format.displayedSign(0.001))
+        assertEquals(0, Format.displayedSign(-0.004))
+        assertEquals(-1, Format.displayedSign(-0.006))
+        assertEquals(1, Format.displayedSign(0.006))
+        assertEquals(0, Format.displayedSign(null))
+        assertEquals(0, Format.displayedSign(Double.NaN))
+        // Grouped thousands must not read as unparseable, and so as zero.
+        assertEquals(1, Format.displayedSign(1_234.567))
+        assertEquals("+1,234.57", Format.signed(1_234.567))
+        assertEquals(1, Format.displayedSign(0.06, precision = 1))
+        assertEquals(0, Format.displayedSign(0.4, precision = 0))
+    }
+
+    @Test
     fun percentage_points_are_labelled_pp_not_percent() {
         val text = Format.percentagePoints(7.0)
         assertTrue(text.contains("pp"))

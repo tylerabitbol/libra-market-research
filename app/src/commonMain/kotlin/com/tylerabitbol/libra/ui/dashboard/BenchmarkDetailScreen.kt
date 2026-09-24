@@ -34,10 +34,13 @@ import com.tylerabitbol.libra.ui.components.libraCard
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
 import com.tylerabitbol.libra.ui.components.DirectionalChangeText
+import com.tylerabitbol.libra.ui.components.HeroPrice
 import com.tylerabitbol.libra.ui.components.Footnote
 import com.tylerabitbol.libra.ui.components.PriceChart
 import com.tylerabitbol.libra.ui.components.RangePicker
 import com.tylerabitbol.libra.ui.components.periodLabel
+import com.tylerabitbol.libra.viewmodels.sessionChange
+import com.tylerabitbol.libra.viewmodels.sessionChangePercent
 import com.tylerabitbol.libra.viewmodels.BenchmarkDetailUiState
 import com.tylerabitbol.libra.viewmodels.availableRanges
 import com.tylerabitbol.libra.viewmodels.chartAvailability
@@ -50,7 +53,6 @@ import com.tylerabitbol.libra.viewmodels.daily
 import com.tylerabitbol.libra.viewmodels.formattedLevel
 import com.tylerabitbol.libra.viewmodels.latestBar
 import com.tylerabitbol.libra.viewmodels.monthly
-import com.tylerabitbol.libra.viewmodels.rangeReturn
 import com.tylerabitbol.libra.viewmodels.sourceExplanation
 import com.tylerabitbol.libra.viewmodels.sourceLabel
 import com.tylerabitbol.libra.viewmodels.valueFormat
@@ -95,23 +97,16 @@ private fun Header(state: BenchmarkDetailUiState) {
             style = LibraType.code,
             color = LibraTheme.colors.tertiaryText,
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.Bottom,
-        ) {
-            Text(
-                state.formattedLevel,
-                style = LibraType.figureLarge,
-            )
-            state.rangeReturn?.let { DirectionalChangeText(it.percent) }
-        }
-        state.latestBar?.date?.let {
-            Text(
-                "as of ${Format.shortDate(it)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = LibraTheme.colors.secondaryText,
-            )
-        }
+        // The latest session's move, dated, because a benchmark's level is
+        // a close, not a live price. The chart's own strip carries the move
+        // over the chosen range, which this header used to repeat.
+        HeroPrice(
+            price = state.formattedLevel,
+            change = state.sessionChange,
+            percent = state.sessionChangePercent,
+            valueFormat = state.valueFormat,
+            caption = state.latestBar?.date?.let { "on ${Format.shortDate(it)}" } ?: "",
+        )
     }
 }
 

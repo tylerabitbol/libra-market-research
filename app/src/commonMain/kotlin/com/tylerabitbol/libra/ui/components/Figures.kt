@@ -7,6 +7,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.material3.MaterialTheme
+import com.tylerabitbol.libra.support.Freshness
+import com.tylerabitbol.libra.viewmodels.ChartValueFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -25,6 +32,7 @@ import com.tylerabitbol.libra.support.Format
 import com.tylerabitbol.libra.ui.LibraShapes
 import com.tylerabitbol.libra.ui.LibraTheme
 import com.tylerabitbol.libra.ui.LibraType
+import com.tylerabitbol.libra.ui.prefersReducedMotion
 
 /**
  * A figure that rolls when it changes: the old value slides out, the new one
@@ -40,6 +48,10 @@ fun AnimatedFigure(
     color: Color,
     modifier: Modifier = Modifier,
 ) {
+    if (prefersReducedMotion()) {
+        Text(text, style = style, color = color, modifier = modifier)
+        return
+    }
     AnimatedContent(
         targetState = text,
         modifier = modifier,
@@ -72,12 +84,13 @@ fun AnimatedFigure(
  */
 @Composable
 fun ChangePill(percent: Double?, modifier: Modifier = Modifier) {
+    val shown = Format.displayedSign(percent)
     val fill = when {
-        percent == null || percent == 0.0 -> LibraTheme.colors.quaternaryFill
-        percent > 0 -> LibraTheme.colors.positive
-        else -> LibraTheme.colors.negative
+        shown > 0 -> LibraTheme.colors.positive
+        shown < 0 -> LibraTheme.colors.negative
+        else -> LibraTheme.colors.quaternaryFill
     }
-    val textColor = if (percent == null || percent == 0.0) {
+    val textColor = if (shown == 0) {
         LibraTheme.colors.secondaryText
     } else {
         Color.White
@@ -94,6 +107,65 @@ fun ChangePill(percent: Double?, modifier: Modifier = Modifier) {
             .background(fill)
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
+}
+
+/**
+ * A page's headline price: the figure, then the day's move in its direction's
+ * colour, then how old both are, on one line beneath.
+ *
+ * The move reads "+$2.72 (+0.80%) today" when the absolute change is known
+ * and falls back to the percentage alone when it is not. Zero and missing are
+ * both secondary, the same boundary as [DirectionalChangeText]; missing shows
+ * a dash, never "+0.00%".
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun HeroPrice(
+    price: String,
+    change: Double?,
+    percent: Double?,
+    valueFormat: ChartValueFormat,
+    modifier: Modifier = Modifier,
+    freshness: Freshness? = null,
+    caption: String = "today",
+) {
+    // The sign as printed, so a move that rounds to zero is not coloured.
+    val shown = if (change != null) Format.displayedSign(change) else Format.displayedSign(percent)
+    val color = when {
+        shown > 0 -> LibraTheme.colors.positive
+        shown < 0 -> LibraTheme.colors.negative
+        else -> LibraTheme.colors.secondaryText
+    }
+    val move = when {
+        change != null -> moveText(change, percent, valueFormat)
+        percent != null -> Format.signedPercent(percent)
+        else -> null
+    }
+    Column(modifier) {
+        AnimatedFigure(
+            price,
+            style = LibraType.figureHero,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.Center,
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                if (move == null) "—" else "$move $caption",
+                style = LibraType.figureEmphasis,
+                color = color,
+                modifier = Modifier.semantics {
+                    if (move == null) contentDescription = "Change ${Format.notAvailable}"
+                },
+            )
+            if (freshness != null) {
+                Text("·", style = MaterialTheme.typography.labelSmall, color = LibraTheme.colors.tertiaryText)
+                FreshnessLabel(freshness)
+            }
+        }
+    }
 }
 
 /** The number in a formatted figure, for telling which way it moved. */

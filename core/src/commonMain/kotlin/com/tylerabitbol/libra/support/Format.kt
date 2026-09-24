@@ -85,18 +85,35 @@ object Format {
         return "${fixed(value, precision)}%"
     }
 
+    /**
+     * The sign of [value] as it prints at [precision]: 1, -1, or 0 for null,
+     * non-finite, or anything that rounds to zero.
+     *
+     * Colour and the "+" follow this, not the raw value, so -0.001% is never
+     * a red "0.00%" and 0.001% never a green "+0.00%".
+     */
+    fun displayedSign(value: Double?, precision: Int = 2): Int {
+        if (value == null || !value.isFinite()) return 0
+        val shown = fixed(value, precision, grouping = false).toDoubleOrNull() ?: return 0
+        return when {
+            shown > 0 -> 1
+            shown < 0 -> -1
+            else -> 0
+        }
+    }
+
     /** The same, with an explicit sign, for changes where direction matters. */
     fun signedPercent(value: Double?, precision: Int = 2): String {
         if (value == null) return notAvailable
         if (!value.isFinite()) return notAvailable
-        val sign = if (value > 0) "+" else ""
+        val sign = if (displayedSign(value, precision) > 0) "+" else ""
         return "$sign${fixed(value, precision)}%"
     }
 
     fun signed(value: Double?, precision: Int = 2): String {
         if (value == null) return notAvailable
         if (!value.isFinite()) return notAvailable
-        val sign = if (value > 0) "+" else ""
+        val sign = if (displayedSign(value, precision) > 0) "+" else ""
         return "$sign${fixed(value, precision)}"
     }
 

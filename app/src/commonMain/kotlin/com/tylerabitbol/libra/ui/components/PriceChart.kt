@@ -463,11 +463,15 @@ private fun ExtremeLine(label: String, value: String) {
     }
 }
 
-/** "+$12.34 (+3.80%)", "−12.34 (−0.16%)". A zero move carries no sign. */
+/**
+ * "+$12.34 (+3.80%)", "-12.34 (-0.16%)". A zero move carries no sign. The
+ * hyphen-minus matches [Format.signedPercent], so one line never mixes two
+ * minus signs.
+ */
 internal fun moveText(change: Double, percent: Double?, valueFormat: ChartValueFormat): String {
     val sign = when {
         change > 0 -> "+"
-        change < 0 -> "−"
+        change < 0 -> "-"
         else -> ""
     }
     val magnitude = valueFormat.string(abs(change))

@@ -8,11 +8,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,6 +28,8 @@ import androidx.navigation.compose.navigation
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import com.tylerabitbol.libra.ui.components.TabBar
+import com.tylerabitbol.libra.ui.components.TabBarItem
 import kotlinx.serialization.Serializable
 import kotlin.reflect.KClass
 
@@ -140,17 +138,17 @@ fun LibraNavigation(
         // its own inset and Scaffold subtracts it before padding the content.
         contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
-            NavigationBar {
+            TabBar {
                 for (section in AppSection.entries) {
                     val selected = current?.hierarchy?.any {
                         @Suppress("UNCHECKED_CAST")
                         it.hasRoute(section.graphClass as KClass<Any>)
                     } == true
-                    NavigationBarItem(
+                    TabBarItem(
                         selected = selected,
                         onClick = { navController.switchTo(section) },
-                        icon = { Icon(section.icon, contentDescription = null) },
-                        label = { Text(section.title) },
+                        icon = section.icon,
+                        label = section.title,
                     )
                 }
             }

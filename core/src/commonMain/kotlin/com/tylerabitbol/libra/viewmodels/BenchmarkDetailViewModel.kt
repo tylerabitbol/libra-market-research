@@ -376,6 +376,21 @@ val BenchmarkDetailUiState.formattedLevel: String
         }
     }
 
+/** The latest session's move, close against the close before it. */
+val BenchmarkDetailUiState.sessionChange: Double?
+    get() {
+        val closes = dailyBars.takeLast(2).map { it.analysisClose }
+        return if (closes.size == 2) closes[1] - closes[0] else null
+    }
+
+/** [sessionChange] as a percentage of the earlier close; null off a zero base. */
+val BenchmarkDetailUiState.sessionChangePercent: Double?
+    get() {
+        val closes = dailyBars.takeLast(2).map { it.analysisClose }
+        if (closes.size != 2 || closes[0] <= 0) return null
+        return (closes[1] - closes[0]) / closes[0] * 100
+    }
+
 // MARK: - Returns
 
 /**

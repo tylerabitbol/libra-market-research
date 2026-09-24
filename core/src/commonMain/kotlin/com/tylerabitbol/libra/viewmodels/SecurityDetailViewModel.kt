@@ -1178,6 +1178,18 @@ val SecurityDetailUiState.displayPrice: Double?
 val SecurityDetailUiState.displayChangePercent: Double?
     get() = quote?.changePercent ?: lastStoredSessionChange
 
+/**
+ * The day's move in dollars, from the same source as [displayChangePercent]:
+ * the quote's when there is a quote, so the two never mix a live price with a
+ * stored close.
+ */
+val SecurityDetailUiState.displayChange: Double?
+    get() {
+        quote?.let { return it.change }
+        val closes = bars.takeLast(2).map { it.analysisClose }
+        return if (closes.size == 2) closes[1] - closes[0] else null
+    }
+
 /** The most recent closed session's move, from bars alone. */
 private val SecurityDetailUiState.lastStoredSessionChange: Double?
     get() {
