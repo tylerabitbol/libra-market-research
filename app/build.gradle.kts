@@ -60,3 +60,13 @@ kotlin {
         }
     }
 }
+
+// Stability and skippability reports, on request only:
+// `./gradlew :app:compileKotlinIosSimulatorArm64 -PcomposeReports`, then read
+// `app/build/compose_reports/*-composables.txt`.
+composeCompiler {
+    if (project.hasProperty("composeReports")) {
+        reportsDestination = layout.buildDirectory.dir("compose_reports")
+        metricsDestination = layout.buildDirectory.dir("compose_reports")
+    }
+}

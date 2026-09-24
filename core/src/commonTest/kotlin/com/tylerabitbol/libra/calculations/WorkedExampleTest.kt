@@ -233,14 +233,11 @@ class WorkedExampleTest {
     @Test
     fun a_chart_summary_is_the_line_worked_by_hand() {
         // Closes 200, 180, 240, 220.
-        // Change 220 - 200 = +20; percent 20 / 200 = +10%.
-        // High 240, low 180; position (220 - 180) / (240 - 180) = 2/3.
+        // Percent (220 - 200) / 200 = +10%. High 240, low 180.
         val summary = assertNotNull(ChartSummary.of(listOf(200.0, 180.0, 240.0, 220.0)))
-        near(20.0, summary.change)
         near(10.0, assertNotNull(summary.percent))
         assertEquals(240.0, summary.high)
         assertEquals(180.0, summary.low)
-        near(2.0 / 3.0, assertNotNull(summary.position))
         assertEquals(1, summary.direction)
         // Scrubbed to the 180 close: (180 - 200) / 200 = -10%, down.
         near(-10.0, assertNotNull(summary.percentFrom(180.0)))
@@ -258,11 +255,6 @@ class WorkedExampleTest {
     fun one_close_is_not_a_move() {
         assertNull(ChartSummary.of(listOf(100.0)))
         assertNull(ChartSummary.of(listOf(100.0, Double.NaN)))
-    }
-
-    @Test
-    fun a_constant_line_has_no_position_in_its_range() {
-        assertNull(assertNotNull(ChartSummary.of(listOf(5.0, 5.0))).position)
     }
 
     @Test

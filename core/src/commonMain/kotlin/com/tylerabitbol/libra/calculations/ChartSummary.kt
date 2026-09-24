@@ -14,18 +14,11 @@ data class ChartSummary(
     val high: Double,
     val low: Double,
 ) {
-    /** Last less first, in the series' own unit. */
-    val change: Double get() = last - first
-
     /** The move as a percentage of the first close; null off a non-positive base. */
     val percent: Double? get() = percentFrom(last)
 
     /** 1 up, -1 down, 0 flat: what colours the line. */
     val direction: Int get() = direction(last)
-
-    /** Where the last close sits between the low and high, 0 to 1. */
-    val position: Double?
-        get() = if (high > low) (last - low) / (high - low) else null
 
     /** The change from the first close to [value], as a percentage. */
     fun percentFrom(value: Double): Double? =

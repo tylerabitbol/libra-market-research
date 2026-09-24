@@ -127,6 +127,26 @@ rather than on `main`, so the root checkout keeps reporting `Claude outputs/`,
 themselves are verified: `git ls-files --others --exclude-from` against the new
 file returns nothing for all three.
 
+### Build times and sizes (2026-09-23, `PLAN.md` Stage 7)
+
+Measured on this Mac for `:app:linkDebugFrameworkIosSimulatorArm64` plus
+`:androidApp:assembleDebug`:
+
+| Build | Time |
+|---|---|
+| Clean, `--no-build-cache` | 37 s |
+| Clean, with the build cache | 16 s |
+| Incremental, one line changed in `:app` | 20 s |
+
+Output sizes:
+
+- The debug `LibraKit` binary for the simulator is 292 MB. It is static and
+  unstripped, and the linked app is far smaller.
+- The debug APK is 21.7 MB.
+
+A "clean" timing taken with the build cache on is a cache restore, not a
+compile.
+
 ## Support and value types
 
 Foundation types with no multiplatform counterpart, and what replaced them:
@@ -1059,6 +1079,33 @@ changed, so the two apps will print different figures in these cases.
   calendars; worked in `WorkedExampleTest`.
 - **Median, MAD × 1.4826, sample (n − 1) standard deviation, drawdown**: worked
   by hand and correct.
+
+## `PLAN.md` deviations (UI/UX and general improvements)
+
+- **No generic host (Stage 7).** The plan asked for one host in place of the six
+  `*Host.kt` files. Their shared part is three lines. Each load takes different
+  arguments: the Dashboard takes the registry only, Research and Screener take
+  the store only, and the rest take both. Watchlist also carries membership,
+  search and save-error state. A generic host would need a lambda for each of
+  those differences, and would hide more than it saves.
+
+  The audit the plan attached to it was done. Every host that reads the
+  snapshot store now keys its load on the store, which fixed the
+  attach-after-launch defect in Watchlist and on the security page. The
+  Dashboard reads no stored data and keys on `isUsingSampleData` alone.
+- **UI state is left unstable (Stage 7).** The Compose compiler report
+  (`-PcomposeReports`) shows all 129 restartable composables are skippable, under
+  strong skipping. The `*UiState` classes live in `:core`, which has no Compose
+  dependency, so the compiler infers them as unstable. They are compared by
+  instance, and an unrelated emission leaves a screen's state instance
+  unchanged, so the screen skips. Declaring them stable would change that to a
+  deep `equals` over every list in the state on each recomposition, which costs
+  more than it saves.
+- **Dead-code sweep (Stage 7)** used a reference count, not coverage, because
+  Kover is not set up. The only unreferenced `:core` declarations were Room's
+  entity columns and type converters, which Room calls reflectively, and one
+  serialized DTO field. Two speculative `ChartSummary` members from Stage 2 were
+  removed.
 
 ## Open issues
 
