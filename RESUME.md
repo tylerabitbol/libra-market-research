@@ -4,7 +4,7 @@
 
 This work is on branch `claude/ui-ux-improvements`, cut from `kmp-translation`.
 Stages 1–5 were done on 2026-09-23. Stages 7 (optimisation) and 6 (cleanup)
-remain, in that order. Test counts: 499 `:core` tests on JVM and 499 on
+remain, in that order. Test counts: 501 `:core` tests on JVM and 501 on
 `iosSimulatorArm64`, and 31 `:app` UI tests, with no failures.
 
 - **1, math audit.** The findings are under "Calculations: the math audit" in
