@@ -195,6 +195,7 @@ private fun Overview(state: SecurityDetailUiState) {
             percent = state.displayChangePercent,
             valueFormat = ChartValueFormat.Currency,
             freshness = state.freshness.takeUnless { state.isShowingSavedCopy },
+            isPending = state.displayPrice == null && !state.hasCompletedLoad,
         )
 
         // A failed refresh must not blank a page the store can fill. When it

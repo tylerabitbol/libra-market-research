@@ -116,7 +116,8 @@ fun ChangePill(percent: Double?, modifier: Modifier = Modifier) {
  * The move reads "+$2.72 (+0.80%) today" when the absolute change is known
  * and falls back to the percentage alone when it is not. Zero and missing are
  * both secondary, the same boundary as [DirectionalChangeText]; missing shows
- * a dash, never "+0.00%".
+ * a dash, never "+0.00%". [isPending] draws placeholder shapes instead,
+ * for the moment before the first load has answered.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -128,7 +129,17 @@ fun HeroPrice(
     modifier: Modifier = Modifier,
     freshness: Freshness? = null,
     caption: String = "today",
+    isPending: Boolean = false,
 ) {
+    // Before the first load there is no price yet, which is not the same as
+    // there being none: shapes, not "Not available" in hero type.
+    if (isPending) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            PlaceholderBar(width = 150.dp, height = 36.dp)
+            PlaceholderBar(width = 190.dp, height = 16.dp)
+        }
+        return
+    }
     // The sign as printed, so a move that rounds to zero is not coloured.
     val shown = if (change != null) Format.displayedSign(change) else Format.displayedSign(percent)
     val color = when {

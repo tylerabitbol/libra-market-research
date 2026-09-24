@@ -1146,8 +1146,13 @@ fun SecurityDetailUiState.analysis(event: DetectedEventDTO): FilingAnalysis.Resu
 
 // MARK: - Freshness and the saved copy
 
+/**
+ * Refreshing until the first load has run, not only while one is in flight: a
+ * page that has not asked yet has nothing *missing*, and the gap between
+ * composing and the load starting read "! Not available" in caution colour.
+ */
 val SecurityDetailUiState.freshness: Freshness
-    get() = if (isLoading) {
+    get() = if (isLoading || (!hasCompletedLoad && lastRefreshedAt == null)) {
         Freshness.Refreshing(lastRefreshedAt)
     } else {
         StalenessPolicy.quote.evaluate(lastRefreshedAt)
