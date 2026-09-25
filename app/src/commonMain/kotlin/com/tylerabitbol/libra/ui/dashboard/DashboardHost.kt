@@ -2,9 +2,10 @@ package com.tylerabitbol.libra.ui.dashboard
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylerabitbol.libra.app.AppEnvironment
 import com.tylerabitbol.libra.models.core.Benchmark
 import com.tylerabitbol.libra.ui.settings.collectAsStateValue
@@ -23,8 +24,7 @@ fun DashboardHost(
     onOpenBenchmark: (Benchmark) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val scope = rememberCoroutineScope()
-    val model = remember { DashboardViewModel(scope) }
+    val model = viewModel { DashboardHolder() }.model
     val state = model.state.collectAsStateValue()
     val registry = environment.registry.collectAsStateValue()
 
@@ -39,4 +39,16 @@ fun DashboardHost(
         onRefresh = { model.refresh(registry) },
         modifier = modifier,
     )
+}
+
+/**
+ * Keeps the dashboard's model for as long as the tab's back stack lives.
+ *
+ * `remember` held it in the composition, and leaving the tab disposes that:
+ * any load in flight was cancelled and coming back refetched all 21 requests
+ * from empty. Navigation keeps an entry's `ViewModelStore` while a tab's state
+ * is saved, so the rows, and a load still running, survive the switch.
+ */
+private class DashboardHolder : ViewModel() {
+    val model = DashboardViewModel(viewModelScope)
 }

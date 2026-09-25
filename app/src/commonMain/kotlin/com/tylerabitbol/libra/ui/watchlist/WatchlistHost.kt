@@ -8,6 +8,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.tylerabitbol.libra.app.AppEnvironment
 import com.tylerabitbol.libra.persistence.WatchlistMember
 import com.tylerabitbol.libra.ui.settings.collectAsStateValue
@@ -30,7 +33,8 @@ fun WatchlistHost(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
-    val model = remember { WatchlistViewModel(scope) }
+    val holder = viewModel { WatchlistHolder() }
+    val model = holder.model
     val search = remember { SymbolSearchViewModel(scope) }
     val state = model.state.collectAsStateValue()
     val searchState = search.state.collectAsStateValue()
@@ -38,7 +42,7 @@ fun WatchlistHost(
     val snapshots = environment.snapshots.collectAsStateValue()
     val registry = environment.registry.collectAsStateValue()
 
-    var members by remember { mutableStateOf(emptyList<WatchlistMember>()) }
+    var members by holder.members
     var isAdding by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
     // Bumped by every membership write, so the read below re-runs without the
@@ -118,4 +122,14 @@ fun WatchlistHost(
             onDismiss = { isAdding = false },
         )
     }
+}
+
+/**
+ * Keeps the watchlist's model, and the membership it was loaded with, for as
+ * long as the tab's back stack lives. Held by `remember`, both were rebuilt on
+ * every return to the tab, and the list reloaded from an empty membership.
+ */
+private class WatchlistHolder : ViewModel() {
+    val model = WatchlistViewModel(viewModelScope)
+    val members = mutableStateOf(emptyList<WatchlistMember>())
 }

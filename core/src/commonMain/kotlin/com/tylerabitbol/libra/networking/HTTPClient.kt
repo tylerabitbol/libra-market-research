@@ -42,6 +42,9 @@ class HTTPClient(
     private val logger = Logger.withTag("http")
     private val maxAttempts = 3
 
+    /** The longest server-requested wait that is sat through before a retry. */
+    private val maxRetryAfter = 10.seconds
+
     private val limiters: Map<DataProviderID, RateLimiter> = limiters ?: mapOf(
         DataProviderID.SEC to RateLimiter.sec(),
         DataProviderID.Finnhub to RateLimiter.finnhub(),
@@ -111,6 +114,10 @@ class HTTPClient(
                 if (error is APIError.RateLimited) {
                     wait = error.retryAfter ?: wait
                     limiters[error.providerID]?.penalize(wait)
+                    // Tiingo's hourly limit can ask for minutes. Sleeping that
+                    // long left a row spinning with no explanation; a row that
+                    // says it is rate-limited can at least tell the user why.
+                    if (wait > maxRetryAfter) throw error
                 }
                 logger.i {
                     "Retrying ${endpoint.label} in $wait (attempt $attempt)"

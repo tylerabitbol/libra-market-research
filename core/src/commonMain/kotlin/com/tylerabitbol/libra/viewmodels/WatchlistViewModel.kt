@@ -119,6 +119,14 @@ class WatchlistViewModel(private val scope: CoroutineScope) {
     private var loadJob: Job? = null
 
     /**
+     * Where the rows on screen came from. The model outlives the tab, so a
+     * price fetched from the sample providers, or read before the store
+     * attached, must not be kept once either changes.
+     */
+    private var loadedRegistry: ProviderRegistry? = null
+    private var loadedSnapshots: SnapshotStore? = null
+
+    /**
      * Section 15's sort options.
      *
      * "Most unusual" and "newest information" read the detectors' output from
@@ -146,10 +154,21 @@ class WatchlistViewModel(private val scope: CoroutineScope) {
         snapshots: SnapshotStore? = null,
         force: Boolean = false,
     ) {
+        val sameSource = registry === loadedRegistry && snapshots === loadedSnapshots
+        loadedRegistry = registry
+        loadedSnapshots = snapshots
+
         // Everything the store already knows, read before any request: names,
-        // sectors and the user's own ordering all render immediately.
+        // sectors and the user's own ordering all render immediately. A row
+        // already on screen keeps its price; rebuilding every row from
+        // membership blanked the list each time the tab came back.
+        val previous = if (sameSource) _state.value.rows.associateBy { it.symbol } else emptyMap()
         val rows = members.map { member ->
-            WatchlistRow(
+            previous[member.symbol]?.copy(
+                name = member.name,
+                sector = member.sector,
+                priority = member.priority,
+            ) ?: WatchlistRow(
                 symbol = member.symbol,
                 name = member.name,
                 sector = member.sector,
@@ -159,7 +178,12 @@ class WatchlistViewModel(private val scope: CoroutineScope) {
         _state.update { it.copy(rows = rows) }
         if (rows.isEmpty()) return
 
-        if (!force && _state.value.freshness is Freshness.Fresh) return
+        // A symbol just added has no price yet, however fresh the others are.
+        val hasNewRows = rows.any { it.symbol !in previous }
+        if (!force && sameSource && !hasNewRows) {
+            if (loadJob?.isActive == true) return
+            if (_state.value.freshness is Freshness.Fresh) return
+        }
         loadJob?.cancel()
         loadJob = scope.launch {
             perform(registry, snapshots)

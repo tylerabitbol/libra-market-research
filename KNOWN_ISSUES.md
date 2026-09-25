@@ -229,6 +229,14 @@ mapping, the retry bound, the 403 disambiguation and the header pass-through.
 `MockHttp` in `commonTest` is the `StubURLProtocol` replacement the plan asked
 for, written so Phase 6's provider tests reuse it.
 
+**A `Retry-After` over 10 s is reported, not slept through (2026-09-24).**
+`HTTPClient.data` slept for the server's full `Retry-After` before retrying a
+429, and Tiingo's hourly limit can ask for minutes, which left a Dashboard row
+spinning with no explanation. The limiter is still penalised for the full wait,
+so the next requests back off, but beyond `maxRetryAfter` the `RateLimited`
+error is thrown at once and the row says it is rate-limited. This diverges from
+Swift, which slept.
+
 
 ## Persistence
 
@@ -522,6 +530,38 @@ the only test affordance the file needed beyond the
 **The detection diagnostic is logged at debug level rather than compiled out.**
 Swift wraps the `DETECT …` line in `#if DEBUG`; Kotlin has no equivalent, so
 the sink drops it in release instead of the compiler.
+
+**The Dashboard and Watchlist models outlive their tab (2026-09-24).** Both
+hosts built their model with `remember { …ViewModel(rememberCoroutineScope()) }`
+inside a nav destination, so leaving the tab cancelled any load in flight and
+threw the rows away, and coming back refetched every request from empty. Each
+is now held by a small `androidx.lifecycle.ViewModel` in `:app`
+(`DashboardHolder`, `WatchlistHolder`), whose `viewModelScope` is the model's
+scope. Navigation keeps a saved tab's `ViewModelStore`, so the rows survive the
+switch and the `Fresh` check in `load` finally does its job. The models
+themselves stay plain Kotlin in `:core`, as above; only the owner changed. The
+lifecycle artifact arrives through `navigation-compose` rather than its own
+catalog entry. Three things follow from the longer life:
+- `load` remembers the registry (and, for the Watchlist, the snapshot store)
+  its rows came from. Entering a key builds a new registry; without this,
+  sample rows counted as fresh against the real providers. A different
+  registry clears the rows and reloads.
+- `load` leaves a load already in flight for the same registry alone. It used
+  to cancel and restart it, spending the Tiingo allowance twice.
+- `WatchlistViewModel.load` keeps a row's price when its symbol is already
+  listed. It rebuilt every row from membership, which blanked the list on each
+  return. A symbol just added is fetched even when the rest are fresh.
+
+**The Dashboard publishes each group as it lands (2026-09-24).** `performLoad`
+awaited all four groups and updated state once, so the slowest request, usually
+the Russell 2000's Tiingo history waiting up to 15 s for a token, held back
+every row. Each group now updates state from its own `launch`, and `isLoading`
+stays set until all are in. The Russell row is published with its quote and
+daily change first; `withHistory` adds the week and month when the bars
+arrive. `macroReadings` asks FRED for 120 days rather than 400, since only the
+last two points are read and 120 still covers two months of CPI published six
+weeks late. The index rows still ask for 400 days; FRED's limit is not the
+constraint there, and cutting them was left alone.
 
 
 **`-LibraOpenSymbol` opens the security page before fundamentals have

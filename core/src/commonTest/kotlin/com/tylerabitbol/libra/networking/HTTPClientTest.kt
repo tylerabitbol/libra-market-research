@@ -211,6 +211,28 @@ class HTTPClientTest {
     }
 
     @Test
+    fun aLongRetryAfterIsReportedRatherThanSlept() = runTest {
+        // Tiingo's hourly limit can ask for minutes; a row sleeping through
+        // that spins with no explanation.
+        val recorder = MockHttp.Recorder()
+        val engine = MockHttp.engine(
+            MockHttp.Reply(
+                status = HttpStatusCode.TooManyRequests,
+                headers = mapOf("Retry-After" to "120")
+            ),
+            recorder
+        )
+        try {
+            client(engine).data(endpoint())
+            fail("Expected rateLimited")
+        } catch (error: APIError) {
+            assertTrue(error is APIError.RateLimited)
+            assertEquals(120.seconds, error.retryAfter)
+        }
+        assertEquals(1, recorder.count, "No retry after a wait beyond the cap")
+    }
+
+    @Test
     fun anOfflineDeviceIsATransportFailure() = runTest {
         try {
             client(MockHttp.failing()).data(endpoint())
