@@ -5,9 +5,14 @@
 **`PLAN.md` is complete.** This work is on branch `claude/ui-ux-improvements`,
 cut from `kmp-translation`, and is pushed to origin. Stages 1–5 were done on
 2026-09-23, then Stage 7 (optimisation), then Stage 6 (cleanup) on 2026-09-24.
-Test counts: 500 `:core` tests on JVM and 500 on `iosSimulatorArm64`, and 31
+Test counts: 509 `:core` tests on JVM and 509 on `iosSimulatorArm64`, and 31
 `:app` UI tests, with no failures. (Stage 7 removed one test with the
-`ChartSummary` member it covered; it was 501 before that.)
+`ChartSummary` member it covered, taking 501 to 500; the Dashboard load fix
+added nine.)
+
+After `PLAN.md`, the Dashboard was fixed to show each group of rows as it
+lands and to keep its rows, and the Watchlist's, across tab switches. The
+details are in `KNOWN_ISSUES.md` under View models.
 
 - **7, optimisation.** Hosts key their loads on the store, the security page is
   one file per section, and build times are recorded.
