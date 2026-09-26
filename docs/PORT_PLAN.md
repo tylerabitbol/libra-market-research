@@ -1,6 +1,6 @@
 > **This is the completed port plan, kept for reference. It is not the current
 > plan.** Phases 0–9 below are all done; `RESUME.md` records the result. The
-> plan being worked now is [`../PLAN.md`](../PLAN.md). The section numbers here
+> plans that followed it are indexed in [`README.md`](README.md). The section numbers here
 > (`§0`–`§9`) are what `KNOWN_ISSUES.md` cites when it says "PORT_PLAN §4".
 
 # Libra → Kotlin Multiplatform + Compose Multiplatform

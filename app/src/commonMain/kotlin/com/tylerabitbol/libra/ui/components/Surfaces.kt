@@ -20,7 +20,7 @@ import androidx.compose.runtime.ReadOnlyComposable
  *
  * Swift repeats this nineteen times: fourteen points of padding and a
  * twelve-point rounded fill of `secondarySystemGroupedBackground`, separated
- * from the page by fill contrast alone. The refresh (`PLAN.md` Stage 5) rounds
+ * from the page by fill contrast alone. The refresh (`docs/UI_UX_PLAN.md` Stage 5) rounds
  * it to fourteen and gives it a hairline edge in light mode, where the fill
  * contrast is a few percent; still no shadow.
  */

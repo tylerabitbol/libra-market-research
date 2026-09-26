@@ -1,3 +1,7 @@
+> **This is the completed UI/UX and general improvements plan, kept for
+> reference. It is not the current plan.** All seven stages were worked and
+> committed, and the Swift app has since moved to the `swift-app` branch.
+
 # Libra: UI/UX and general improvements
 
 ## Context

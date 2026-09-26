@@ -56,15 +56,15 @@ recommendation and no AI anywhere in the numbers.
 - **A faster Dashboard.** Each group of rows appears as soon as its data lands,
   and the rows survive switching tabs instead of reloading.
 - **The arithmetic re-checked.** Every calculation was audited against worked
-  answers; what changed is under "Calculations" in
-  [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+  answers, and the fixes are covered by tests.
 
 ## Working on it
 
-[RESUME.md](RESUME.md) says where the work stands, and
-[KNOWN_ISSUES.md](KNOWN_ISSUES.md) holds every deviation from the Swift
-original. [PLAN.md](PLAN.md), the UI/UX plan, is complete; the plans before it
-are indexed in [docs/README.md](docs/README.md).
+The plans behind the port, all finished, are indexed in
+[docs/README.md](docs/README.md). `RESUME.md` (where the work stands) and
+`KNOWN_ISSUES.md` (every deviation from the Swift original, and what is still
+open) are working notes kept locally, not in the repository, so code comments
+that cite them point at a file only a working copy has.
 
 ## Layout
 

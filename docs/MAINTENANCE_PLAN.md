@@ -2,8 +2,8 @@
 
 > **This is the completed cleanup and UI-parity plan, kept for reference. It is
 > not the current plan.** Its five stages were worked and committed; what they
-> left open is recorded in [`../KNOWN_ISSUES.md`](../KNOWN_ISSUES.md). The plan
-> being worked now is [`../PLAN.md`](../PLAN.md).
+> left open is recorded in `KNOWN_ISSUES.md`. The plans
+> that followed it are indexed in [`README.md`](README.md).
 
 The plan being worked now. Written to be executed by another agent without
 re-deriving decisions, the same way `docs/PORT_PLAN.md` was.

@@ -10,3 +10,7 @@ iosApp/Libra.xcodeproj/
 # Written by XcodeGen from project.yml, like the project itself.
 iosApp/Info.plist
 iosApp/*.xcworkspace/
+
+# Working notes, kept locally and out of the repository
+RESUME.md
+KNOWN_ISSUES.md
