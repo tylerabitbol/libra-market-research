@@ -1,5 +1,10 @@
 # Libra
 
+> **Archived.** This is the original SwiftUI app, kept for reference and no longer
+> developed. Libra now lives on [`main`](../../tree/main) as a Kotlin Multiplatform
+> app for iOS and Android. The tag `swift-app-final` marks this code as it was last
+> worked on.
+
 An iOS research tool that answers *what changed, why, and how unusual is it* —
 for a small number of companies you actually follow.
 
