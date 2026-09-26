@@ -1,0 +1,105 @@
+package com.tylerabitbol.libra.ui.components
+
+import com.patrykandpatrick.vico.multiplatform.cartesian.CartesianDrawingContext
+import com.patrykandpatrick.vico.multiplatform.cartesian.CartesianMeasuringContext
+import com.patrykandpatrick.vico.multiplatform.cartesian.axis.HorizontalAxis
+import com.patrykandpatrick.vico.multiplatform.cartesian.layer.CartesianLayerDimensions
+
+/**
+ * Labels the x-axis at the positions the model chose, and nowhere else.
+ *
+ * Vico's own item placers put labels at a fixed *spacing* — every k-th x value.
+ * Neither chart's labels are spaced that way: the intraday chart labels the
+ * start of each trading session, which fall wherever the sessions happen to
+ * fall, and the daily chart labels a handful of dates out of hundreds.
+ *
+ * Returning `""` from the value formatter for the positions in between is not
+ * the way to express that. Vico raises
+ * `CartesianValueFormatter.format returned an empty string` and the chart
+ * fails to draw, which is exactly what the 1D and 5D ranges did before this
+ * existed — the formatter is asked to label positions the placer picked, so
+ * choosing the positions is the placer's job.
+ */
+internal class TickItemPlacer(positions: List<Double>) : HorizontalAxis.ItemPlacer {
+
+    private val sorted = positions.sorted()
+
+    override fun getLabelValues(
+        context: CartesianDrawingContext,
+        visibleXRange: ClosedFloatingPointRange<Double>,
+        fullXRange: ClosedFloatingPointRange<Double>,
+        maxLabelWidth: Float,
+    ): List<Double> = sorted
+
+    /** Every label, so the axis reserves room for the widest one. */
+    override fun getWidthMeasurementLabelValues(
+        context: CartesianMeasuringContext,
+        layerDimensions: CartesianLayerDimensions,
+        fullXRange: ClosedFloatingPointRange<Double>,
+    ): List<Double> = sorted
+
+    override fun getHeightMeasurementLabelValues(
+        context: CartesianMeasuringContext,
+        layerDimensions: CartesianLayerDimensions,
+        fullXRange: ClosedFloatingPointRange<Double>,
+        maxLabelWidth: Float,
+    ): List<Double> = sorted
+
+    /**
+     * The extremes, named. Vico measures the first and last labels separately
+     * to decide how much room each end needs; the interface's defaults return
+     * null, which reads as "no label there" and drops both.
+     */
+    override fun getFirstLabelValue(
+        context: CartesianMeasuringContext,
+        maxLabelWidth: Float,
+    ): Double? = sorted.firstOrNull()
+
+    override fun getLastLabelValue(
+        context: CartesianMeasuringContext,
+        maxLabelWidth: Float,
+    ): Double? = sorted.lastOrNull()
+
+    /**
+     * A label is centred on its position, so one sitting near either end of
+     * the domain needs up to half its width of room beside it or it is
+     * clipped. Only the part that actually overhangs is reserved: a flat half
+     * width at both ends left the line short of the card on every chart. This
+     * is the thing Swift worked around by anchoring the trailing label.
+     */
+    override fun getStartLayerMargin(
+        context: CartesianMeasuringContext,
+        layerDimensions: CartesianLayerDimensions,
+        tickThickness: Float,
+        maxLabelWidth: Float,
+    ): Float = overhang(
+        from = sorted.firstOrNull()?.let { it - context.ranges.minX },
+        context = context,
+        layerDimensions = layerDimensions,
+        maxLabelWidth = maxLabelWidth,
+    )
+
+    override fun getEndLayerMargin(
+        context: CartesianMeasuringContext,
+        layerDimensions: CartesianLayerDimensions,
+        tickThickness: Float,
+        maxLabelWidth: Float,
+    ): Float = overhang(
+        from = sorted.lastOrNull()?.let { context.ranges.maxX - it },
+        context = context,
+        layerDimensions = layerDimensions,
+        maxLabelWidth = maxLabelWidth,
+    )
+
+    /** How far half a label reaches past the end it sits [from] x units in. */
+    private fun overhang(
+        from: Double?,
+        context: CartesianMeasuringContext,
+        layerDimensions: CartesianLayerDimensions,
+        maxLabelWidth: Float,
+    ): Float {
+        if (from == null) return 0f
+        val inset = (from / context.ranges.xStep * layerDimensions.xSpacing).toFloat()
+        return (maxLabelWidth / 2 - inset).coerceAtLeast(0f)
+    }
+}

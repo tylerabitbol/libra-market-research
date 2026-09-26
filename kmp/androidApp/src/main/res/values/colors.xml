@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ic_launcher_background">#FFFFFF</color>
+
+    <!--
+        What shows before Compose draws its first frame. It matches the page
+        colour the Compose theme paints (systemGroupedBackground), so launch
+        does not flash a different colour on the way in.
+    -->
+    <color name="window_background">#F2F2F7</color>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The artwork runs to all four edges of its square, so a round or squircle
+  launcher mask would clip it. An adaptive icon insets the foreground into the
+  66% safe zone over a background layer; the artwork sits on white anyway, so
+  the background is the same white.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

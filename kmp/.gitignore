@@ -1,0 +1,12 @@
+.gradle/
+build/
+.kotlin/
+local.properties
+.idea/
+*.iml
+.DS_Store
+xcuserdata/
+iosApp/Libra.xcodeproj/
+# Written by XcodeGen from project.yml, like the project itself.
+iosApp/Info.plist
+iosApp/*.xcworkspace/
