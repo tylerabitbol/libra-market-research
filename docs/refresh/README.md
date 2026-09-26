@@ -1,10 +1,12 @@
-# Refresh screenshots
+# Reference screenshots
 
-`PLAN.md` Stage 5.3, taken 2026-09-23 against live data. There are light and
-dark sets for each platform. Each covers the five tabs, then the security page
-(`-LibraOpenSymbol AAPL`) and the S&P 500 benchmark page.
+Retaken 2026-09-26 from `main` against live data, after the Dashboard load fix.
+The first set was taken for `PLAN.md` Stage 5.3 on 2026-09-23. There are light
+and dark sets for each platform. Each covers the five tabs, then a security page
+and the S&P 500 benchmark page. The watchlist holds AAPL, COST and NVDA.
 
-- `light-*`, `dark-*`: iPhone 18 Pro simulator, iOS 27.
-- `android-light-*`, `android-dark-*`: the `medium_phone` emulator.
+- `light-*`, `dark-*`: iPhone 18 Pro simulator, iOS 27. The security page is NVDA.
+- `android-light-*`, `android-dark-*`: the `medium_phone` emulator. The security
+  page is AAPL (`-LibraOpenSymbol AAPL`).
 
 Not captured: the add-security sheet, which would be the third pushed screen.

@@ -1,13 +1,70 @@
-# Libra — Kotlin Multiplatform
+# Libra
 
-Port of the SwiftUI app on the `swift-app` branch to Kotlin Multiplatform + Compose
-Multiplatform. The port is complete. [PLAN.md](PLAN.md) is the plan being
-worked now: UI/UX and general improvements. The finished plans before it are in
-`docs/`: [PORT_PLAN.md](docs/PORT_PLAN.md), kept because `KNOWN_ISSUES.md` cites
-its section numbers, then `MAINTENANCE_PLAN.md` and `LOOK_PLAN.md`.
+An equity research tool for iOS and Android that answers *what changed, why,
+and how unusual is it*, for a small number of companies you actually follow.
+Built with Kotlin Multiplatform and Compose Multiplatform: one codebase, two
+native apps.
+
+<p align="center">
+  <img src="docs/refresh/light-1-dashboard.png" width="200" alt="Dashboard on iOS: index levels from FRED, sector tiles and macro readings">
+  <img src="docs/refresh/light-6-security.png" width="200" alt="NVDA on iOS: hero price, range bars, and a one-year chart with its summary strip">
+  <img src="docs/refresh/light-2-watchlist.png" width="200" alt="Watchlist on iOS: rows with sparklines and change pills">
+  <img src="docs/refresh/light-7-benchmark.png" width="200" alt="S&P 500 benchmark page on iOS">
+</p>
+<p align="center">
+  <img src="docs/refresh/android-dark-1-dashboard.png" width="200" alt="Dashboard on Android, dark">
+  <img src="docs/refresh/android-dark-6-security.png" width="200" alt="Security page on Android, dark">
+  <img src="docs/refresh/android-dark-2-watchlist.png" width="200" alt="Watchlist on Android, dark">
+  <img src="docs/refresh/android-dark-3-research.png" width="200" alt="Research on Android, dark: detected changes, each with its arithmetic">
+</p>
+
+<p align="center"><sub>Every screen in light and dark, on both platforms, is in <a href="docs/refresh/"><code>docs/refresh/</code></a>.</sub></p>
+
+> **Educational and informational purposes only.** Libra is a research tool.
+> It is **not investment advice**, not a recommendation to buy or sell any
+> security, and carries **no warranty as to the accuracy, completeness or
+> timeliness of any data shown**. All data comes from third-party providers and
+> may be delayed, incomplete or wrong. Do your own research and consult a
+> licensed professional.
+
+Libra started as a SwiftUI app. That version is archived on the
+[`swift-app`](../../tree/swift-app) branch, and its README's *Design decisions*
+section still describes this app: every calculation was ported and checked
+against it. The principles hold here too: no overall score, no rating, no
+recommendation and no AI anywhere in the numbers.
+
+## What's new since the Swift app
+
+- **Android.** The same app on Android, from the same code as iOS.
+- **Dark mode and Libra's own palette.** Neutral near-black on near-white, with
+  colour kept for a gain, a loss or a caution. SF Pro and SF Pro Rounded on iOS;
+  Inter, Nunito and JetBrains Mono bundled on Android.
+- **Charts that say what the line did.** A summary strip above each chart with
+  the move over the range, the line coloured by direction against the
+  window's first close, a rule at the starting close, press-and-drag to scrub
+  (with a light haptic on each step), and a range picker whose indicator slides.
+- **A tighter stats block.** Day range and 52-week range as bars with a marker at
+  the current price, and market cap, open, beta and average volume in a compact
+  grid.
+- **Hero price** on the security and benchmark pages, rolling to each new value.
+- **Watchlist.** A one-month sparkline and a change pill on every row, swipe to
+  remove, a long-press menu to open or remove, and one tap to add starter
+  symbols to an empty list.
+- **Pull to refresh** on the Dashboard, Watchlist and security pages.
+- **Loading and motion.** Placeholder shapes on first load in place of spinners,
+  crossfades between screens, and Reduce Motion respected throughout.
+- **A faster Dashboard.** Each group of rows appears as soon as its data lands,
+  and the rows survive switching tabs instead of reloading.
+- **The arithmetic re-checked.** Every calculation was audited against worked
+  answers; what changed is under "Calculations" in
+  [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+
+## Working on it
+
+[RESUME.md](RESUME.md) says where the work stands, and
 [KNOWN_ISSUES.md](KNOWN_ISSUES.md) holds every deviation from the Swift
-original, and [RESUME.md](RESUME.md) says where the work stands. The Swift app
-is the reference for every ported file.
+original. [PLAN.md](PLAN.md), the UI/UX plan, is complete; the plans before it
+are indexed in [docs/README.md](docs/README.md).
 
 ## Layout
 
@@ -125,3 +182,16 @@ adb shell am start -n com.tylerabitbol.libra/.MainActivity \
 result to the log; on iOS that is the only way to verify the Keychain, because
 a test bundle has no entitlements and every Keychain call in one fails before
 anything else is evaluated.
+
+## Data sources and notices
+
+This product uses the FRED® API but is not endorsed or certified by the Federal
+Reserve Bank of St. Louis.
+
+Market and fundamental data are supplied by Finnhub, Tiingo, Alpaca, FRED and
+SEC EDGAR under each reader's own account and each provider's own terms. This
+repository contains no licensed market data.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE).
