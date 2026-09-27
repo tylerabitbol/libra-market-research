@@ -16,7 +16,7 @@ import com.tylerabitbol.libra.ui.watchlist.WatchlistHost
  * The screen each route renders.
  *
  * Built here rather than inside `LibraNavigation` so navigation stays testable
- * with stand-ins. Every route in `PLAN.md §8` is ported; the placeholder this
+ * with stand-ins. Every route in `docs/PORT_PLAN.md` Phase 8 is ported; the placeholder this
  * file carried while the screens were being built is gone.
  */
 fun libraScreens(): LibraScreens = LibraScreens(

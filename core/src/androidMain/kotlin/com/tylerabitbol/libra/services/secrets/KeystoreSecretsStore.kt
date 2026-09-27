@@ -23,7 +23,7 @@ import javax.crypto.spec.GCMParameterSpec
  * keystore.
  *
  * `androidx.security:security-crypto` would have done this, but it is
- * deprecated and unmaintained, so `PLAN.md §5` calls for the primitives
+ * deprecated and unmaintained, so `docs/PORT_PLAN.md` Phase 5 calls for the primitives
  * directly.
  *
  * Each record is `Base64(iv ‖ ciphertext)`. GCM's 12-byte IV is generated per

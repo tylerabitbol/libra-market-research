@@ -10,8 +10,7 @@ import kotlin.test.assertTrue
  * Errors and endpoint construction.
  *
  * The Swift file this comes from also holds the keychain, fingerprint and
- * secrets-store suites; those belong to `SecretsStore`, which Phase 5 brings.
- * See KNOWN_ISSUES.md.
+ * secrets-store suites; those are in `SecretsStoreTest`.
  */
 class APIErrorTest {
 

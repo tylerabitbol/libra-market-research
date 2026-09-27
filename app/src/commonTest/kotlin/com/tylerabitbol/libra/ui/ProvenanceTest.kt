@@ -23,7 +23,7 @@ import kotlin.time.Instant
 /**
  * Provenance, as a screen reader receives it.
  *
- * `PLAN.md §8` makes the provenance label a rule rather than a decoration:
+ * `docs/PORT_PLAN.md` Phase 8 makes the provenance label a rule rather than a decoration:
  * every figure keeps its source label, and Section 24 forbids a statement
  * reaching the user without its epistemic status. A view-model test can check
  * that a `Claim` carries the right [ClaimKind]; only a UI test can check that

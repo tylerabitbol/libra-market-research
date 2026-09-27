@@ -56,8 +56,8 @@ interface WatchlistDao {
      * The watchlist joined to the securities it names.
      *
      * SwiftData gave `WatchlistEntry.security` for free through the object
-     * graph. Room's entities carry plain foreign-key columns — see
-     * `KNOWN_ISSUES.md` — so the join is written out, and it is an inner join
+     * graph. Room's entities carry plain foreign-key columns instead of
+     * object references, so the join is written out, and it is an inner join
      * because a watchlist row naming a security the store has never seen has
      * no name to render.
      */

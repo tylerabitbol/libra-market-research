@@ -25,8 +25,7 @@ import com.tylerabitbol.libra.ui.LibraIcons
  *
  * The bar belongs to the screen, not to the shell's `Scaffold`. Putting it in
  * the shell would draw a second title above the five tab roots, which already
- * draw their own header rows — the toolbar-becomes-a-header-row decision under
- * `KNOWN_ISSUES.md` → UI.
+ * draw their own header rows: Swift's toolbars became header rows in the port.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

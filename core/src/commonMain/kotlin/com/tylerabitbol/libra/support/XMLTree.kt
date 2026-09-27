@@ -9,7 +9,7 @@ package com.tylerabitbol.libra.support
  * of a few kilobytes.
  *
  * Kotlin Multiplatform has no XML parser in the standard library, and
- * `PLAN.md §6` allows a hand-walk in place of `xmlutil` — the only XML this
+ * `docs/PORT_PLAN.md` Phase 6 allows a hand-walk in place of `xmlutil` — the only XML this
  * app reads is an SEC ownership form, a few kilobytes of plain elements with
  * no namespaces to resolve, no DTD to honour and no schema to validate.
  * Pulling in a parser for that would be a dependency carried for one file.

@@ -28,7 +28,7 @@ import kotlin.time.Instant
 /**
  * What the chart says out loud.
  *
- * A line drawn on a canvas carries nothing for a screen reader, so `PLAN.md §8`
+ * A line drawn on a canvas carries nothing for a screen reader, so `docs/PORT_PLAN.md` Phase 8
  * requires every chart to describe itself: what it is, and where the window
  * opened, closed and ended up. Swift did this with
  * `intradayChartLabel`/`intradayChartValue`; here it is a `contentDescription`

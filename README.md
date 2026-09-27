@@ -82,8 +82,7 @@ that cite them point at a file only a working copy has.
 ## Toolchain
 
 JDK 21, Android SDK (compile 37, min 26), Xcode 27, XcodeGen.
-Use an iOS 27 simulator: the 26.5 runtime on this machine is broken, and
-`KNOWN_ISSUES.md` → Platform shells says how it fails.
+Use an iOS 27 simulator: the 26.5 runtime on this machine is broken.
 Installed here via Homebrew; `local.properties` points at the SDK.
 
 Everything large is relocatable: `GRADLE_USER_HOME`, `ANDROID_HOME`

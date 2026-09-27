@@ -191,7 +191,7 @@ class DeveloperOptions(private val launch: LaunchEnvironment = LaunchEnvironment
             // Alpaca authenticates with a pair, so both halves seed separately.
             // The Swift original seeds only the four above; this pair was added
             // here because a simulator with no usable window is the only way to
-            // reach Settings on this machine. See KNOWN_ISSUES.md, "Secrets".
+            // reach Settings on this machine.
             SecretKey.AlpacaKeyID to "LIBRA_ALPACA_KEY_ID",
             SecretKey.AlpacaSecretKey to "LIBRA_ALPACA_SECRET",
         )

@@ -53,7 +53,7 @@ kotlin {
             implementation(libs.navigation.compose)
             // Charts. Vico draws both: one series per `ChartSegment` gives the
             // intraday line its overnight break, so the `Canvas` fallback
-            // `PLAN.md §8` allowed for was never needed.
+            // `docs/PORT_PLAN.md` Phase 8 allowed for was never needed.
             implementation(libs.vico.multiplatform)
             implementation(libs.kotlinx.datetime)
             implementation(libs.kotlinx.serialization.json)

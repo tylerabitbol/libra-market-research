@@ -14,7 +14,7 @@ import kotlinx.serialization.json.Json
  * The files live at `core/src/commonTest/resources/fixtures` and are copied
  * from `LibraTests/Fixtures` unchanged. They reach the test binary through the
  * `generateFixtures` Gradle task rather than through a resource bundle, which
- * Kotlin/Native test binaries do not have — see `KNOWN_ISSUES.md`.
+ * Kotlin/Native test binaries do not have.
  */
 object Fixture {
 

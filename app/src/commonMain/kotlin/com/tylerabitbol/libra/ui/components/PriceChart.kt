@@ -255,7 +255,7 @@ private fun IntradayChart(
  * The host both charts share: fixed height, no scroll and no zoom.
  *
  * A Vico host scrolls unless told to fit, and a year of sessions then drew
- * only its first eight bars (`KNOWN_ISSUES.md`, "UI"). The press-to-scrub
+ * only its first eight bars. The press-to-scrub
  * marker does not change that: it reads a press, not a drag of the viewport.
  */
 @Composable

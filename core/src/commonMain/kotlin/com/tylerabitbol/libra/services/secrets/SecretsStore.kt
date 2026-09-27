@@ -30,9 +30,9 @@ sealed class SecretsHealth {
  *
  * Swift declared this as a `protocol` with default implementations in an
  * extension; the Kotlin shape is the same, with [hasValue], [fingerprint],
- * [require] and [diagnose] defaulted on the interface. `PLAN.md §5` called for
- * an `expect class`, which would have made the in-memory implementation the
- * tests need impossible to express — see `KNOWN_ISSUES.md`.
+ * [require] and [diagnose] defaulted on the interface. `docs/PORT_PLAN.md` Phase 5
+ * called for an `expect class`, which would have made the in-memory
+ * implementation the tests need impossible to express, so it is an interface.
  */
 interface SecretsStore {
     fun value(key: SecretKey): String?

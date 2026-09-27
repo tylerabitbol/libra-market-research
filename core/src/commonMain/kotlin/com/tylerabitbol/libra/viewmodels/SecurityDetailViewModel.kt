@@ -79,7 +79,7 @@ import kotlin.time.Instant
  * screen — and with four providers on three different rate limits, partial
  * success is the normal case rather than an edge case.
  *
- * Ported 1:1 from Swift per `PLAN.md §7`, including its length. Splitting it
+ * Ported 1:1 from Swift per `docs/PORT_PLAN.md` Phase 7, including its length. Splitting it
  * is a post-parity task.
  */
 class SecurityDetailViewModel(

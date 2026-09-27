@@ -15,10 +15,10 @@ import kotlin.time.Instant
 /**
  * Regressions for defects that were visible on screen rather than in a test.
  *
- * Three of the Swift suites in `CorrectnessRegressionTests.swift` are not here
- * yet: `CIKTests` needs `SECProvider` (Phase 6), and `SortOptionTests` and
- * `AnnualPeriodKeyingTests` need the watchlist and security-detail view models
- * (Phase 7). See KNOWN_ISSUES.md.
+ * Three of the Swift suites in `CorrectnessRegressionTests.swift` live elsewhere:
+ * `CIKTests` in `SECDecodingTest`, and `SortOptionTests` and
+ * `AnnualPeriodKeyingTests` in `DetailAndWatchlistTest`, beside the code they
+ * exercise.
  */
 class CorrectnessRegressionTest {
 
